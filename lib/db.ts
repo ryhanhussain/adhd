@@ -20,6 +20,10 @@ export interface Entry {
   energy?: EnergyLevel | null;
   summary?: string | null;
   createdAt: number;
+  // --- sync metadata (v7) ---
+  updatedAt?: number;        // epoch ms of last local or remote write; drives LWW merge
+  deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
+  syncedAt?: number | null;  // updatedAt value at the moment of the last successful push; null = dirty
 }
 
 export interface Reflection {
@@ -28,6 +32,10 @@ export interface Reflection {
   note: string;
   summary: string; // AI-generated accomplishment summary
   createdAt: number;
+  // --- sync metadata (v7) ---
+  updatedAt?: number;
+  deleted?: boolean;
+  syncedAt?: number | null;
 }
 
 export interface Settings {
@@ -39,6 +47,13 @@ export interface Settings {
   intentionSyncOwner: string | null;
   /** High-water mark for remote `updated_at` values already pulled into local. */
   lastIntentionPullAt: number;
+  // --- entries/reflections sync (v7) ---
+  entrySyncOwner: string | null;
+  lastEntryPullAt: number;
+  reflectionSyncOwner: string | null;
+  lastReflectionPullAt: number;
+  /** Epoch ms timestamp of the last local categories write; used for LWW push/pull. */
+  categoriesSyncedAt: number;
 }
 
 export interface Intention {
@@ -55,6 +70,16 @@ export interface Intention {
   updatedAt: number;         // epoch ms of the last local or remote write; drives last-write-wins merge
   deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
   syncedAt?: number | null;  // updatedAt value at the moment of the last successful push; null = dirty
+}
+
+const pendingEntryDeletions = new Set<string>();
+
+export function markEntryPendingDelete(id: string) {
+  pendingEntryDeletions.add(id);
+}
+
+export function unmarkEntryPendingDelete(id: string) {
+  pendingEntryDeletions.delete(id);
 }
 
 interface ADDitDB extends DBSchema {
@@ -82,7 +107,7 @@ let dbPromise: Promise<IDBPDatabase<ADDitDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<ADDitDB>("addit-db", 6, {
+    dbPromise = openDB<ADDitDB>("addit-db", 7, {
       upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           const entryStore = db.createObjectStore("entries", { keyPath: "id" });
@@ -102,29 +127,79 @@ function getDB() {
           }
         }
         // v5: archived field added to Intention (optional, no store changes needed)
-        // v6: sync metadata — backfill updatedAt so existing rows aren't treated
-        // as brand new or ancient. They get `syncedAt = null` on purpose so the
-        // first post-upgrade sync pushes them to Supabase. Returning this
-        // promise to `upgrade` ensures the transaction waits for the backfill
-        // before committing.
-        if (oldVersion < 6 && db.objectStoreNames.contains("intentions")) {
+        //
+        // v6: sync metadata backfill for intentions.
+        // v7: sync metadata backfill for entries and reflections.
+        //
+        // Both backfills share a single async block so that any upgrade path
+        // (e.g. fresh install → v7, or v3 → v7) runs whatever is needed in
+        // one transaction without the early-return of the old v6 block
+        // swallowing the v7 pass.
+        const needsV6Backfill = oldVersion < 6 && db.objectStoreNames.contains("intentions");
+        const needsV7Backfill = oldVersion < 7;
+
+        if (needsV6Backfill || needsV7Backfill) {
           return (async () => {
-            const store = tx.objectStore("intentions");
-            let cursor = await store.openCursor();
-            while (cursor) {
-              const value = cursor.value as Intention;
-              const needsBackfill =
-                typeof value.updatedAt !== "number" || !Number.isFinite(value.updatedAt);
-              if (needsBackfill) {
-                const ts = value.completedAt ?? value.createdAt ?? Date.now();
-                await cursor.update({
-                  ...value,
-                  updatedAt: ts,
-                  deleted: value.deleted ?? false,
-                  syncedAt: null,
-                });
+            const now = Date.now();
+
+            if (needsV6Backfill) {
+              const store = tx.objectStore("intentions");
+              let cursor = await store.openCursor();
+              while (cursor) {
+                const value = cursor.value as Intention;
+                const needsBackfill =
+                  typeof value.updatedAt !== "number" || !Number.isFinite(value.updatedAt);
+                if (needsBackfill) {
+                  const ts = value.completedAt ?? value.createdAt ?? now;
+                  await cursor.update({
+                    ...value,
+                    updatedAt: ts,
+                    deleted: value.deleted ?? false,
+                    syncedAt: null,
+                  });
+                }
+                cursor = await cursor.continue();
               }
-              cursor = await cursor.continue();
+            }
+
+            if (needsV7Backfill && db.objectStoreNames.contains("entries")) {
+              const store = tx.objectStore("entries");
+              let cursor = await store.openCursor();
+              while (cursor) {
+                const value = cursor.value as Entry;
+                const needsBackfill =
+                  typeof value.updatedAt !== "number" || !Number.isFinite(value.updatedAt);
+                if (needsBackfill) {
+                  const ts = value.startTime ?? value.timestamp ?? value.createdAt ?? now;
+                  await cursor.update({
+                    ...value,
+                    updatedAt: ts,
+                    deleted: value.deleted ?? false,
+                    syncedAt: null,
+                  });
+                }
+                cursor = await cursor.continue();
+              }
+            }
+
+            if (needsV7Backfill && db.objectStoreNames.contains("reflections")) {
+              const store = tx.objectStore("reflections");
+              let cursor = await store.openCursor();
+              while (cursor) {
+                const value = cursor.value as Reflection;
+                const needsBackfill =
+                  typeof value.updatedAt !== "number" || !Number.isFinite(value.updatedAt);
+                if (needsBackfill) {
+                  const ts = value.createdAt ?? now;
+                  await cursor.update({
+                    ...value,
+                    updatedAt: ts,
+                    deleted: value.deleted ?? false,
+                    syncedAt: null,
+                  });
+                }
+                cursor = await cursor.continue();
+              }
             }
           })();
         }
@@ -147,27 +222,61 @@ function getDB() {
   return dbPromise;
 }
 
+// ---------------------------------------------------------------------------
+// Dirty-event helpers — separate from the UI `entry-updated` event.
+// `entry-dirty` / `reflection-dirty` wake up the sync layer.
+// `entry-updated` wakes up UI components (kept as-is).
+// ---------------------------------------------------------------------------
+
+function ENTRY_DIRTY_EVENT() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("entry-dirty"));
+  }
+}
+
+function REFLECTION_DIRTY_EVENT() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("reflection-dirty"));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entries
+// ---------------------------------------------------------------------------
+
 export async function addEntry(entry: Entry): Promise<void> {
   const db = await getDB();
-  await db.put("entries", entry);
+  const now = Date.now();
+  await db.put("entries", {
+    ...entry,
+    updatedAt: entry.updatedAt ?? now,
+    deleted: entry.deleted ?? false,
+    syncedAt: null,
+  });
+  ENTRY_DIRTY_EVENT();
 }
 
 export async function getEntriesByDate(date: string): Promise<Entry[]> {
   const db = await getDB();
   const entries = await db.getAllFromIndex("entries", "by-date", date);
-  return entries.sort((a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp));
+  return entries
+    .filter((e) => !e.deleted && !pendingEntryDeletions.has(e.id))
+    .sort((a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp));
 }
 
 export async function getEntriesForDateRange(startDate: string, endDate: string): Promise<Entry[]> {
   const db = await getDB();
   const range = IDBKeyRange.bound(startDate, endDate);
   const entries = await db.getAllFromIndex("entries", "by-date", range);
-  return entries.sort((a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp));
+  return entries
+    .filter((e) => !e.deleted && !pendingEntryDeletions.has(e.id))
+    .sort((a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp));
 }
 
 export async function getAllEntries(): Promise<Entry[]> {
   const db = await getDB();
-  return db.getAll("entries");
+  const all = await db.getAll("entries");
+  return all.filter((e) => !e.deleted && !pendingEntryDeletions.has(e.id));
 }
 
 export async function searchEntries(query: string): Promise<Entry[]> {
@@ -175,6 +284,7 @@ export async function searchEntries(query: string): Promise<Entry[]> {
   const all = await db.getAll("entries");
   const lower = query.toLowerCase();
   return all
+    .filter((e) => !e.deleted && !pendingEntryDeletions.has(e.id))
     .filter((e) => e.text.toLowerCase().includes(lower) || e.tags.some((t) => t.toLowerCase().includes(lower)))
     .sort((a, b) => b.timestamp - a.timestamp);
 }
@@ -183,8 +293,13 @@ export async function updateEntryTags(id: string, tags: string[]): Promise<void>
   const db = await getDB();
   const entry = await db.get("entries", id);
   if (entry) {
-    entry.tags = tags;
-    await db.put("entries", entry);
+    await db.put("entries", {
+      ...entry,
+      tags,
+      updatedAt: Date.now(),
+      syncedAt: null,
+    });
+    ENTRY_DIRTY_EVENT();
   }
 }
 
@@ -195,18 +310,42 @@ export async function updateEntry(
   const db = await getDB();
   const entry = await db.get("entries", id);
   if (!entry) return null;
-  const updated = { ...entry, ...updates };
+  const updated: Entry = {
+    ...entry,
+    ...updates,
+    updatedAt: Date.now(),
+    syncedAt: null,
+  };
   if (updates.startTime !== undefined) {
     updated.date = toLocalDateStr(updates.startTime);
   }
   await db.put("entries", updated);
+  ENTRY_DIRTY_EVENT();
   return updated;
 }
 
+/**
+ * Soft-delete: marks the row as deleted and dirty so the tombstone propagates
+ * via sync. Local queries already filter `deleted === true`.
+ */
 export async function deleteEntry(id: string): Promise<void> {
   const db = await getDB();
-  await db.delete("entries", id);
+  const entry = await db.get("entries", id);
+  if (entry) {
+    await db.put("entries", {
+      ...entry,
+      deleted: true,
+      updatedAt: Date.now(),
+      syncedAt: null,
+    });
+    ENTRY_DIRTY_EVENT();
+  }
+  unmarkEntryPendingDelete(id);
 }
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
 
 export async function getSettings(): Promise<Settings> {
   const db = await getDB();
@@ -217,6 +356,14 @@ export async function getSettings(): Promise<Settings> {
   const intentionSyncOwner = (await db.get("settings", "intentionSyncOwner")) || null;
   const lastIntentionPullAtRaw = (await db.get("settings", "lastIntentionPullAt")) || "0";
   const lastIntentionPullAt = Number.parseInt(lastIntentionPullAtRaw, 10) || 0;
+  const entrySyncOwner = (await db.get("settings", "entrySyncOwner")) || null;
+  const lastEntryPullAtRaw = (await db.get("settings", "lastEntryPullAt")) || "0";
+  const lastEntryPullAt = Number.parseInt(lastEntryPullAtRaw, 10) || 0;
+  const reflectionSyncOwner = (await db.get("settings", "reflectionSyncOwner")) || null;
+  const lastReflectionPullAtRaw = (await db.get("settings", "lastReflectionPullAt")) || "0";
+  const lastReflectionPullAt = Number.parseInt(lastReflectionPullAtRaw, 10) || 0;
+  const categoriesSyncedAtRaw = (await db.get("settings", "categoriesSyncedAt")) || "0";
+  const categoriesSyncedAt = Number.parseInt(categoriesSyncedAtRaw, 10) || 0;
   return {
     customCategories,
     theme,
@@ -224,6 +371,11 @@ export async function getSettings(): Promise<Settings> {
     lastCarryoverPromptDate,
     intentionSyncOwner,
     lastIntentionPullAt,
+    entrySyncOwner,
+    lastEntryPullAt,
+    reflectionSyncOwner,
+    lastReflectionPullAt,
+    categoriesSyncedAt,
   };
 }
 
@@ -247,24 +399,52 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   if (settings.lastIntentionPullAt !== undefined) {
     await db.put("settings", String(settings.lastIntentionPullAt ?? 0), "lastIntentionPullAt");
   }
+  if (settings.entrySyncOwner !== undefined) {
+    await db.put("settings", settings.entrySyncOwner || "", "entrySyncOwner");
+  }
+  if (settings.lastEntryPullAt !== undefined) {
+    await db.put("settings", String(settings.lastEntryPullAt ?? 0), "lastEntryPullAt");
+  }
+  if (settings.reflectionSyncOwner !== undefined) {
+    await db.put("settings", settings.reflectionSyncOwner || "", "reflectionSyncOwner");
+  }
+  if (settings.lastReflectionPullAt !== undefined) {
+    await db.put("settings", String(settings.lastReflectionPullAt ?? 0), "lastReflectionPullAt");
+  }
+  if (settings.categoriesSyncedAt !== undefined) {
+    await db.put("settings", String(settings.categoriesSyncedAt ?? 0), "categoriesSyncedAt");
+  }
 }
 
+// ---------------------------------------------------------------------------
 // Reflections
+// ---------------------------------------------------------------------------
+
 export async function addReflection(reflection: Reflection): Promise<void> {
   const db = await getDB();
-  await db.put("reflections", reflection);
+  const now = Date.now();
+  await db.put("reflections", {
+    ...reflection,
+    updatedAt: reflection.updatedAt ?? now,
+    deleted: reflection.deleted ?? false,
+    syncedAt: null,
+  });
+  REFLECTION_DIRTY_EVENT();
 }
 
 export async function getReflectionByDate(date: string): Promise<Reflection | undefined> {
   const db = await getDB();
-  return db.get("reflections", date);
+  const r = await db.get("reflections", date);
+  return r?.deleted ? undefined : r;
 }
 
+// ---------------------------------------------------------------------------
 // Intentions
 //
 // Every write stamps `updatedAt = now` and clears `syncedAt` so the sync layer
 // knows the row is dirty. Removal is a soft-delete (`deleted = true`) so other
 // devices can observe the tombstone and converge; queries filter tombstones out.
+// ---------------------------------------------------------------------------
 function INTENTION_UPDATED_EVENT() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("intention-dirty"));
@@ -370,7 +550,7 @@ export async function deleteIntention(id: string): Promise<void> {
   INTENTION_UPDATED_EVENT();
 }
 
-// --- Sync-only helpers. Do not use from UI code. ------------------------
+// --- Sync-only helpers for intentions. Do not use from UI code. ------------
 
 /** Returns every local intention, including tombstones and archived. */
 export async function getAllIntentionsForSync(): Promise<Intention[]> {
@@ -396,8 +576,6 @@ export async function mergeRemoteIntention(remote: Intention): Promise<"applied"
     await tx.done;
     return "skipped";
   }
-  // Preserve the dirty bit if the local copy has newer unsynced edits
-  // (shouldn't happen given the guard above, but belt-and-braces).
   await tx.store.put({ ...remote, syncedAt: remote.updatedAt });
   await tx.done;
   return "applied";
@@ -421,6 +599,112 @@ export async function markIntentionsSynced(ids: string[]): Promise<void> {
 export async function clearAllIntentions(): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("intentions", "readwrite");
+  await tx.store.clear();
+  await tx.done;
+}
+
+// --- Sync-only helpers for entries. Do not use from UI code. ---------------
+
+/** Returns every local entry, including tombstones. */
+export async function getAllEntriesForSync(): Promise<Entry[]> {
+  const db = await getDB();
+  return db.getAll("entries");
+}
+
+/** Dirty rows = local updatedAt hasn't been confirmed as pushed. */
+export async function getDirtyEntries(): Promise<Entry[]> {
+  const rows = await getAllEntriesForSync();
+  return rows.filter((e) => e.syncedAt == null || e.syncedAt < (e.updatedAt ?? 0));
+}
+
+/**
+ * Merges a remote entry into local storage using last-write-wins on updatedAt.
+ * Safe to call repeatedly (idempotent).
+ */
+export async function mergeRemoteEntry(remote: Entry): Promise<"applied" | "skipped"> {
+  const db = await getDB();
+  const tx = db.transaction("entries", "readwrite");
+  const local = await tx.store.get(remote.id);
+  if (local && (local.updatedAt ?? 0) >= (remote.updatedAt ?? 0)) {
+    await tx.done;
+    return "skipped";
+  }
+  await tx.store.put({ ...remote, syncedAt: remote.updatedAt });
+  await tx.done;
+  return "applied";
+}
+
+/** Stamps a set of entries as cleanly synced at their current updatedAt. */
+export async function markEntriesSynced(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDB();
+  const tx = db.transaction("entries", "readwrite");
+  for (const id of ids) {
+    const row = await tx.store.get(id);
+    if (row) {
+      await tx.store.put({ ...row, syncedAt: row.updatedAt });
+    }
+  }
+  await tx.done;
+}
+
+/** Used when switching Supabase users on the same device. */
+export async function clearAllEntries(): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction("entries", "readwrite");
+  await tx.store.clear();
+  await tx.done;
+}
+
+// --- Sync-only helpers for reflections. Do not use from UI code. -----------
+
+/** Returns every local reflection, including tombstones. */
+export async function getAllReflectionsForSync(): Promise<Reflection[]> {
+  const db = await getDB();
+  return db.getAll("reflections");
+}
+
+/** Dirty rows = local updatedAt hasn't been confirmed as pushed. */
+export async function getDirtyReflections(): Promise<Reflection[]> {
+  const rows = await getAllReflectionsForSync();
+  return rows.filter((r) => r.syncedAt == null || r.syncedAt < (r.updatedAt ?? 0));
+}
+
+/**
+ * Merges a remote reflection into local storage using last-write-wins on updatedAt.
+ * Safe to call repeatedly (idempotent).
+ */
+export async function mergeRemoteReflection(remote: Reflection): Promise<"applied" | "skipped"> {
+  const db = await getDB();
+  const tx = db.transaction("reflections", "readwrite");
+  const local = await tx.store.get(remote.date);
+  if (local && (local.updatedAt ?? 0) >= (remote.updatedAt ?? 0)) {
+    await tx.done;
+    return "skipped";
+  }
+  await tx.store.put({ ...remote, syncedAt: remote.updatedAt });
+  await tx.done;
+  return "applied";
+}
+
+/** Stamps a set of reflections as cleanly synced at their current updatedAt. */
+export async function markReflectionsSynced(dates: string[]): Promise<void> {
+  if (dates.length === 0) return;
+  const db = await getDB();
+  const tx = db.transaction("reflections", "readwrite");
+  for (const date of dates) {
+    const row = await tx.store.get(date);
+    if (row) {
+      await tx.store.put({ ...row, syncedAt: row.updatedAt });
+    }
+  }
+  await tx.done;
+}
+
+/** Used when switching Supabase users on the same device. */
+export async function clearAllReflections(): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction("reflections", "readwrite");
   await tx.store.clear();
   await tx.done;
 }

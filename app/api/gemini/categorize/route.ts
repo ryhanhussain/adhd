@@ -25,14 +25,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(SAFE_DEFAULT, { status: 429 });
   }
 
-  const { text, existingCategories, now: nowStr } = await req.json();
+  const { text, existingCategories, currentTime: clientTime, currentDate: clientDate } = await req.json();
   if (typeof text !== "string" || !text.trim()) {
     return NextResponse.json(SAFE_DEFAULT, { status: 400 });
   }
 
-  const now = nowStr ? new Date(nowStr) : new Date();
-  const currentTime = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
-  const currentDate = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const now = new Date();
+  const currentTime = typeof clientTime === "string" && clientTime
+    ? clientTime
+    : now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const currentDate = typeof clientDate === "string" && clientDate
+    ? clientDate
+    : now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const categoryNames: string[] = Array.isArray(existingCategories) ? existingCategories : [];
 
   const prompt = `You are a categorization, time-parsing, and journaling assistant. Given a journal entry, do five things:

@@ -3,6 +3,7 @@
 ADHD-friendly journaling + time-tracking PWA. User types or speaks what they're doing; Gemini categorizes it, writes a short summary, infers energy level, and parses time references; the app tracks time, streaks, intentions, and daily/weekly insights. Client-first UI (IndexedDB) with Supabase auth gating access and Cloudflare Pages Edge Functions securely handling the centralized background Gemini API key.
 
 **Dev:** `npm run dev`
+**Deploy:** `npm run deploy` — uploads directly to Cloudflare Pages **production**. Never run `wrangler pages deploy` without `--branch=main` or it lands as a preview deployment. GitHub integration is intentionally disconnected; the CLI script is the only deploy path.
 **Builder:** Ryhan (personal use, possible open-source, React Native port planned).
 
 ---
@@ -11,7 +12,7 @@ ADHD-friendly journaling + time-tracking PWA. User types or speaks what they're 
 
 Next.js 15 (App Router) · React 19 · TypeScript 5 strict · Tailwind 4 (CSS vars for theming) · IndexedDB via `idb` v8 · Supabase (auth + quota tracking) · Google Gemini API (secure server-side key via Cloudflare Pages proxy) · Web Speech API · PWA via `public/manifest.json`.
 
-No Redux. State = React hooks + IndexedDB, synced across components via `window.dispatchEvent(new Event("entry-updated"))`. App is gated behind `LoginGate`; all entry/reflection/intention data stays local in IndexedDB.
+No Redux. State = React hooks + IndexedDB, synced across components via `window.dispatchEvent(new Event("entry-updated"))`. App is gated behind `LoginGate`. Entries, reflections, intentions, and custom categories all sync to Supabase (cross-device, offline-first, LWW); sync modules: `lib/entriesSync.ts`, `lib/reflectionsSync.ts`, `lib/intentionsSync.ts`, `lib/categoriesSync.ts`.
 
 ---
 

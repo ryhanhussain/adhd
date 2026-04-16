@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { addEntry, toLocalDateStr } from "@/lib/db";
 import { categorizeEntry } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
@@ -31,6 +31,11 @@ export default function EntryInput({ onEntryAdded }: EntryInputProps) {
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => {
+    const t = setTimeout(() => textareaRef.current?.focus(), 250);
+    return () => clearTimeout(t);
+  }, []);
+
   const showToast = (msg: string) => {
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
     setToast(msg);
@@ -39,10 +44,11 @@ export default function EntryInput({ onEntryAdded }: EntryInputProps) {
 
   const autoResize = () => {
     const ta = textareaRef.current;
-    if (ta) {
+    if (!ta) return;
+    requestAnimationFrame(() => {
       ta.style.height = "auto";
       ta.style.height = Math.max(80, ta.scrollHeight) + "px";
-    }
+    });
   };
 
   const handleSubmit = async () => {
@@ -97,7 +103,6 @@ export default function EntryInput({ onEntryAdded }: EntryInputProps) {
           id="entry-input"
           ref={textareaRef}
           value={text}
-          autoFocus
           onChange={(e) => {
             setText(e.target.value);
             autoResize();

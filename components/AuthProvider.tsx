@@ -14,6 +14,21 @@ import {
   startIntentionsSync,
   stopIntentionsSync,
 } from "@/lib/intentionsSync";
+import {
+  handleEntriesSignOut,
+  startEntriesSync,
+  stopEntriesSync,
+} from "@/lib/entriesSync";
+import {
+  handleReflectionsSignOut,
+  startReflectionsSync,
+  stopReflectionsSync,
+} from "@/lib/reflectionsSync";
+import {
+  handleCategoriesSignOut,
+  startCategoriesSync,
+  stopCategoriesSync,
+} from "@/lib/categoriesSync";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextValue {
@@ -70,9 +85,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     if (nextId) {
       startIntentionsSync();
+      startEntriesSync();
+      startReflectionsSync();
+      startCategoriesSync();
     } else {
       stopIntentionsSync();
+      stopEntriesSync();
+      stopReflectionsSync();
+      stopCategoriesSync();
       void handleIntentionsSignOut();
+      void handleEntriesSignOut();
+      void handleReflectionsSignOut();
+      void handleCategoriesSignOut();
     }
     syncedUserId.current = nextId;
   }, [user?.id]);
@@ -80,6 +104,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return () => {
       stopIntentionsSync();
+      stopEntriesSync();
+      stopReflectionsSync();
+      stopCategoriesSync();
     };
   }, []);
 

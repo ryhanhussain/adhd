@@ -108,15 +108,25 @@ body {
 .gradient-mesh {
   background: radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.15), transparent 25%),
               radial-gradient(circle at 85% 30%, rgba(94, 67, 243, 0.15), transparent 25%);
-  filter: blur(40px);
+  /* Reduced blur radius for mobile perf — still visually soft */
+  filter: blur(20px);
 }
 
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  /* Reduced blur on mobile is much faster; 12px is still clearly glass */
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
+}
+
+/* On mobile browsers that support backdrop-filter, reduce it further for performance */
+@media (max-width: 768px) {
+  .glass-panel {
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+  }
 }
 
 /* Safari on older iOS doesn't support backdrop-filter; fall back to a
@@ -176,7 +186,8 @@ h1, h2, h3 {
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 .animate-slide-up {
-  animation: slideUp 0.6s var(--spring-bouncy) forwards;
+  animation: slideUp 0.4s var(--spring) forwards;
+  will-change: transform, opacity;
 }
 
 @keyframes fadeIn {
@@ -200,38 +211,46 @@ h1, h2, h3 {
   to { transform: translate3d(0, 0, 0); }
 }
 .animate-sheet-up {
-  animation: sheetUp 0.5s var(--spring) forwards;
+  animation: sheetUp 0.35s var(--spring) forwards;
+  will-change: transform;
 }
 
+/* Removed animated backdrop-filter — it forces a full GPU layer repaint every frame
+   and is the single biggest frame-rate killer on mobile. Simple opacity fade instead. */
 @keyframes sheetFade {
-  from { opacity: 0; backdrop-filter: blur(0px); }
-  to { opacity: 1; backdrop-filter: blur(8px); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .animate-sheet-fade {
-  animation: sheetFade 0.3s ease-out forwards;
+  animation: sheetFade 0.25s ease-out forwards;
+  will-change: opacity;
 }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.95); }
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.97); }
   to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 .animate-toast-in {
-  animation: toastIn 0.4s var(--spring-bouncy) forwards;
+  animation: toastIn 0.3s var(--spring) forwards;
+  will-change: transform, opacity;
 }
 
 @keyframes toastOut {
-  to { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.95); }
+  to { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.97); }
 }
 .animate-toast-out {
   animation: toastOut 0.2s ease-in forwards;
+  will-change: transform, opacity;
 }
 
+/* nowPulse: removed box-shadow animation (triggers repaint); transform+opacity only — GPU composited */
 @keyframes nowPulse {
-  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(139,92,246,0.4); }
-  50% { opacity: 0.6; transform: scale(1.2); box-shadow: 0 0 12px 4px rgba(139,92,246,0); }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.15); }
 }
 .animate-now-pulse {
-  animation: nowPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: nowPulse 2s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 @keyframes shimmer {
@@ -241,21 +260,25 @@ h1, h2, h3 {
 .animate-shimmer {
   background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.08) 50%, transparent 75%);
   background-size: 200% 100%;
-  animation: shimmer 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: shimmer 1.6s linear infinite;
+  will-change: background-position;
 }
 
 @keyframes successFlash {
   0% { transform: scale(1); }
-  30% { transform: scale(0.95); background-color: var(--color-success); }
+  30% { transform: scale(0.95); }
   100% { transform: scale(1); }
 }
 .animate-success-flash {
-  animation: successFlash 0.5s var(--spring-bouncy);
+  animation: successFlash 0.4s var(--spring);
+  will-change: transform;
 }
 
+/* breathe: removed box-shadow animation (triggers repaint every frame);
+   use a pseudo-element ring with opacity instead — GPU composited */
 @keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 0 var(--color-accent-soft); }
-  50% { box-shadow: 0 0 24px 8px var(--color-accent-soft); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 .animate-breathe {
   animation: breathe 4s ease-in-out infinite;
@@ -274,15 +297,17 @@ h1, h2, h3 {
   to { opacity: 0; transform: translate3d(-100%, 0, 0); }
 }
 .animate-slide-out-left {
-  animation: slideOutLeft 0.3s var(--spring) forwards;
+  animation: slideOutLeft 0.25s var(--spring) forwards;
+  will-change: transform, opacity;
 }
 
 @keyframes popIn {
-  0% { opacity: 0; transform: scale(0.9); }
+  0% { opacity: 0; transform: scale(0.92); }
   100% { opacity: 1; transform: scale(1); }
 }
 .animate-pop-in {
-  animation: popIn 0.4s var(--spring-bouncy) forwards;
+  animation: popIn 0.3s var(--spring) forwards;
+  will-change: transform, opacity;
 }
 
 .scrollbar-hide {
@@ -302,32 +327,37 @@ h1, h2, h3 {
   animation: micPulse 1.5s ease-out infinite;
 }
 
+/* Intention expand/collapse: max-height animation forces layout recalc on every frame.
+   Using scaleY + opacity instead — pure composited transform, silky on mobile. */
 @keyframes intentionExpand {
-  from { max-height: 0; opacity: 0; transform: translate3d(0, -8px, 0); }
-  to { max-height: 300px; opacity: 1; transform: translate3d(0, 0, 0); }
+  from { opacity: 0; transform: translate3d(0, -6px, 0) scaleY(0.95); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scaleY(1); }
 }
 .animate-intention-expand {
-  animation: intentionExpand 0.4s var(--spring) forwards;
-  overflow: hidden;
+  animation: intentionExpand 0.25s var(--spring) forwards;
+  transform-origin: top;
+  will-change: transform, opacity;
 }
 
 @keyframes intentionCollapse {
-  from { max-height: 200px; opacity: 1; }
-  to { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+  from { opacity: 1; transform: scaleY(1); }
+  to { opacity: 0; transform: scaleY(0.95); }
 }
 .animate-intention-collapse {
-  animation: intentionCollapse 0.3s var(--spring) forwards;
+  animation: intentionCollapse 0.2s ease-in forwards;
+  transform-origin: top;
+  will-change: transform, opacity;
   overflow: hidden;
 }
 
 /* Intention flies out toward Ta-Da list below */
 @keyframes intentionFlyOut {
   0% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-  40% { opacity: 0.8; transform: translate3d(0, -6px, 0) scale(1.02); }
-  100% { opacity: 0; max-height: 0; padding: 0; margin: 0; transform: translate3d(0, 40px, 0) scale(0.9); }
+  100% { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.95); }
 }
 .animate-intention-fly-out {
-  animation: intentionFlyOut 0.5s var(--spring) forwards;
+  animation: intentionFlyOut 0.35s var(--spring) forwards;
+  will-change: transform, opacity;
   overflow: hidden;
 }
 
@@ -338,17 +368,19 @@ h1, h2, h3 {
 }
 .animate-check-draw {
   stroke-dasharray: 24;
-  animation: checkDraw 0.35s var(--spring) forwards;
+  animation: checkDraw 0.3s var(--spring) forwards;
+  will-change: opacity;
 }
 
-/* Entry lands in Ta-Da list with a glow */
+/* Entry lands in Ta-Da list — removed box-shadow animation (triggers repaint) */
 @keyframes tadaLand {
-  0% { opacity: 0; transform: translate3d(0, -20px, 0) scale(0.95); }
-  50% { opacity: 1; transform: translate3d(0, 2px, 0) scale(1.02); box-shadow: 0 0 20px var(--color-accent-soft); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); box-shadow: 0 0 0 transparent; }
+  0% { opacity: 0; transform: translate3d(0, -16px, 0) scale(0.96); }
+  60% { opacity: 1; transform: translate3d(0, 2px, 0) scale(1.01); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 .animate-tada-land {
-  animation: tadaLand 0.6s var(--spring-bouncy) forwards;
+  animation: tadaLand 0.45s var(--spring) forwards;
+  will-change: transform, opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {

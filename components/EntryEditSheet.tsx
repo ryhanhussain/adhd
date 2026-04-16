@@ -41,6 +41,7 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const isTimer = entry?.endTime === 0;
 
@@ -61,6 +62,14 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
     }
   }, [text]);
+
+  useEffect(() => {
+    if (showTagPicker) {
+      requestAnimationFrame(() => {
+        pickerRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
+  }, [showTagPicker]);
 
   if (!entry) return null;
 
@@ -197,17 +206,25 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
         </div>
 
         {showTagPicker && availableTags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {availableTags.map((cat) => (
-              <button
-                key={cat.name}
-                onClick={() => addTag(cat.name)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] transition-colors"
-              >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                {cat.name}
-              </button>
-            ))}
+          <div ref={pickerRef} className="mt-3 p-3 rounded-xl bg-[var(--color-bg)] border border-[var(--color-border)] shadow-sm animate-fade-in overflow-hidden relative">
+            <div className="absolute inset-0 bg-[var(--color-surface)] opacity-50" />
+            <div className="relative">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1">
+                Select Category
+              </div>
+              <div className="grid grid-cols-2 gap-2 max-h-[40vh] overflow-y-auto">
+                {availableTags.map((cat) => (
+                  <button
+                    key={cat.name}
+                    onClick={() => addTag(cat.name)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--glass-border)] hover:border-[var(--color-accent)] hover:shadow-sm active:scale-95 transition-all text-left"
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: cat.color }} />
+                    <span className="truncate">{cat.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -220,11 +237,10 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
               key={opt.value}
               type="button"
               onClick={() => setEnergy(energy === opt.value ? null : opt.value)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${
-                energy === opt.value
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${energy === opt.value
                   ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)] border border-[var(--color-accent)]/40"
                   : "border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
-              }`}
+                }`}
               aria-pressed={energy === opt.value}
               aria-label={`Energy: ${opt.label}`}
             >

@@ -36,6 +36,7 @@ export async function categorizeEntry(text: string, categoryNames: string[]): Pr
   if (!token) return SAFE_DEFAULT;
 
   try {
+    const d = new Date();
     const res = await fetch("/api/gemini/categorize/", {
       method: "POST",
       headers: {
@@ -45,7 +46,8 @@ export async function categorizeEntry(text: string, categoryNames: string[]): Pr
       body: JSON.stringify({
         text,
         existingCategories: categoryNames,
-        now: new Date().toISOString(),
+        currentTime: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }),
+        currentDate: d.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
       }),
     });
 

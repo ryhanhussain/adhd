@@ -46,7 +46,11 @@ export default function SettingsPage() {
 
   const handleSaveCategories = async (updated: Category[]) => {
     setCategories(updated);
-    await saveSettings({ customCategories: JSON.stringify(updated) });
+    await saveSettings({
+      customCategories: JSON.stringify(updated),
+      categoriesSyncedAt: Date.now(),
+    });
+    window.dispatchEvent(new Event("categories-dirty"));
   };
 
   const startEditing = (index: number) => {

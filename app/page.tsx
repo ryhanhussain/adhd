@@ -12,7 +12,7 @@ import CheckInGarden from "@/components/CheckInGarden";
 import IntentionsCard from "@/components/IntentionsCard";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import CarryoverPrompt from "@/components/CarryoverPrompt";
-import { getEntriesByDate, updateEntry, deleteEntry, addEntry, getSettings, saveSettings, getIntentionsByDate, getPendingIntentionsByDate, archiveIntentions, addIntentions, updateIntention, deleteIntention, toLocalDateStr, type Entry, type Intention } from "@/lib/db";
+import { getEntriesByDate, updateEntry, deleteEntry, addEntry, getSettings, saveSettings, getIntentionsByDate, getPendingIntentionsByDate, archiveIntentions, addIntentions, updateIntention, deleteIntention, toLocalDateStr, markEntryPendingDelete, unmarkEntryPendingDelete, type Entry, type Intention } from "@/lib/db";
 import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
 import { getCategoryNames } from "@/lib/categories";
@@ -129,6 +129,7 @@ export default function Home() {
 
     // Remove from UI immediately
     setEntries((prev) => prev.filter((e) => e.id !== id));
+    markEntryPendingDelete(id);
 
     // Schedule actual delete after 5 seconds
     if (deleteTimeout.current) clearTimeout(deleteTimeout.current);
@@ -144,14 +145,15 @@ export default function Home() {
       message: "Entry deleted",
       undo: entryToDelete
         ? () => {
-            if (deleteTimeout.current) clearTimeout(deleteTimeout.current);
-            setEntries((prev) =>
-              [...prev, entryToDelete].sort(
-                (a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp)
-              )
-            );
-            setToast(null);
-          }
+          if (deleteTimeout.current) clearTimeout(deleteTimeout.current);
+          unmarkEntryPendingDelete(id);
+          setEntries((prev) =>
+            [...prev, entryToDelete].sort(
+              (a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp)
+            )
+          );
+          setToast(null);
+        }
         : undefined,
     });
     toastTimeout.current = setTimeout(() => setToast(null), 5000);
@@ -352,9 +354,8 @@ export default function Home() {
       >
         <div className="max-w-lg mx-auto px-4 pointer-events-auto">
           <div
-            className={`glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] transition-all duration-300 overflow-hidden ${
-              activeInput !== "none" ? "p-4" : "p-1.5"
-            }`}
+            className={`glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] overflow-hidden ${activeInput !== "none" ? "p-4" : "p-1.5"
+              }`}
           >
             {activeInput === "log" ? (
               <div className="animate-fade-in">
