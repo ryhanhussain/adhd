@@ -7,3 +7,5 @@ out/
 *.log
 .vercel
 .wrangler/
+.claude/
+tsconfig.tsbuildinfo
