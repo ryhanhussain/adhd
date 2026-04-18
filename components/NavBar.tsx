@@ -49,7 +49,7 @@ export default function NavBar() {
   const pathname = usePathname();
 
   return (
-    <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-full max-w-[22rem] px-4">
+    <div className="nav-dock fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 w-full max-w-[22rem] px-4 transition-opacity duration-150">
       <nav className="glass-panel flex items-center justify-around h-[4.5rem] rounded-[2rem] px-3 shadow-2xl border border-[var(--glass-border)]">
         {tabs.map((tab) => {
           const active = pathname === tab.href;

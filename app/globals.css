@@ -144,6 +144,14 @@ body {
 .pb-nav { padding-bottom: var(--nav-clearance); }
 .pb-dock { padding-bottom: var(--dock-clearance); }
 
+/* When the on-screen keyboard is open (tracked by KeyboardInsetProvider),
+   hide bottom-pinned chrome so it doesn't sit behind the keyboard. The
+   input dock itself lifts above the keyboard via --kb in its bottom calc. */
+html[data-keyboard="open"] .nav-dock {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* Screen-reader-only utility */
 .sr-only {
   position: absolute;

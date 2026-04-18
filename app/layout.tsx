@@ -6,6 +6,7 @@ import ActiveTimerBar from "@/components/ActiveTimerBar";
 import ThemeProvider from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
 import LoginGate from "@/components/LoginGate";
+import KeyboardInsetProvider from "@/components/KeyboardInsetProvider";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -45,6 +46,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen pb-nav font-sans antialiased text-[var(--color-text)] bg-[var(--color-bg)] selection:bg-[var(--color-accent)] selection:text-white transition-colors duration-500" suppressHydrationWarning>
         <ThemeProvider>
+          <KeyboardInsetProvider />
           <AuthProvider>
             <LoginGate />
             <div className="fixed inset-0 z-[-1] pointer-events-none noise-bg" />

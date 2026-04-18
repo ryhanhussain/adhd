@@ -347,10 +347,13 @@ export default function Home() {
         <ReflectionPrompt entries={entries} />
       </div>
 
-      {/* ── Pinned input dock (fixed above navbar) ── */}
+      {/* ── Pinned input dock (fixed above navbar, lifts above keyboard on mobile) ── */}
       <div
         className="fixed left-0 right-0 z-40 pointer-events-none"
-        style={{ bottom: "calc(var(--nav-clearance) + 0.5rem)" }}
+        style={{
+          bottom:
+            "max(calc(var(--nav-clearance) + 0.5rem), calc(var(--kb, 0px) + 0.5rem))",
+        }}
       >
         <div className="max-w-lg mx-auto px-4 pointer-events-auto">
           <div

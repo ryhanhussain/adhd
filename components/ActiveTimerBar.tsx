@@ -64,7 +64,7 @@ export default function ActiveTimerBar() {
       : displayText;
 
   return (
-    <div className="fixed above-nav left-1/2 -translate-x-1/2 z-[45] w-full max-w-[20rem] px-4">
+    <div className="nav-dock fixed above-nav left-1/2 -translate-x-1/2 z-[45] w-full max-w-[20rem] px-4 transition-opacity duration-150">
       <div 
         className="glass-panel flex items-center gap-3 px-3 py-2 rounded-2xl shadow-xl animate-pop-in border border-[var(--color-accent)]/30 pointer-events-auto"
       >

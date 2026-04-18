@@ -97,8 +97,14 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className="absolute bottom-0 left-0 right-0 w-full max-w-lg mx-auto glass-panel border border-[var(--glass-border)] border-b-0 rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] max-h-[85vh] overflow-y-auto animate-sheet-up pb-nav"
-        style={dragY > 0 ? { transform: `translate3d(0, ${dragY}px, 0)`, transition: "none" } : { transition: "transform 0.5s var(--spring-bouncy)" }}
+        className="absolute left-0 right-0 w-full max-w-lg mx-auto glass-panel border border-[var(--glass-border)] border-b-0 rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] overflow-y-auto animate-sheet-up pb-nav"
+        style={{
+          bottom: "var(--kb, 0px)",
+          maxHeight: "min(85vh, calc(100vh - var(--kb, 0px) - 2rem))",
+          ...(dragY > 0
+            ? { transform: `translate3d(0, ${dragY}px, 0)`, transition: "none" }
+            : { transition: "transform 0.5s var(--spring-bouncy), bottom 0.2s ease, max-height 0.2s ease" }),
+        }}
       >
         <div
           className="flex justify-center pt-4 pb-3 cursor-grab touch-none relative"
