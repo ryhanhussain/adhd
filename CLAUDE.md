@@ -18,11 +18,12 @@ No Redux. State = React hooks + IndexedDB, synced across components via `window.
 
 ## Routes
 
-- `/` — Home: greeting, check-in garden, active-timer card, daily intentions, Ta-Da list, daily + weekly insights, end-of-day reflection. Pinned dock with "Log Activity" and "Plan Day" (brain dump).
+- `/` — Home: greeting, check-in garden, active-timer card, daily intentions, Ta-Da list, daily + weekly insights, end-of-day reflection. Pinned dock with "Log Activity" and "Plan Day" (brain dump). First-load-per-day `CarryoverPrompt` for yesterday's pending intentions; items older than a day auto-archive.
 - `/timeline` — Hourly history with week-strip nav, date swipe, debounced search.
+- `/archive` — Past intentions you didn't carry forward; restore or discard.
 - `/settings` — Activity categories, Intention buckets (up to 3, user-described), theme, JSON + CSV export, sign-out.
 
-Bottom `NavBar` links all three.
+Bottom `NavBar` links Home, Timeline, Settings.
 
 ---
 
@@ -59,7 +60,9 @@ Completing an intention creates an `Entry` and links back via `entryId`.
 **Planning**
 - Brain Dump modal: voice/text → Gemini splits into discrete intentions (fallback: local sentence split)
 - Up to 3 user-defined intention buckets, each with a 1-sentence description. The brain-dump prompt is built dynamically from those descriptions so Gemini sorts tasks by the user's own mental model. `IntentionsCard` groups items under bucket headers; falls back to a flat list when no buckets exist
+- Per-intention **bucket chip** on each `IntentionItem`: tap to reassign or clear the bucket when Gemini guessed wrong (also works for intentions that pre-date bucket setup). Only shown when the user has defined buckets
 - `IntentionsCard` on Home — tap to complete, which logs a new Entry
+- Carryover flow: once per day on Home, `CarryoverPrompt` offers yesterday's still-pending intentions as a checklist; carry-over clones preserve `categoryId`. Intentions 2–7 days stale auto-archive silently
 
 **Insights**
 - `DailySummary`: SVG donut chart, category bars, peak time
@@ -83,8 +86,11 @@ Completing an intention creates an `Entry` and links back via `entryId`.
 
 **Settings / Data**
 - Supabase email auth; Next.js Edge API routes automatically handle Gemini API interactions for all users with server-side quota tracking.
-- Category customization with 8-color palette
+- Activity categories: rename, recolor (8-color palette), add/remove (min 2), or reset to defaults
+- Intention buckets: up to 3 user-defined, each with name + one-sentence description that feeds the brain-dump prompt
+- Theme: Light / System / Dark (synced via IndexedDB)
 - JSON + CSV export of all entries
+- Sign-out; account switch wipes local IndexedDB to prevent cross-account data leakage
 
 ---
 

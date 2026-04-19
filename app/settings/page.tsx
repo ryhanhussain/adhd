@@ -12,6 +12,7 @@ import {
   type IntentionCategory,
 } from "@/lib/categories";
 import { useAuth } from "@/components/AuthProvider";
+import { fetchQuota, type QuotaSnapshot } from "@/lib/quota";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -27,6 +28,27 @@ export default function SettingsPage() {
   const [intentionCategories, setIntentionCategories] = useState<IntentionCategory[]>([]);
   const [intentionOpenColorPicker, setIntentionOpenColorPicker] = useState<string | null>(null);
   const [intentionPendingRemoveId, setIntentionPendingRemoveId] = useState<string | null>(null);
+  const [quota, setQuota] = useState<QuotaSnapshot | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const load = async () => {
+      const snap = await fetchQuota();
+      if (!cancelled) setQuota(snap);
+    };
+    load();
+    const onUpdate = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(load, 500);
+    };
+    window.addEventListener("entry-updated", onUpdate);
+    return () => {
+      cancelled = true;
+      if (debounce) clearTimeout(debounce);
+      window.removeEventListener("entry-updated", onUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     async function loadSettings() {
@@ -214,7 +236,7 @@ export default function SettingsPage() {
   if (!loaded) return null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 lg:max-w-lg lg:mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm mt-1 text-[var(--color-text-muted)]">
@@ -487,6 +509,45 @@ export default function SettingsPage() {
           </p>
         )}
       </section>
+
+      {/* AI Usage */}
+      {quota && (
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider mb-3 text-[var(--color-text-muted)]">
+            AI requests today
+          </h2>
+          <div className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] px-4 py-3">
+            <div className="flex items-baseline justify-between mb-2">
+              <span
+                className={`text-sm font-semibold tabular-nums ${
+                  quota.remaining === 0
+                    ? "text-red-500"
+                    : quota.remaining <= 5
+                    ? "text-amber-500"
+                    : "text-[var(--color-text)]"
+                }`}
+              >
+                {quota.count}/{quota.cap} used
+              </span>
+              <span className="text-[11px] text-[var(--color-text-muted)]">
+                resets at midnight UTC
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-[var(--color-border)]/40 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  quota.remaining === 0
+                    ? "bg-red-500"
+                    : quota.remaining <= 5
+                    ? "bg-amber-500"
+                    : "bg-[var(--color-accent)]"
+                }`}
+                style={{ width: `${Math.min(100, (quota.count / quota.cap) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Account */}
       {user && (

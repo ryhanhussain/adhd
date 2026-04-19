@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { getEntriesForDateRange, type Entry, type EnergyLevel } from "@/lib/db";
 import { getWeeklyEnergyData, getEnergyColor } from "@/lib/energy";
 
@@ -82,8 +82,8 @@ export default function WeeklyEnergyHeatmap() {
 
           {/* Hour rows */}
           {HOURS.map((hour) => (
-            <>
-              <div key={`label-${hour}`} className="text-[7px] text-[var(--color-text-muted)] text-right pr-1 leading-none flex items-center justify-end">
+            <React.Fragment key={hour}>
+              <div className="text-[7px] text-[var(--color-text-muted)] text-right pr-1 leading-none flex items-center justify-end">
                 {hour % 12 || 12}{hour >= 12 ? "p" : "a"}
               </div>
               {data.days.map((d) => {
@@ -105,7 +105,7 @@ export default function WeeklyEnergyHeatmap() {
                   />
                 );
               })}
-            </>
+            </React.Fragment>
           ))}
         </div>
       </div>

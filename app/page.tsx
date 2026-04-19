@@ -198,6 +198,38 @@ export default function Home() {
     window.dispatchEvent(new Event("entry-updated"));
   };
 
+  const handleIntentionCategoryChange = async (id: string, categoryId: string | null) => {
+    await updateIntention(id, { categoryId });
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const handleIntentionTextChange = async (id: string, text: string) => {
+    await updateIntention(id, { text });
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  // Keyboard shortcuts: ⌘K log, ⌘⇧K plan, Esc collapse. Modals short-circuit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const modalOpen =
+        carryoverItems.length > 0 || !!selectedEntry || !!milestoneToShow;
+      if (modalOpen) return;
+
+      const cmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (cmdOrCtrl && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setActiveInput(e.shiftKey ? "plan" : "log");
+        return;
+      }
+      if (e.key === "Escape" && activeInput !== "none") {
+        e.preventDefault();
+        setActiveInput("none");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeInput, carryoverItems.length, selectedEntry, milestoneToShow]);
+
   const handleIntentionComplete = async (id: string, note: string, startTime: number, endTime: number) => {
     const intention = intentions.find((i) => i.id === id);
     if (!intention) return;
@@ -249,10 +281,11 @@ export default function Home() {
 
   return (
     <>
-      {/* Scrollable content — padded at bottom to clear the pinned input dock */}
-      <div className="flex flex-col gap-5 pb-dock">
+      {/* Scrollable content — padded at bottom to clear the pinned input dock.
+          At lg: 2-col grid, action-left / insights-right; source order matches mobile. */}
+      <div className="flex flex-col gap-3 pb-dock lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-3 lg:items-start">
         {/* ── Header card: greeting + garden anchored together ── */}
-        <div className="glass-panel rounded-2xl p-4 flex items-center justify-between">
+        <div className="lg:col-start-1 glass-panel rounded-2xl p-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}</h1>
             {entries.length > 0 && (
@@ -266,18 +299,22 @@ export default function Home() {
 
         {/* ── Daily Intentions (top priority position) ── */}
         {intentions.length > 0 && (
-          <IntentionsCard
-            intentions={intentions}
-            onComplete={handleIntentionComplete}
-            onDelete={handleIntentionDelete}
-            intentionCategories={intentionCategories}
-          />
+          <div className="lg:col-start-1 relative z-10">
+            <IntentionsCard
+              intentions={intentions}
+              onComplete={handleIntentionComplete}
+              onDelete={handleIntentionDelete}
+              intentionCategories={intentionCategories}
+              onCategoryChange={handleIntentionCategoryChange}
+              onTextChange={handleIntentionTextChange}
+            />
+          </div>
         )}
 
         {/* ── Active entry ── */}
         {activeEntry && (
           <div
-            className="rounded-xl p-4 border-2 border-[var(--color-accent)] animate-fade-in animate-breathe"
+            className="lg:col-start-1 rounded-xl p-4 border-2 border-[var(--color-accent)] animate-fade-in animate-breathe"
             style={{ backgroundColor: "var(--color-accent-soft)" }}
           >
             <div className="flex items-center justify-between mb-2">
@@ -301,7 +338,7 @@ export default function Home() {
 
         {/* ── Empty state ── */}
         {entries.length === 0 && intentions.length === 0 && streak && (
-          <div className="text-center py-8 animate-fade-in">
+          <div className="lg:col-start-2 text-center py-6 animate-fade-in">
             {streak.totalDays === 0 ? (
               <>
                 <p className="text-lg font-semibold mb-1">Welcome to ADDit</p>
@@ -321,21 +358,23 @@ export default function Home() {
 
         {/* ── Today's Ta-Da List ── */}
         {tadaEntries.length > 0 && (
-          <TaDaTimeline
-            entries={tadaEntries}
-            categories={categories}
-            onTap={setSelectedEntry}
-            highlightIds={recentTaDaIds}
-          />
+          <div className="lg:col-start-2 lg:row-start-1">
+            <TaDaTimeline
+              entries={tadaEntries}
+              categories={categories}
+              onTap={setSelectedEntry}
+              highlightIds={recentTaDaIds}
+            />
+          </div>
         )}
 
         {/* ── Insights section: daily + weekly grouped ── */}
         {hasInsights && (
-          <section>
+          <section className="lg:col-start-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3 px-1">
               Insights
             </h2>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               <DailySummary entries={entries} categories={categories} />
               <WeeklyInsights categories={categories} />
             </div>
@@ -344,11 +383,15 @@ export default function Home() {
 
         {/* Show weekly insights even with no entries today (it covers the whole week) */}
         {!hasInsights && (
-          <WeeklyInsights categories={categories} />
+          <div className="lg:col-start-2">
+            <WeeklyInsights categories={categories} />
+          </div>
         )}
 
         {/* ── End-of-day reflection ── */}
-        <ReflectionPrompt entries={entries} />
+        <div className="lg:col-start-2">
+          <ReflectionPrompt entries={entries} />
+        </div>
       </div>
 
       {/* ── Pinned input dock (fixed above navbar, lifts above keyboard on mobile) ── */}
@@ -421,7 +464,10 @@ export default function Home() {
                   </div>
                   <div className="flex flex-col text-left">
                     <span className="text-sm font-bold text-[var(--color-text)] leading-tight">Log Activity</span>
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-medium mt-0.5">Doing or Done</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] font-medium mt-0.5">
+                      Doing or Done
+                      <span className="hidden lg:inline ml-1.5 opacity-70">⌘K</span>
+                    </span>
                   </div>
                 </button>
 
@@ -441,7 +487,10 @@ export default function Home() {
                   </div>
                   <div className="flex flex-col text-left relative pr-2">
                     <span className="text-sm font-bold text-[var(--color-text)] leading-tight">Plan Day</span>
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-medium mt-0.5">To-Do List</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] font-medium mt-0.5">
+                      To-Do List
+                      <span className="hidden lg:inline ml-1.5 opacity-70">⌘⇧K</span>
+                    </span>
                     <span className="absolute -top-1 right-0 text-[10px] text-indigo-500">&#x2728;</span>
                   </div>
                 </button>
@@ -485,6 +534,8 @@ export default function Home() {
       {carryoverItems.length > 0 && (
         <CarryoverPrompt
           items={carryoverItems}
+          intentionCategories={intentionCategories}
+          onCategoryChange={handleIntentionCategoryChange}
           onDone={async () => {
             setCarryoverItems([]);
             await saveSettings({ lastCarryoverPromptDate: today });

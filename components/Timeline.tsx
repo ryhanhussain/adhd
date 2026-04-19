@@ -313,6 +313,7 @@ export default function Timeline() {
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      className="lg:max-w-lg lg:mx-auto"
     >
       {/* Search bar */}
       <div className="flex items-center gap-2 mb-3">

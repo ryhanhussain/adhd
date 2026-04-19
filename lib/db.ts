@@ -569,6 +569,31 @@ export async function updateIntention(
 }
 
 /**
+ * Re-numbers `order` on the given intention ids so they match the array index
+ * (0, 1, 2, …). Only touches rows whose existing `order` differs, so a no-op
+ * drag doesn't churn sync state. All writes happen in a single transaction.
+ */
+export async function reorderIntentions(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDB();
+  const now = Date.now();
+  const tx = db.transaction("intentions", "readwrite");
+  for (let i = 0; i < ids.length; i++) {
+    const row = await tx.store.get(ids[i]);
+    if (!row) continue;
+    if (row.order === i) continue;
+    await tx.store.put({
+      ...row,
+      order: i,
+      updatedAt: now,
+      syncedAt: null,
+    });
+  }
+  await tx.done;
+  INTENTION_UPDATED_EVENT();
+}
+
+/**
  * Soft-delete: marks the row as deleted and dirty so the tombstone propagates
  * via sync. Local queries already filter `deleted === true`.
  */

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { type Entry } from "@/lib/db";
+import { useRef, useState } from "react";
+import { updateEntry, type Entry } from "@/lib/db";
 import { getCategoryStyle, type Category } from "@/lib/categories";
 import { getEnergyEmoji } from "@/lib/energy";
+import CategoryPicker from "./CategoryPicker";
 
 interface TaDaTimelineProps {
   entries: Entry[];
@@ -13,6 +14,8 @@ interface TaDaTimelineProps {
 }
 
 const INITIAL_SHOW = 10;
+const LONG_PRESS_MS = 500;
+const MOVE_CANCEL_PX = 6;
 
 function formatDuration(ms: number): string {
   const minutes = Math.floor(ms / 60000);
@@ -29,6 +32,14 @@ function formatTime(ts: number): string {
 
 export default function TaDaTimeline({ entries, categories, onTap, highlightIds }: TaDaTimelineProps) {
   const [showAll, setShowAll] = useState(false);
+  const [picker, setPicker] = useState<{ entry: Entry; rect: DOMRect } | null>(null);
+  const longPressRef = useRef<{
+    id: string;
+    timer: ReturnType<typeof setTimeout> | null;
+    startX: number;
+    startY: number;
+    fired: boolean;
+  } | null>(null);
 
   // Sort oldest first (chronological order — building up the day)
   const sorted = [...entries].sort(
@@ -39,6 +50,62 @@ export default function TaDaTimeline({ entries, categories, onTap, highlightIds 
   const hasMore = sorted.length > INITIAL_SHOW && !showAll;
 
   if (sorted.length === 0) return null;
+
+  const cancelPress = () => {
+    const meta = longPressRef.current;
+    if (!meta) return;
+    if (meta.timer) clearTimeout(meta.timer);
+    longPressRef.current = null;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>, entry: Entry) => {
+    if (entry.endTime === 0) return; // skip active timers
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const row = e.currentTarget;
+    longPressRef.current = {
+      id: entry.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      fired: false,
+      timer: setTimeout(() => {
+        const meta = longPressRef.current;
+        if (!meta || meta.id !== entry.id) return;
+        meta.fired = true;
+        if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+          try { navigator.vibrate(10); } catch { /* ignore */ }
+        }
+        setPicker({ entry, rect: row.getBoundingClientRect() });
+      }, LONG_PRESS_MS),
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const meta = longPressRef.current;
+    if (!meta || meta.fired) return;
+    if (Math.hypot(e.clientX - meta.startX, e.clientY - meta.startY) > MOVE_CANCEL_PX) {
+      cancelPress();
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent, entry: Entry) => {
+    const meta = longPressRef.current;
+    if (meta?.fired) {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelPress();
+      return;
+    }
+    cancelPress();
+    onTap(entry);
+  };
+
+  const pickCategory = async (name: string) => {
+    if (!picker) return;
+    const { entry } = picker;
+    const nextTags = [name, ...entry.tags.filter((t) => t !== name).slice(1)];
+    await updateEntry(entry.id, { tags: nextTags });
+    window.dispatchEvent(new Event("entry-updated"));
+  };
 
   return (
     <div>
@@ -71,7 +138,12 @@ export default function TaDaTimeline({ entries, categories, onTap, highlightIds 
               <div
                 key={entry.id}
                 className={`relative flex items-center gap-3 py-1.5 cursor-pointer group ${isJustLanded ? "animate-tada-land" : ""}`}
-                onClick={() => onTap(entry)}
+                onClick={(e) => handleClick(e, entry)}
+                onPointerDown={(e) => handlePointerDown(e, entry)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={cancelPress}
+                onPointerCancel={cancelPress}
+                onContextMenu={(e) => e.preventDefault()}
                 style={{
                   opacity: 0,
                   animation: isJustLanded
@@ -137,6 +209,16 @@ export default function TaDaTimeline({ entries, categories, onTap, highlightIds 
           </button>
         )}
       </div>
+
+      {picker && (
+        <CategoryPicker
+          categories={categories}
+          current={picker.entry.tags[0] || ""}
+          anchorRect={picker.rect}
+          onPick={pickCategory}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   );
 }

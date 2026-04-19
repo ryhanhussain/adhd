@@ -51,7 +51,7 @@ export default function RootLayout({
             <LoginGate />
             <div className="fixed inset-0 z-[-1] pointer-events-none noise-bg" />
             <div className="fixed inset-0 z-[-1] pointer-events-none gradient-mesh opacity-40 dark:opacity-20" />
-            <main className="max-w-lg mx-auto px-5 pt-6 relative z-0">
+            <main className="max-w-lg lg:max-w-5xl mx-auto px-5 pt-6 relative z-0">
               {children}
             </main>
             <ActiveTimerBar />

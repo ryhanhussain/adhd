@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Intention } from "@/lib/db";
+import type { IntentionCategory } from "@/lib/categories";
+import BucketChipPicker from "./BucketChipPicker";
 
 interface IntentionItemProps {
   intention: Intention;
   onComplete: (id: string, note: string, startTime: number, endTime: number) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  /** Current user buckets; when non-empty, a chip is shown that opens a picker. */
+  intentionCategories?: IntentionCategory[];
+  /** Sets or clears the category for this intention. Pass null to clear. */
+  onCategoryChange?: (id: string, categoryId: string | null) => Promise<void>;
+  /** Updates the intention's text. When omitted, inline edit is disabled. */
+  onTextChange?: (id: string, text: string) => Promise<void>;
 }
 
 function defaultStartTime(): string {
@@ -26,7 +34,14 @@ function timeToTimestamp(timeStr: string): number {
   return d.getTime();
 }
 
-export default function IntentionItem({ intention, onComplete, onDelete }: IntentionItemProps) {
+export default function IntentionItem({
+  intention,
+  onComplete,
+  onDelete,
+  intentionCategories = [],
+  onCategoryChange,
+  onTextChange,
+}: IntentionItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState("");
   const [startTime, setStartTime] = useState(defaultStartTime);
@@ -34,7 +49,21 @@ export default function IntentionItem({ intention, onComplete, onDelete }: Inten
   const [isLogging, setIsLogging] = useState(false);
   const [checked, setChecked] = useState(false);
   const [animatingOut, setAnimatingOut] = useState(false);
-  const itemRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(intention.text);
+  const [bucketFlash, setBucketFlash] = useState(false);
+  const prevCategoryId = useRef(intention.categoryId);
+  const editRef = useRef<HTMLInputElement>(null);
+
+  // Flash highlight when bucket changes
+  useEffect(() => {
+    if (prevCategoryId.current !== intention.categoryId) {
+      prevCategoryId.current = intention.categoryId;
+      setBucketFlash(true);
+      const t = setTimeout(() => setBucketFlash(false), 600);
+      return () => clearTimeout(t);
+    }
+  }, [intention.categoryId]);
 
   // Already completed — show struck-through with check
   if (intention.completed && !animatingOut) {
@@ -42,6 +71,7 @@ export default function IntentionItem({ intention, onComplete, onDelete }: Inten
   }
 
   const handleCheck = () => {
+    if (editing) return;
     if (expanded) {
       setExpanded(false);
       setChecked(false);
@@ -66,15 +96,53 @@ export default function IntentionItem({ intention, onComplete, onDelete }: Inten
     }
   };
 
+  const hasBuckets = intentionCategories.length > 0 && !!onCategoryChange;
+
+  const handlePickCategory = async (categoryId: string | null) => {
+    if (!onCategoryChange) return;
+    await onCategoryChange(intention.id, categoryId);
+  };
+
+  const canEdit = !!onTextChange && !expanded && !animatingOut;
+
+  const startEdit = () => {
+    if (!canEdit) return;
+    setDraft(intention.text);
+    setEditing(true);
+  };
+
+  const commitEdit = async () => {
+    const next = draft.trim();
+    setEditing(false);
+    if (!next || next === intention.text) return;
+    await onTextChange?.(intention.id, next);
+  };
+
+  const cancelEdit = () => {
+    setDraft(intention.text);
+    setEditing(false);
+  };
+
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.select();
+    }
+  }, [editing]);
+
   return (
     <div
-      ref={itemRef}
-      className={animatingOut ? "animate-intention-fly-out" : ""}
+      data-intention-id={intention.id}
+      data-expanded={expanded ? "true" : undefined}
+      data-editing={editing ? "true" : undefined}
+      className={`${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""}`}
     >
-      {/* Row: checkbox + text + delete */}
-      <div className="flex items-center gap-3 py-2.5">
+      {/* Row: checkbox + text + category chip + delete */}
+      <div className="flex items-center gap-2 py-2">
         <button
           onClick={handleCheck}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 active:scale-90 ${
             checked
               ? "border-[var(--color-accent)] bg-[var(--color-accent)] scale-110"
@@ -98,11 +166,54 @@ export default function IntentionItem({ intention, onComplete, onDelete }: Inten
             </svg>
           )}
         </button>
-        <span className={`flex-1 text-sm transition-all duration-300 ${checked ? "text-[var(--color-text-muted)]" : "text-[var(--color-text)]"}`}>
-          {intention.text}
-        </span>
+
+        {editing ? (
+          <input
+            ref={editRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitEdit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancelEdit();
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="flex-1 min-w-0 text-sm bg-transparent border-b border-[var(--color-accent)] outline-none py-0.5 text-[var(--color-text)]"
+          />
+        ) : (
+          <span
+            onDoubleClick={(e) => {
+              if (!canEdit) return;
+              e.stopPropagation();
+              startEdit();
+            }}
+            className={`flex-1 min-w-0 text-sm transition-all duration-300 ${
+              checked ? "text-[var(--color-text-muted)]" : "text-[var(--color-text)]"
+            } ${canEdit ? "cursor-text select-none" : ""}`}
+            title={canEdit ? "Double-click to edit" : undefined}
+          >
+            {intention.text}
+          </span>
+        )}
+
+        {/* Category chip — only when user has buckets defined */}
+        {hasBuckets && !editing && (
+          <BucketChipPicker
+            buckets={intentionCategories}
+            value={intention.categoryId ?? null}
+            onChange={handlePickCategory}
+          />
+        )}
+
         <button
           onClick={() => onDelete(intention.id)}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
           className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0"
           aria-label="Delete intention"
         >
