@@ -2,13 +2,16 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { ParsedIntention } from "@/lib/gemini";
+import type { IntentionCategory } from "@/lib/categories";
 
 interface BrainDumpInputProps {
   onIntentionsParsed: (intentions: ParsedIntention[]) => Promise<void>;
   onClose: () => void;
+  /** Current intention buckets; forwarded to the Gemini prompt for dynamic classification. */
+  intentionCategories?: IntentionCategory[];
 }
 
-export default function BrainDumpInput({ onIntentionsParsed, onClose }: BrainDumpInputProps) {
+export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionCategories }: BrainDumpInputProps) {
   const [transcript, setTranscript] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -40,7 +43,10 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose }: BrainDum
     setIsParsing(true);
     try {
       const { parseBrainDump } = await import("@/lib/gemini");
-      const parsed = await parseBrainDump(transcript.trim());
+      const parsed = await parseBrainDump(
+        transcript.trim(),
+        intentionCategories?.map((c) => ({ id: c.id, name: c.name, description: c.description }))
+      );
       if (parsed.length > 0) {
         await onIntentionsParsed(parsed);
       }

@@ -67,6 +67,14 @@ export async function categorizeEntry(text: string, categoryNames: string[]): Pr
 
 export interface ParsedIntention {
   text: string;
+  categoryId?: string | null;
+}
+
+/** Minimal shape the route needs; callers pass their full IntentionCategory list. */
+export interface BrainDumpCategory {
+  id: string;
+  name: string;
+  description: string;
 }
 
 function splitTranscriptLocally(transcript: string): ParsedIntention[] {
@@ -75,10 +83,13 @@ function splitTranscriptLocally(transcript: string): ParsedIntention[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 2)
     .slice(0, 10)
-    .map((text) => ({ text: text.charAt(0).toUpperCase() + text.slice(1) }));
+    .map((text) => ({ text: text.charAt(0).toUpperCase() + text.slice(1), categoryId: null }));
 }
 
-export async function parseBrainDump(transcript: string): Promise<ParsedIntention[]> {
+export async function parseBrainDump(
+  transcript: string,
+  categories?: BrainDumpCategory[]
+): Promise<ParsedIntention[]> {
   const token = await getAuthToken();
   if (!token) return splitTranscriptLocally(transcript);
 
@@ -89,7 +100,10 @@ export async function parseBrainDump(transcript: string): Promise<ParsedIntentio
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ text: transcript }),
+      body: JSON.stringify({
+        text: transcript,
+        categories: categories ?? [],
+      }),
     });
 
     if (!res.ok) {

@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings, getAllEntries } from "@/lib/db";
-import { DEFAULT_CATEGORIES, COLOR_OPTIONS, type Category } from "@/lib/categories";
+import {
+  DEFAULT_CATEGORIES,
+  COLOR_OPTIONS,
+  MAX_INTENTION_CATEGORIES,
+  INTENTION_CATEGORY_NAME_MAX,
+  INTENTION_CATEGORY_DESCRIPTION_MAX,
+  type Category,
+  type IntentionCategory,
+} from "@/lib/categories";
 import { useAuth } from "@/components/AuthProvider";
 
 export default function SettingsPage() {
@@ -16,6 +24,9 @@ export default function SettingsPage() {
   const [openColorPicker, setOpenColorPicker] = useState<number | null>(null);
   const [pendingRemoveIndex, setPendingRemoveIndex] = useState<number | null>(null);
   const [pendingReset, setPendingReset] = useState(false);
+  const [intentionCategories, setIntentionCategories] = useState<IntentionCategory[]>([]);
+  const [intentionOpenColorPicker, setIntentionOpenColorPicker] = useState<string | null>(null);
+  const [intentionPendingRemoveId, setIntentionPendingRemoveId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
@@ -32,10 +43,19 @@ export default function SettingsPage() {
           }
         } catch { /* use defaults */ }
       }
+      if (s.customIntentionCategories) {
+        try {
+          const parsed = JSON.parse(s.customIntentionCategories);
+          if (Array.isArray(parsed)) setIntentionCategories(parsed as IntentionCategory[]);
+        } catch { /* keep empty */ }
+      }
       setTheme(s.theme || "system");
       setLoaded(true);
     }
     loadSettings();
+    const onUpdated = () => { void loadSettings(); };
+    window.addEventListener("intention-categories-updated", onUpdated);
+    return () => window.removeEventListener("intention-categories-updated", onUpdated);
   }, []);
 
   const handleThemeChange = async (newTheme: string) => {
@@ -97,6 +117,47 @@ export default function SettingsPage() {
     setPendingRemoveIndex(index);
     setTimeout(() => {
       setPendingRemoveIndex((cur) => (cur === index ? null : cur));
+    }, 3000);
+  };
+
+  const handleSaveIntentionCategories = async (updated: IntentionCategory[]) => {
+    setIntentionCategories(updated);
+    await saveSettings({
+      customIntentionCategories: updated.length > 0 ? JSON.stringify(updated) : null,
+      intentionCategoriesSyncedAt: Date.now(),
+    });
+    window.dispatchEvent(new Event("intention-categories-dirty"));
+    window.dispatchEvent(new Event("intention-categories-updated"));
+  };
+
+  const addIntentionCategory = () => {
+    if (intentionCategories.length >= MAX_INTENTION_CATEGORIES) return;
+    const usedColors = new Set(intentionCategories.map((c) => c.color));
+    const available = COLOR_OPTIONS.find((co) => !usedColors.has(co.color)) || COLOR_OPTIONS[0];
+    const newBucket: IntentionCategory = {
+      id: crypto.randomUUID(),
+      name: "New bucket",
+      description: "",
+      color: available.color,
+    };
+    handleSaveIntentionCategories([...intentionCategories, newBucket]);
+  };
+
+  const updateIntentionBucket = (id: string, patch: Partial<IntentionCategory>) => {
+    const updated = intentionCategories.map((c) => (c.id === id ? { ...c, ...patch } : c));
+    handleSaveIntentionCategories(updated);
+  };
+
+  const requestRemoveIntentionBucket = (id: string) => {
+    if (intentionPendingRemoveId === id) {
+      const updated = intentionCategories.filter((c) => c.id !== id);
+      handleSaveIntentionCategories(updated);
+      setIntentionPendingRemoveId(null);
+      return;
+    }
+    setIntentionPendingRemoveId(id);
+    setTimeout(() => {
+      setIntentionPendingRemoveId((cur) => (cur === id ? null : cur));
     }, 3000);
   };
 
@@ -292,6 +353,113 @@ export default function SettingsPage() {
         >
           + Add Category
         </button>
+      </section>
+
+      {/* Intention buckets */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider mb-2 text-[var(--color-text-muted)]">
+          Intention buckets
+        </h2>
+        <p className="text-sm mb-4 text-[var(--color-text-muted)]">
+          Up to {MAX_INTENTION_CATEGORIES} buckets. Your description teaches the AI how to sort brain-dump items.
+        </p>
+
+        <div className="flex flex-col gap-2">
+          {intentionCategories.map((bucket) => (
+            <div
+              key={bucket.id}
+              className="flex flex-col gap-2 px-3 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <button
+                    className="min-w-11 min-h-11 flex items-center justify-center flex-shrink-0"
+                    onClick={() => setIntentionOpenColorPicker(intentionOpenColorPicker === bucket.id ? null : bucket.id)}
+                    aria-label={`Change color for ${bucket.name}`}
+                    aria-expanded={intentionOpenColorPicker === bucket.id}
+                  >
+                    <span
+                      className="w-6 h-6 rounded-full border-2 border-[var(--color-bg)] shadow-sm flex items-center justify-center"
+                      style={{ backgroundColor: bucket.color }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                        <path d="M3 4.5L6 7.5L9 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  </button>
+                  {intentionOpenColorPicker === bucket.id && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIntentionOpenColorPicker(null)} />
+                      <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 flex gap-1.5 flex-wrap w-[220px] animate-slide-up">
+                        {COLOR_OPTIONS.map((co) => (
+                          <button
+                            key={co.color}
+                            onClick={() => {
+                              updateIntentionBucket(bucket.id, { color: co.color });
+                              setIntentionOpenColorPicker(null);
+                            }}
+                            className="min-w-11 min-h-11 flex items-center justify-center rounded-lg transition-transform active:scale-90"
+                            title={co.label}
+                            aria-label={co.label}
+                          >
+                            <span
+                              className="w-7 h-7 rounded-full border-2"
+                              style={{
+                                backgroundColor: co.color,
+                                borderColor: co.color === bucket.color ? "var(--color-text)" : "transparent",
+                              }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <input
+                  value={bucket.name}
+                  onChange={(e) => updateIntentionBucket(bucket.id, { name: e.target.value.slice(0, INTENTION_CATEGORY_NAME_MAX) })}
+                  placeholder="Bucket name"
+                  maxLength={INTENTION_CATEGORY_NAME_MAX}
+                  className="flex-1 text-sm font-medium bg-transparent border-b border-[var(--color-border)] focus:border-[var(--color-accent)] outline-none py-0.5"
+                />
+
+                <button
+                  onClick={() => requestRemoveIntentionBucket(bucket.id)}
+                  className={`min-w-11 min-h-11 flex items-center justify-center leading-none transition-colors ${
+                    intentionPendingRemoveId === bucket.id
+                      ? "text-[var(--color-danger)] text-xs font-semibold"
+                      : "text-[var(--color-text-muted)] text-xl hover:text-[var(--color-danger)]"
+                  }`}
+                  aria-label={intentionPendingRemoveId === bucket.id ? `Tap again to confirm removing ${bucket.name}` : `Remove ${bucket.name}`}
+                >
+                  {intentionPendingRemoveId === bucket.id ? "Confirm?" : "×"}
+                </button>
+              </div>
+
+              <textarea
+                value={bucket.description}
+                onChange={(e) => updateIntentionBucket(bucket.id, { description: e.target.value.slice(0, INTENTION_CATEGORY_DESCRIPTION_MAX) })}
+                placeholder="One sentence: what belongs in this bucket?"
+                rows={2}
+                maxLength={INTENTION_CATEGORY_DESCRIPTION_MAX}
+                className="w-full text-sm bg-[var(--color-bg)]/50 rounded-lg px-3 py-2 border border-[var(--color-border)] focus:border-[var(--color-accent)] outline-none resize-none placeholder:text-[var(--color-text-muted)]"
+              />
+              <div className="text-[10px] text-right text-[var(--color-text-muted)] tabular-nums">
+                {bucket.description.length}/{INTENTION_CATEGORY_DESCRIPTION_MAX}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {intentionCategories.length < MAX_INTENTION_CATEGORIES && (
+          <button
+            onClick={addIntentionCategory}
+            className="mt-3 w-full h-11 rounded-xl border-2 border-dashed border-[var(--color-border)] text-sm font-medium text-[var(--color-text-muted)] transition-all active:scale-[0.98] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            + Add Bucket
+          </button>
+        )}
       </section>
 
       {/* Export */}

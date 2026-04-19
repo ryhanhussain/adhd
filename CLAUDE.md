@@ -12,7 +12,7 @@ ADHD-friendly journaling + time-tracking PWA. User types or speaks what they're 
 
 Next.js 15 (App Router) · React 19 · TypeScript 5 strict · Tailwind 4 (CSS vars for theming) · IndexedDB via `idb` v8 · Supabase (auth + quota tracking) · Google Gemini API (secure server-side key via Cloudflare Pages proxy) · Web Speech API · PWA via `public/manifest.json`.
 
-No Redux. State = React hooks + IndexedDB, synced across components via `window.dispatchEvent(new Event("entry-updated"))`. App is gated behind `LoginGate`. Entries, reflections, intentions, and custom categories all sync to Supabase (cross-device, offline-first, LWW); sync modules: `lib/entriesSync.ts`, `lib/reflectionsSync.ts`, `lib/intentionsSync.ts`, `lib/categoriesSync.ts`.
+No Redux. State = React hooks + IndexedDB, synced across components via `window.dispatchEvent(new Event("entry-updated"))`. App is gated behind `LoginGate`. Entries, reflections, intentions, and both custom activity categories + intention buckets all sync to Supabase (cross-device, offline-first, LWW); sync modules: `lib/entriesSync.ts`, `lib/reflectionsSync.ts`, `lib/intentionsSync.ts`, `lib/categoriesSync.ts` (covers both category kinds in one round-trip).
 
 ---
 
@@ -20,7 +20,7 @@ No Redux. State = React hooks + IndexedDB, synced across components via `window.
 
 - `/` — Home: greeting, check-in garden, active-timer card, daily intentions, Ta-Da list, daily + weekly insights, end-of-day reflection. Pinned dock with "Log Activity" and "Plan Day" (brain dump).
 - `/timeline` — Hourly history with week-strip nav, date swipe, debounced search.
-- `/settings` — Category management, theme, JSON + CSV export, sign-out.
+- `/settings` — Activity categories, Intention buckets (up to 3, user-described), theme, JSON + CSV export, sign-out.
 
 Bottom `NavBar` links all three.
 
@@ -29,13 +29,16 @@ Bottom `NavBar` links all three.
 ## Data models (`lib/db.ts`)
 
 ```ts
-Entry       { id, text, timestamp, startTime, endTime, date: "YYYY-MM-DD",
-              tags[], location|null, energy?: "high"|"medium"|"low"|"scattered"|null,
-              summary?: string|null, createdAt }
-Intention   { id, text, date, completed, completedAt, entryId|null, order, createdAt }
-Reflection  { date (pk), mood 1–5, note, summary, createdAt }
-Settings    { customCategories (JSON string), theme, lastSeenMilestone }
-Category    { name, color (hex) }
+Entry              { id, text, timestamp, startTime, endTime, date: "YYYY-MM-DD",
+                     tags[], location|null, energy?: "high"|"medium"|"low"|"scattered"|null,
+                     summary?: string|null, createdAt }
+Intention          { id, text, date, completed, completedAt, entryId|null, order,
+                     categoryId?: string|null, createdAt }
+Reflection         { date (pk), mood 1–5, note, summary, createdAt }
+Settings           { customCategories, customIntentionCategories (JSON strings),
+                     theme, lastSeenMilestone, ...syncedAt timestamps }
+Category           { name, color (hex) }
+IntentionCategory  { id, name, description, color }   // user-defined bucket, ≤3
 ```
 
 `endTime === 0` → timer running (sentinel, no separate active-timer record).
@@ -55,6 +58,7 @@ Completing an intention creates an `Entry` and links back via `entryId`.
 
 **Planning**
 - Brain Dump modal: voice/text → Gemini splits into discrete intentions (fallback: local sentence split)
+- Up to 3 user-defined intention buckets, each with a 1-sentence description. The brain-dump prompt is built dynamically from those descriptions so Gemini sorts tasks by the user's own mental model. `IntentionsCard` groups items under bucket headers; falls back to a flat list when no buckets exist
 - `IntentionsCard` on Home — tap to complete, which logs a new Entry
 
 **Insights**
@@ -91,6 +95,8 @@ Completing an intention creates an `Entry` and links back via `entryId`.
 - **Suggestion scoring:** `frequency × exp(-days/7) × (0.5 + 0.5 × entries_within_±2hrs / total)`.
 - **Reflection gate:** shown only after 19:00, once per date.
 - **Entry date:** derived from `startTime` via `toLocalDateStr` (local tz, not UTC) whenever startTime is updated.
+- **Gemini proxy quota:** per-user daily cap enforced via an atomic Postgres RPC (`increment_and_check_quota`, SECURITY DEFINER with row lock) plus a 1.5s burst guard. Fails CLOSED on DB errors.
+- **Bounded history reads:** streak/garden compute over the last 400 days via `getEntriesSince`, not `getAllEntries`, so cost stays constant as logs accumulate.
 
 ---
 

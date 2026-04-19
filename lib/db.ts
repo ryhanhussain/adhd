@@ -54,6 +54,11 @@ export interface Settings {
   lastReflectionPullAt: number;
   /** Epoch ms timestamp of the last local categories write; used for LWW push/pull. */
   categoriesSyncedAt: number;
+  // --- intention categories (v8) ---
+  /** JSON-encoded array of IntentionCategory; null = user has no buckets (flat list fallback). */
+  customIntentionCategories: string | null;
+  /** Epoch ms timestamp of the last local intention-categories write; used for LWW push/pull. */
+  intentionCategoriesSyncedAt: number;
 }
 
 export interface Intention {
@@ -66,6 +71,9 @@ export interface Intention {
   order: number;
   createdAt: number;
   archived?: boolean; // true = user declined carryover or auto-archived; hidden from Home
+  // --- intention categories (v8) ---
+  /** id of an IntentionCategory; null = uncategorized; unknown id renders as uncategorized. */
+  categoryId?: string | null;
   // --- sync metadata (v6) ---
   updatedAt: number;         // epoch ms of the last local or remote write; drives last-write-wins merge
   deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
@@ -107,7 +115,7 @@ let dbPromise: Promise<IDBPDatabase<ADDitDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<ADDitDB>("addit-db", 7, {
+    dbPromise = openDB<ADDitDB>("addit-db", 8, {
       upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           const entryStore = db.createObjectStore("entries", { keyPath: "id" });
@@ -130,6 +138,9 @@ function getDB() {
         //
         // v6: sync metadata backfill for intentions.
         // v7: sync metadata backfill for entries and reflections.
+        // v8: categoryId added to Intention (optional, defaults to undefined → "uncategorized")
+        //     and customIntentionCategories/intentionCategoriesSyncedAt added to Settings.
+        //     No store changes; Settings keys default to null/0 when absent.
         //
         // Both backfills share a single async block so that any upgrade path
         // (e.g. fresh install → v7, or v3 → v7) runs whatever is needed in
@@ -377,6 +388,9 @@ export async function getSettings(): Promise<Settings> {
   const lastReflectionPullAt = Number.parseInt(lastReflectionPullAtRaw, 10) || 0;
   const categoriesSyncedAtRaw = (await db.get("settings", "categoriesSyncedAt")) || "0";
   const categoriesSyncedAt = Number.parseInt(categoriesSyncedAtRaw, 10) || 0;
+  const customIntentionCategories = (await db.get("settings", "customIntentionCategories")) || null;
+  const intentionCategoriesSyncedAtRaw = (await db.get("settings", "intentionCategoriesSyncedAt")) || "0";
+  const intentionCategoriesSyncedAt = Number.parseInt(intentionCategoriesSyncedAtRaw, 10) || 0;
   return {
     customCategories,
     theme,
@@ -389,6 +403,8 @@ export async function getSettings(): Promise<Settings> {
     reflectionSyncOwner,
     lastReflectionPullAt,
     categoriesSyncedAt,
+    customIntentionCategories,
+    intentionCategoriesSyncedAt,
   };
 }
 
@@ -426,6 +442,12 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   }
   if (settings.categoriesSyncedAt !== undefined) {
     await db.put("settings", String(settings.categoriesSyncedAt ?? 0), "categoriesSyncedAt");
+  }
+  if (settings.customIntentionCategories !== undefined) {
+    await db.put("settings", settings.customIntentionCategories || "", "customIntentionCategories");
+  }
+  if (settings.intentionCategoriesSyncedAt !== undefined) {
+    await db.put("settings", String(settings.intentionCategoriesSyncedAt ?? 0), "intentionCategoriesSyncedAt");
   }
 }
 

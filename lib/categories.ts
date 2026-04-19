@@ -3,6 +3,23 @@ export interface Category {
   color: string;
 }
 
+/**
+ * Intention category ("bucket"). User-defined, up to 3, each with a short
+ * description that's passed verbatim to the brain-dump Gemini prompt so the
+ * model can sort tasks by the user's own mental model rather than a canned
+ * taxonomy.
+ */
+export interface IntentionCategory {
+  id: string;          // stable uuid
+  name: string;        // short label, 1-20 chars
+  description: string; // 1-sentence prompt hint, <=140 chars
+  color: string;       // hex from COLOR_OPTIONS
+}
+
+export const MAX_INTENTION_CATEGORIES = 3;
+export const INTENTION_CATEGORY_NAME_MAX = 20;
+export const INTENTION_CATEGORY_DESCRIPTION_MAX = 140;
+
 export const COLOR_OPTIONS: { color: string; label: string }[] = [
   { color: "#7c5cfc", label: "Purple" },
   { color: "#3b82f6", label: "Blue" },
@@ -33,4 +50,12 @@ export function getCategoryStyle(tag: string, categories: Category[]): Category 
 
 export function getCategoryNames(categories: Category[]): string[] {
   return categories.map((c) => c.name);
+}
+
+export function getIntentionCategoryById(
+  id: string | null | undefined,
+  categories: IntentionCategory[]
+): IntentionCategory | null {
+  if (!id) return null;
+  return categories.find((c) => c.id === id) ?? null;
 }

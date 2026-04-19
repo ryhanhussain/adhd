@@ -15,6 +15,7 @@ import CarryoverPrompt from "@/components/CarryoverPrompt";
 import { getEntriesByDate, updateEntry, deleteEntry, addEntry, getSettings, saveSettings, getIntentionsByDate, getPendingIntentionsByDate, archiveIntentions, addIntentions, updateIntention, deleteIntention, toLocalDateStr, markEntryPendingDelete, unmarkEntryPendingDelete, type Entry, type Intention } from "@/lib/db";
 import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
+import { useIntentionCategories } from "@/lib/useIntentionCategories";
 import { getCategoryNames } from "@/lib/categories";
 import { getStreakInfo, getMilestone, type StreakInfo, type MilestoneInfo } from "@/lib/streaks";
 
@@ -35,6 +36,7 @@ function formatElapsed(ms: number): string {
 
 export default function Home() {
   const categories = useCategories();
+  const intentionCategories = useIntentionCategories();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -181,6 +183,7 @@ export default function Home() {
       entryId: null,
       order: orderOffset + i,
       createdAt: now,
+      categoryId: p.categoryId ?? null,
       updatedAt: now,
       deleted: false,
       syncedAt: null,
@@ -267,6 +270,7 @@ export default function Home() {
             intentions={intentions}
             onComplete={handleIntentionComplete}
             onDelete={handleIntentionDelete}
+            intentionCategories={intentionCategories}
           />
         )}
 
@@ -400,6 +404,7 @@ export default function Home() {
                 <BrainDumpInput
                   onIntentionsParsed={handleIntentionsParsed}
                   onClose={() => setActiveInput("none")}
+                  intentionCategories={intentionCategories}
                 />
               </div>
             ) : (
