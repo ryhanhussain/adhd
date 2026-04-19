@@ -1,4 +1,4 @@
-import { getAllEntries } from "./db";
+import { getEntriesSince } from "./db";
 
 export interface StreakInfo {
   currentStreak: number;
@@ -7,8 +7,20 @@ export interface StreakInfo {
   hasLoggedToday: boolean;
 }
 
+/** Streak look-back window. 400 days comfortably covers the longest milestone
+ *  threshold (365) plus slack. Anything older doesn't affect current-streak
+ *  math and isn't worth paying to scan on every page load. */
+const WINDOW_DAYS = 400;
+
 function dateStr(d: Date): string {
   return d.toISOString().split("T")[0];
+}
+
+function daysAgoStr(days: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function daysBetween(a: string, b: string): number {
@@ -18,7 +30,7 @@ function daysBetween(a: string, b: string): number {
 }
 
 export async function getStreakInfo(): Promise<StreakInfo> {
-  const entries = await getAllEntries();
+  const entries = await getEntriesSince(daysAgoStr(WINDOW_DAYS));
   if (entries.length === 0) {
     return { currentStreak: 0, longestStreak: 0, totalDays: 0, hasLoggedToday: false };
   }

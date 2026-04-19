@@ -11,9 +11,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Quota
-  const allowed = await checkAndIncrementQuota(user.userId);
-  if (!allowed) {
-    return NextResponse.json({ intentions: null }, { status: 429 });
+  const quota = await checkAndIncrementQuota(user.userId);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { intentions: null, _quota: quota.reason },
+      { status: 429 }
+    );
   }
 
   const { text } = await req.json();

@@ -7,6 +7,11 @@ export const runtime = "edge";
 export const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 const DAILY_CAP = 50;
+/** Minimum ms between two allowed calls from the same user. Blocks scripted
+ *  bursts that would otherwise drain the daily cap in a single second. 1500ms
+ *  is short enough that normal human-paced usage (brain-dump, reflection,
+ *  categorize-activity) is unaffected even when they fire back-to-back. */
+const BURST_MIN_MS = 1500;
 
 // ---------------------------------------------------------------------------
 // Supabase server client (service role — bypasses RLS for quota writes)
@@ -44,42 +49,44 @@ export async function getUserFromRequest(req: NextRequest): Promise<{ userId: st
 // ---------------------------------------------------------------------------
 // Quota
 // ---------------------------------------------------------------------------
-export async function checkAndIncrementQuota(userId: string): Promise<boolean> {
+export type QuotaResult =
+  | { allowed: true; count: number }
+  | { allowed: false; reason: "cap" | "burst" | "error"; count: number };
+
+/**
+ * Atomically checks and increments the per-user daily Gemini quota.
+ *
+ * Backed by the `increment_and_check_quota` Postgres RPC (see
+ * supabase/gemini-quota-rpc.sql). The RPC takes a row lock on the user's
+ * (user_id, day) row, so concurrent requests from the same user serialize —
+ * no TOCTOU window where two requests both see `count < cap` and bypass.
+ *
+ * Fails CLOSED on DB errors (returns `allowed: false`) so a DB outage can't
+ * silently grant unlimited calls. Callers should surface this as 429.
+ */
+export async function checkAndIncrementQuota(userId: string): Promise<QuotaResult> {
   const supabase = getServiceSupabase();
   const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD UTC
 
-  // Upsert: insert or increment atomically via RPC isn't available without a
-  // custom function, so we read-then-write with service role (no TOCTOU risk
-  // at our traffic scale).
   const { data, error } = await supabase
-    .from("gemini_usage")
-    .select("count")
-    .eq("user_id", userId)
-    .eq("day", today)
-    .maybeSingle();
+    .rpc("increment_and_check_quota", {
+      p_user_id: userId,
+      p_day: today,
+      p_cap: DAILY_CAP,
+      p_burst_ms: BURST_MIN_MS,
+    })
+    .single<{ allowed: boolean; reason: string | null; count: number }>();
 
-  if (error) {
-    console.error("quota read error:", error);
-    // Fail open — don't block the user on a DB error
-    return true;
+  if (error || !data) {
+    console.error("quota RPC error:", error);
+    return { allowed: false, reason: "error", count: 0 };
   }
 
-  const currentCount = data?.count ?? 0;
-  if (currentCount >= DAILY_CAP) return false;
-
-  if (data) {
-    await supabase
-      .from("gemini_usage")
-      .update({ count: currentCount + 1 })
-      .eq("user_id", userId)
-      .eq("day", today);
-  } else {
-    await supabase
-      .from("gemini_usage")
-      .insert({ user_id: userId, day: today, count: 1 });
+  if (data.allowed) {
+    return { allowed: true, count: data.count };
   }
-
-  return true;
+  const reason: "cap" | "burst" = data.reason === "burst" ? "burst" : "cap";
+  return { allowed: false, reason, count: data.count };
 }
 
 // ---------------------------------------------------------------------------

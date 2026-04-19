@@ -1,4 +1,4 @@
-import { getAllEntries } from "./db";
+import { getEntriesSince } from "./db";
 
 export interface GardenData {
   /** Map of YYYY-MM-DD → entry count for that day */
@@ -6,19 +6,21 @@ export interface GardenData {
   totalDays: number;
 }
 
-let cachedData: GardenData | null = null;
-let cacheValid = false;
+/** How far back the garden cares about. 400 days covers a full year plus
+ *  enough slack for the expanded view (12 weeks ≈ 84 days) and leaves room
+ *  for users with year-plus streaks to still see their longest-streak context. */
+const WINDOW_DAYS = 400;
 
-if (typeof window !== "undefined") {
-  window.addEventListener("entry-updated", () => {
-    cacheValid = false;
-  });
+function daysAgoStr(days: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export async function getGardenData(): Promise<GardenData> {
-  if (cacheValid && cachedData) return cachedData;
-
-  const entries = await getAllEntries();
+  const since = daysAgoStr(WINDOW_DAYS);
+  const entries = await getEntriesSince(since);
   const dayCounts = new Map<string, number>();
 
   for (const entry of entries) {
@@ -26,9 +28,7 @@ export async function getGardenData(): Promise<GardenData> {
     dayCounts.set(entry.date, count + 1);
   }
 
-  cachedData = { dayCounts, totalDays: dayCounts.size };
-  cacheValid = true;
-  return cachedData;
+  return { dayCounts, totalDays: dayCounts.size };
 }
 
 /**

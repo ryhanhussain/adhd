@@ -344,7 +344,10 @@ h1, h2, h3 {
 .animate-intention-expand {
   animation: intentionExpand 0.25s var(--spring) forwards;
   transform-origin: top;
-  will-change: transform, opacity;
+  /* No `will-change` here: promoting the form to its own layer on mobile
+     Safari leaves the expanded layout box pinned after the item unmounts,
+     so the parent card won't shrink. The animation is short enough that
+     the perf win isn't worth that regression. */
 }
 
 @keyframes intentionCollapse {

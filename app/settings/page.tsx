@@ -50,7 +50,11 @@ export default function SettingsPage() {
       customCategories: JSON.stringify(updated),
       categoriesSyncedAt: Date.now(),
     });
+    // `categories-dirty` wakes the sync layer; `categories-updated` wakes any
+    // useCategories subscribers (including other tabs on this device once
+    // sync pulls land) so UI refreshes without a reload.
     window.dispatchEvent(new Event("categories-dirty"));
+    window.dispatchEvent(new Event("categories-updated"));
   };
 
   const startEditing = (index: number) => {

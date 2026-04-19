@@ -279,6 +279,19 @@ export async function getAllEntries(): Promise<Entry[]> {
   return all.filter((e) => !e.deleted && !pendingEntryDeletions.has(e.id));
 }
 
+/**
+ * Returns entries with `date >= sinceDate` (YYYY-MM-DD), using the `by-date`
+ * index for a bounded read. Use this for streak/garden/insights computations
+ * instead of `getAllEntries()` so the query cost stays constant as a user's
+ * history grows.
+ */
+export async function getEntriesSince(sinceDate: string): Promise<Entry[]> {
+  const db = await getDB();
+  const range = IDBKeyRange.lowerBound(sinceDate);
+  const entries = await db.getAllFromIndex("entries", "by-date", range);
+  return entries.filter((e) => !e.deleted && !pendingEntryDeletions.has(e.id));
+}
+
 export async function searchEntries(query: string): Promise<Entry[]> {
   const db = await getDB();
   const all = await db.getAll("entries");

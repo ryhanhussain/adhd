@@ -55,7 +55,11 @@ export default function IntentionItem({ intention, onComplete, onDelete }: Inten
     setIsLogging(true);
     try {
       await onComplete(intention.id, note, timeToTimestamp(startTime), timeToTimestamp(endTime));
-      // Animate the item out of the list
+      // Collapse the form first so the layout box for the expanded textarea is
+      // released before the fly-out starts. Without this, mobile Safari keeps
+      // the expanded height reserved and the parent card doesn't shrink when
+      // the item finally unmounts.
+      setExpanded(false);
       setAnimatingOut(true);
     } finally {
       setIsLogging(false);
