@@ -70,7 +70,8 @@ For each task, pick the id of the bucket whose description fits best, or null if
   const prompt = `You are an ADHD-friendly task parser. Given a brain dump transcript, extract only real, actionable tasks or intentions.
 
 Rules:
-- Split compound sentences into separate tasks (e.g. "I need to do X, I need to do Y" → two tasks)
+- Split only when two genuinely independent tasks are listed together (e.g. "I need to call dentist, I need to buy groceries" → two tasks)
+- Do NOT split when multiple verbs act on the same object (e.g. "review and edit Cam's CV" → one task, "clean and organise the desk" → one task)
 - Each item must be a concrete action the user needs to do — not a question, observation, or meta-comment about the app
 - Filter out anything that isn't a real task: fragments, rhetorical questions, self-commentary, test phrases
 - Keep each task concise but preserve full meaning (don't truncate mid-thought)
