@@ -54,13 +54,18 @@ export async function POST(req: NextRequest) {
   // Build prompt dynamically from the user's actual buckets — no hard-coded
   // taxonomies. If no buckets exist, the classification section is omitted
   // entirely and response items have categoryId: null.
-  const bucketSection = hasBuckets
+  const bucketRule = hasBuckets
+    ? `
+- Classify every task into one of the user's intention buckets (listed below). Match based on the bucket's name AND description — reason about which bucket the task belongs to, don't just keyword-match. Use null ONLY as a last resort when a task is genuinely unrelated to every bucket. Do not default to null for convenience. If a task is plausibly related to a bucket's theme (project, domain, life area), assign that bucket.`
+    : "";
+
+  const bucketList = hasBuckets
     ? `
 
-The user has these intention buckets (use their own descriptions to decide fit):
-${buckets.map((b) => `- id: "${b.id}" — ${b.name}${b.description ? `: "${b.description}"` : ""}`).join("\n")}
+User's intention buckets — classify each task into one of these:
+${buckets.map((b) => `- id: "${b.id}" — ${b.name}${b.description ? ` — ${b.description}` : ""}`).join("\n")}
 
-For each task, pick the id of the bucket whose description fits best, or null if none apply. Do not invent new buckets or ids. Use only the ids provided above.`
+Only use the exact ids above. Do not invent new buckets or ids.`
     : "";
 
   const outputShape = hasBuckets
@@ -76,14 +81,15 @@ Rules:
 - Do NOT split a single task whose verbs describe one action on one deliverable (e.g. "review and edit Cam's CV" → one task; "clean and organise the desk" → one task)
 - Each item must be a concrete action the user needs to do — not a question, observation, or meta-comment about the app
 - Filter out anything that isn't a real task: fragments, rhetorical questions, self-commentary, test phrases
-- Keep each task concise but preserve full meaning (don't truncate mid-thought)
+- Rewrite each task as a short, scannable to-do label (ideally 3–8 words). Strip filler like "I need to", "I have to", "do some", "a full", "a bit of". Prefer an imperative verb or a clean noun phrase. Preserve specifics (names, deliverables, qualifiers like "draft" or "final") — don't over-compress or lose meaning.
+- Example cleanup: "I need to work on the product design for the startup pivot" → "Product design for startup pivot"; "i need to do a full regulatory assessment for the new startup pivot" → "Regulatory assessment for pivot"; "do some research on the go to market for the pivot" → "Research go-to-market for pivot"; "I need to email Sarah about the Q3 numbers" → "Email Sarah about Q3 numbers"${bucketRule}
 - Return at most 10 items
 - If nothing actionable is found, return an empty array
 
 Examples of what NOT to include:
 - "If it summarises" → not a task, skip it
 - "Categorizes the submissions" → not a user task, skip it
-- "Let's see" / "So yeah" → filler, skip${bucketSection}
+- "Let's see" / "So yeah" → filler, skip${bucketList}
 
 Transcript: "${text}"
 
