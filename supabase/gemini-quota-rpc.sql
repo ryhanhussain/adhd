@@ -63,9 +63,10 @@ begin
     return;
   end if;
 
-  -- Admit + stamp.
+  -- Admit + stamp. Qualify `count` to disambiguate from the out-param of the
+  -- same name declared in `returns table (...)`.
   update public.gemini_usage
-     set count = count + 1,
+     set count = public.gemini_usage.count + 1,
          last_request_at = v_now_ms
    where user_id = p_user_id and day = p_day;
 
