@@ -43,12 +43,22 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
     setIsParsing(true);
     try {
       const { parseBrainDump } = await import("@/lib/gemini");
-      const parsed = await parseBrainDump(
+      const result = await parseBrainDump(
         transcript.trim(),
         intentionCategories?.map((c) => ({ id: c.id, name: c.name, description: c.description }))
       );
-      if (parsed.length > 0) {
-        await onIntentionsParsed(parsed);
+      if (!result.ok) {
+        const messages = {
+          auth: "Session expired — sign in again",
+          quota: "Daily AI limit reached — try again tomorrow",
+          network: "Couldn't reach AI — check connection and retry",
+          server: "AI hiccup — please retry",
+        } as const;
+        showToast(messages[result.reason]);
+        return;
+      }
+      if (result.intentions.length > 0) {
+        await onIntentionsParsed(result.intentions);
       }
       onClose();
     } catch (e) {

@@ -105,14 +105,18 @@ Respond with ONLY a JSON array of objects like ${outputShape}. No other text.`;
     if (!Array.isArray(parsed)) return NextResponse.json({ intentions: null });
 
     const validIds = new Set(buckets.map((b) => b.id));
+    const idByName = new Map(buckets.map((b) => [b.name.toLowerCase(), b.id]));
 
     const intentions = parsed
       .filter((item: { text?: string }) => typeof item.text === "string" && item.text.trim().length > 0)
       .slice(0, 10)
       .map((item: { text: string; categoryId?: unknown }) => {
         const rawId = item.categoryId;
-        const categoryId =
-          hasBuckets && typeof rawId === "string" && validIds.has(rawId) ? rawId : null;
+        let categoryId: string | null = null;
+        if (hasBuckets && typeof rawId === "string") {
+          if (validIds.has(rawId)) categoryId = rawId;
+          else categoryId = idByName.get(rawId.toLowerCase()) ?? null;
+        }
         return { text: item.text.trim(), categoryId };
       });
 

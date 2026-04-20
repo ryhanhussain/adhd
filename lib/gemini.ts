@@ -31,6 +31,18 @@ async function getAuthToken(): Promise<string | null> {
   return token;
 }
 
+/** Tries to get a token; on miss, attempts a session refresh once before giving up. */
+async function getAuthTokenWithRefresh(): Promise<string | null> {
+  const first = await getAuthToken();
+  if (first) return first;
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) {
+    console.warn("[ADDit] refreshSession failed:", error.message);
+    return null;
+  }
+  return data.session?.access_token ?? null;
+}
+
 export async function categorizeEntry(text: string, categoryNames: string[]): Promise<GeminiResult> {
   const token = await getAuthToken();
   if (!token) return SAFE_DEFAULT;
@@ -77,24 +89,20 @@ export interface BrainDumpCategory {
   description: string;
 }
 
-function splitTranscriptLocally(transcript: string): ParsedIntention[] {
-  return transcript
-    .split(/[.\n,]|\s+and\s+/i)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 2)
-    .slice(0, 10)
-    .map((text) => ({ text: text.charAt(0).toUpperCase() + text.slice(1), categoryId: null }));
-}
+export type BrainDumpResult =
+  | { ok: true; intentions: ParsedIntention[] }
+  | { ok: false; reason: "auth" | "quota" | "network" | "server" };
 
 export async function parseBrainDump(
   transcript: string,
   categories?: BrainDumpCategory[]
-): Promise<ParsedIntention[]> {
-  const token = await getAuthToken();
-  if (!token) return splitTranscriptLocally(transcript);
+): Promise<BrainDumpResult> {
+  const token = await getAuthTokenWithRefresh();
+  if (!token) return { ok: false, reason: "auth" };
 
+  let res: Response;
   try {
-    const res = await fetch("/api/gemini/parse-brain-dump/", {
+    res = await fetch("/api/gemini/parse-brain-dump/", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -105,17 +113,24 @@ export async function parseBrainDump(
         categories: categories ?? [],
       }),
     });
-
-    if (!res.ok) {
-      console.error("parse-brain-dump API error:", res.status);
-      return splitTranscriptLocally(transcript);
-    }
-
-    const data = await res.json();
-    if (!Array.isArray(data.intentions)) return splitTranscriptLocally(transcript);
-    return data.intentions;
   } catch (e) {
     console.error("parse-brain-dump fetch failed:", e);
-    return splitTranscriptLocally(transcript);
+    return { ok: false, reason: "network" };
   }
+
+  if (!res.ok) {
+    console.error("parse-brain-dump API error:", res.status);
+    if (res.status === 401) return { ok: false, reason: "auth" };
+    if (res.status === 429) return { ok: false, reason: "quota" };
+    return { ok: false, reason: "server" };
+  }
+
+  let data: { intentions?: unknown };
+  try {
+    data = await res.json();
+  } catch {
+    return { ok: false, reason: "server" };
+  }
+  if (!Array.isArray(data.intentions)) return { ok: false, reason: "server" };
+  return { ok: true, intentions: data.intentions as ParsedIntention[] };
 }
