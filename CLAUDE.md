@@ -3,7 +3,7 @@
 ADHD-friendly journaling + time-tracking PWA. User types or speaks what they're doing; Gemini categorizes it, writes a short summary, infers energy level, and parses time references; the app tracks time, streaks, intentions, and daily/weekly insights. Client-first UI (IndexedDB) with Supabase auth gating access and Cloudflare Pages Edge Functions securely handling the centralized background Gemini API key.
 
 **Dev:** `npm run dev`
-**Deploy:** `npm run deploy` — uploads directly to Cloudflare Pages **production**. Never run `wrangler pages deploy` without `--branch=main` or it lands as a preview deployment. GitHub integration is intentionally disconnected; the CLI script is the only deploy path.
+**Deploy:** `git push` to `master` — Cloudflare Pages auto-builds on every commit to the connected GitHub repo. `npm run deploy` (`wrangler pages deploy --branch=main`) is also available as a manual fallback if the GitHub-driven build is broken or you need to ship without a commit.
 **Builder:** Ryhan (personal use, possible open-source, React Native port planned).
 
 ---

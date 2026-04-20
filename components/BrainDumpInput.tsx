@@ -50,7 +50,9 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
       if (!result.ok) {
         const messages = {
           auth: "Session expired — sign in again",
-          quota: "Daily AI limit reached — try again tomorrow",
+          cap: "Daily AI limit reached — try again tomorrow",
+          burst: "Slow down a sec — try again in a moment",
+          quota_error: "Quota check failed — see console / Supabase",
           network: "Couldn't reach AI — check connection and retry",
           server: "AI hiccup — please retry",
         } as const;

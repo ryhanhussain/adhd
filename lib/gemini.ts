@@ -91,7 +91,7 @@ export interface BrainDumpCategory {
 
 export type BrainDumpResult =
   | { ok: true; intentions: ParsedIntention[] }
-  | { ok: false; reason: "auth" | "quota" | "network" | "server" };
+  | { ok: false; reason: "auth" | "cap" | "burst" | "quota_error" | "network" | "server" };
 
 export async function parseBrainDump(
   transcript: string,
@@ -119,9 +119,21 @@ export async function parseBrainDump(
   }
 
   if (!res.ok) {
-    console.error("parse-brain-dump API error:", res.status);
     if (res.status === 401) return { ok: false, reason: "auth" };
-    if (res.status === 429) return { ok: false, reason: "quota" };
+    if (res.status === 429) {
+      // Server returns `_quota: "cap" | "burst" | "error"` so we can give a
+      // specific toast instead of "Daily AI limit reached" for everything.
+      let quotaReason: string | undefined;
+      try {
+        const body = (await res.json()) as { _quota?: unknown };
+        if (typeof body._quota === "string") quotaReason = body._quota;
+      } catch {}
+      console.error("parse-brain-dump 429:", quotaReason ?? "unknown");
+      if (quotaReason === "burst") return { ok: false, reason: "burst" };
+      if (quotaReason === "error") return { ok: false, reason: "quota_error" };
+      return { ok: false, reason: "cap" };
+    }
+    console.error("parse-brain-dump API error:", res.status);
     return { ok: false, reason: "server" };
   }
 

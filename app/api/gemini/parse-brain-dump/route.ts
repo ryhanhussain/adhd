@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
   // Quota
   const quota = await checkAndIncrementQuota(user.userId);
   if (!quota.allowed) {
+    console.error(
+      `[parse-brain-dump] 429 user=${user.userId} reason=${quota.reason} count=${quota.count}`
+    );
     return NextResponse.json(
       { intentions: null, _quota: quota.reason },
       { status: 429 }
