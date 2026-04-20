@@ -6,7 +6,7 @@ export const runtime = "edge";
 
 export const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
-export const DAILY_CAP = 50;
+export const DAILY_CAP = 500;
 /** Minimum ms between two allowed calls from the same user. Blocks scripted
  *  bursts that would otherwise drain the daily cap in a single second. 1500ms
  *  is short enough that normal human-paced usage (brain-dump, reflection,

@@ -28,14 +28,16 @@ export async function syncCategoriesNow(): Promise<void> {
   const localIntentionTs = settings.intentionCategoriesSyncedAt ?? 0;
   const localIntentionCategories = settings.customIntentionCategories;
 
-  // Pull remote profile row (both fields in one round-trip)
+  // Pull remote profile row (both fields in one round-trip).
+  // `.maybeSingle()` returns null (not 406) when the row doesn't exist yet —
+  // first-sync-after-signup, before any category push has happened.
   const { data: profile, error: pullError } = await supabase
     .from("profiles")
     .select(
       "custom_categories, custom_categories_updated_at, custom_intention_categories, custom_intention_categories_updated_at"
     )
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
   if (pullError) {
     console.warn("[categoriesSync] pull failed:", pullError.message);
@@ -67,11 +69,14 @@ export async function syncCategoriesNow(): Promise<void> {
     if (parsed !== undefined) {
       const { error: pushError } = await supabase
         .from("profiles")
-        .update({
-          custom_categories: parsed,
-          custom_categories_updated_at: localTs,
-        })
-        .eq("id", userId);
+        .upsert(
+          {
+            id: userId,
+            custom_categories: parsed,
+            custom_categories_updated_at: localTs,
+          },
+          { onConflict: "id" }
+        );
 
       if (pushError) {
         console.warn("[categoriesSync] push failed:", pushError.message);
@@ -101,11 +106,14 @@ export async function syncCategoriesNow(): Promise<void> {
     }
     const { error: pushError } = await supabase
       .from("profiles")
-      .update({
-        custom_intention_categories: parsed,
-        custom_intention_categories_updated_at: localIntentionTs,
-      })
-      .eq("id", userId);
+      .upsert(
+        {
+          id: userId,
+          custom_intention_categories: parsed,
+          custom_intention_categories_updated_at: localIntentionTs,
+        },
+        { onConflict: "id" }
+      );
 
     if (pushError) {
       console.warn("[categoriesSync] intention push failed:", pushError.message);
