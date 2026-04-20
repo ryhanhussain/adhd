@@ -79,7 +79,7 @@ export interface BrainDumpCategory {
 
 function splitTranscriptLocally(transcript: string): ParsedIntention[] {
   return transcript
-    .split(/[.\n]|(?:,\s*and\s+)|(?:\s+and\s+)/i)
+    .split(/[.\n,]|\s+and\s+/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 2)
     .slice(0, 10)
