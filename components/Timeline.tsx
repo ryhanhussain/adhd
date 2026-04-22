@@ -8,6 +8,7 @@ import { useCategories } from "@/lib/useCategories";
 import TimelineEntry from "./TimelineEntry";
 import EntryEditSheet from "./EntryEditSheet";
 import WeekStrip from "./WeekStrip";
+import EntryInput from "./EntryInput";
 
 function formatTimeShort(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -37,6 +38,9 @@ export default function Timeline() {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
+  // Past-day log sheet
+  const [pastLogOpen, setPastLogOpen] = useState(false);
+
   const showToast = (message: string) => {
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
     setToast(message);
@@ -64,6 +68,10 @@ export default function Timeline() {
   useEffect(() => {
     loadEntries();
   }, [loadEntries]);
+
+  useEffect(() => {
+    setPastLogOpen(false);
+  }, [date]);
 
   const shiftDate = (days: number) => {
     const d = new Date(date + "T12:00:00");
@@ -456,6 +464,48 @@ export default function Timeline() {
               >
                 {isQuickSubmitting ? "..." : "Log"}
               </button>
+            </div>
+          )}
+
+          {!isToday && (
+            <div className="mb-6">
+              {pastLogOpen ? (
+                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 animate-fade-in">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                      Log for {displayDate}
+                    </span>
+                    <button
+                      onClick={() => setPastLogOpen(false)}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-text)]/5 active:scale-90 transition-all"
+                      aria-label="Close"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <EntryInput
+                    key={date}
+                    initialDate={date}
+                    onEntryAdded={async () => {
+                      setPastLogOpen(false);
+                      await loadEntries();
+                    }}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setPastLogOpen(true)}
+                  className="w-full h-12 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/60 hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-accent-soft)] text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                  aria-label={`Log entry for ${displayDate}`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span>Log entry for {displayDate}</span>
+                </button>
+              )}
             </div>
           )}
 

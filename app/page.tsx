@@ -236,8 +236,13 @@ export default function Home() {
 
     const now = Date.now();
     const dateStr = toLocalDateStr(startTime);
+    const isBackdated = dateStr !== toLocalDateStr(now);
 
-    const result = await categorizeEntry(intention.text, getCategoryNames(categories));
+    const result = await categorizeEntry(
+      intention.text,
+      getCategoryNames(categories),
+      isBackdated ? { referenceDate: dateStr } : undefined
+    );
     const tags = result.tags;
     const summary = result.summary || intention.text;
     const energy = result.energy;

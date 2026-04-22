@@ -43,12 +43,31 @@ async function getAuthTokenWithRefresh(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-export async function categorizeEntry(text: string, categoryNames: string[]): Promise<GeminiResult> {
+export interface CategorizeOptions {
+  /**
+   * When set, the server's "now" context is anchored to end-of-day on this
+   * local YYYY-MM-DD. Time offsets returned by Gemini are therefore relative
+   * to 23:59 on the reference date — suitable for backdated logging.
+   */
+  referenceDate?: string;
+}
+
+export async function categorizeEntry(
+  text: string,
+  categoryNames: string[],
+  opts?: CategorizeOptions
+): Promise<GeminiResult> {
   const token = await getAuthToken();
   if (!token) return SAFE_DEFAULT;
 
   try {
-    const d = new Date();
+    let refDate: Date;
+    if (opts?.referenceDate) {
+      const [y, mo, d] = opts.referenceDate.split("-").map(Number);
+      refDate = new Date(y, mo - 1, d, 23, 59, 0, 0);
+    } else {
+      refDate = new Date();
+    }
     const res = await fetch("/api/gemini/categorize/", {
       method: "POST",
       headers: {
@@ -58,8 +77,8 @@ export async function categorizeEntry(text: string, categoryNames: string[]): Pr
       body: JSON.stringify({
         text,
         existingCategories: categoryNames,
-        currentTime: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }),
-        currentDate: d.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
+        currentTime: refDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }),
+        currentDate: refDate.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
       }),
     });
 

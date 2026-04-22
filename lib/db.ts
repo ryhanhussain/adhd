@@ -6,6 +6,21 @@ export function toLocalDateStr(ts: number | Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Maps an "HH:MM" time onto a local YYYY-MM-DD date, returning the local epoch ms. DST-safe. */
+export function timeStringToTimestampOnDate(hhmm: string, dateStr: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  return new Date(y, mo - 1, d, h, m, 0, 0).getTime();
+}
+
+/** Clamps an epoch ms timestamp to the local-day window [00:00:00.000, 23:59:59.999] of dateStr. */
+export function clampToLocalDate(ts: number, dateStr: string): number {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const dayStart = new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
+  const dayEnd = new Date(y, mo - 1, d, 23, 59, 59, 999).getTime();
+  return Math.min(Math.max(ts, dayStart), dayEnd);
+}
+
 export type EnergyLevel = "high" | "medium" | "low" | "scattered";
 
 export interface Entry {

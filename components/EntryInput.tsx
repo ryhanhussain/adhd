@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { addEntry, toLocalDateStr } from "@/lib/db";
+import { addEntry, toLocalDateStr, timeStringToTimestampOnDate, clampToLocalDate } from "@/lib/db";
 import { categorizeEntry } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
 import { getCategoryNames } from "@/lib/categories";
+import DatePill from "./DatePill";
 
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -19,15 +20,18 @@ const PLACEHOLDERS = [
 
 interface EntryInputProps {
   onEntryAdded?: () => void;
+  /** YYYY-MM-DD target date for the logged entry. Defaults to today. */
+  initialDate?: string;
 }
 
-export default function EntryInput({ onEntryAdded }: EntryInputProps) {
+export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProps) {
   const categories = useCategories();
   const [text, setText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState<false | "logged" | "timer">(false);
   const [placeholder] = useState(() => PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)]);
   const [toast, setToast] = useState<string | null>(null);
+  const [targetDate, setTargetDate] = useState(() => initialDate ?? toLocalDateStr(Date.now()));
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -58,20 +62,38 @@ export default function EntryInput({ onEntryAdded }: EntryInputProps) {
     setIsSubmitting(true);
     try {
       const now = Date.now();
-      const dateStr = toLocalDateStr(now);
+      const today = toLocalDateStr(now);
+      const isBackdated = targetDate !== today;
 
-      const geminiResult = await categorizeEntry(trimmed, getCategoryNames(categories));
+      const geminiResult = await categorizeEntry(
+        trimmed,
+        getCategoryNames(categories),
+        isBackdated ? { referenceDate: targetDate } : undefined
+      );
 
-      const startTime = now + geminiResult.startOffsetMinutes * 60 * 1000;
-      const endTime = geminiResult.isOngoing ? 0 : now + geminiResult.endOffsetMinutes * 60 * 1000;
+      let startTime: number;
+      let endTime: number;
+      let isOngoing = geminiResult.isOngoing;
+
+      if (!isBackdated) {
+        startTime = now + geminiResult.startOffsetMinutes * 60 * 1000;
+        endTime = isOngoing ? 0 : now + geminiResult.endOffsetMinutes * 60 * 1000;
+      } else {
+        // Never create a live timer in the past — ActiveTimerBar only scans today.
+        isOngoing = false;
+        const ref = timeStringToTimestampOnDate("23:59", targetDate);
+        startTime = clampToLocalDate(ref + geminiResult.startOffsetMinutes * 60 * 1000, targetDate);
+        endTime = clampToLocalDate(ref + geminiResult.endOffsetMinutes * 60 * 1000, targetDate);
+        if (endTime < startTime) [startTime, endTime] = [endTime, startTime];
+      }
 
       await addEntry({
         id: crypto.randomUUID(),
         text: trimmed,
         timestamp: now,
         startTime,
-        endTime,
-        date: dateStr,
+        endTime: isOngoing ? 0 : endTime,
+        date: targetDate,
         location: null,
         tags: geminiResult.tags,
         energy: geminiResult.energy,
@@ -81,7 +103,7 @@ export default function EntryInput({ onEntryAdded }: EntryInputProps) {
 
       setText("");
       if (textareaRef.current) textareaRef.current.style.height = "80px";
-      setShowSuccess(geminiResult.isOngoing ? "timer" : "logged");
+      setShowSuccess(isOngoing ? "timer" : "logged");
       setTimeout(() => setShowSuccess(false), 2000);
       onEntryAdded?.();
       window.dispatchEvent(new Event("entry-updated"));
@@ -95,6 +117,9 @@ export default function EntryInput({ onEntryAdded }: EntryInputProps) {
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <DatePill value={targetDate} onChange={setTargetDate} />
+      </div>
       <div className="relative">
         <label htmlFor="entry-input" className="sr-only">
           What are you doing?

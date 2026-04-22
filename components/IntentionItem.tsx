@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Intention } from "@/lib/db";
+import { toLocalDateStr, timeStringToTimestampOnDate } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
 import BucketChipPicker from "./BucketChipPicker";
+import DatePill from "./DatePill";
 
 interface IntentionItemProps {
   intention: Intention;
@@ -27,13 +29,6 @@ function defaultEndTime(): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function timeToTimestamp(timeStr: string): number {
-  const [h, m] = timeStr.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d.getTime();
-}
-
 export default function IntentionItem({
   intention,
   onComplete,
@@ -46,6 +41,7 @@ export default function IntentionItem({
   const [note, setNote] = useState("");
   const [startTime, setStartTime] = useState(defaultStartTime);
   const [endTime, setEndTime] = useState(defaultEndTime);
+  const [targetDate, setTargetDate] = useState(() => toLocalDateStr(Date.now()));
   const [isLogging, setIsLogging] = useState(false);
   const [checked, setChecked] = useState(false);
   const [animatingOut, setAnimatingOut] = useState(false);
@@ -84,7 +80,10 @@ export default function IntentionItem({
   const handleLogIt = async () => {
     setIsLogging(true);
     try {
-      await onComplete(intention.id, note, timeToTimestamp(startTime), timeToTimestamp(endTime));
+      let start = timeStringToTimestampOnDate(startTime, targetDate);
+      let end = timeStringToTimestampOnDate(endTime, targetDate);
+      if (end < start) [start, end] = [end, start];
+      await onComplete(intention.id, note, start, end);
       // Collapse the form first so the layout box for the expanded textarea is
       // released before the fly-out starts. Without this, mobile Safari keeps
       // the expanded height reserved and the parent card doesn't shrink when
@@ -236,6 +235,9 @@ export default function IntentionItem({
             rows={2}
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 focus:border-[var(--color-accent)]"
           />
+          <div className="flex items-center gap-2 mt-2">
+            <DatePill value={targetDate} onChange={setTargetDate} />
+          </div>
           <div className="flex items-center gap-2 mt-2">
             <div className="flex items-center gap-1.5 flex-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">From</label>
