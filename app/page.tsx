@@ -287,114 +287,115 @@ export default function Home() {
   return (
     <>
       {/* Scrollable content — padded at bottom to clear the pinned input dock.
-          At lg: 2-col grid, action-left / insights-right; source order matches mobile. */}
-      <div className="flex flex-col gap-3 pb-dock lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-3 lg:items-start">
-        {/* ── Header card: greeting + garden anchored together ── */}
-        <div className="lg:col-start-1 glass-panel rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}</h1>
-            {entries.length > 0 && (
-              <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
-                {entries.length} {entries.length === 1 ? "entry" : "entries"} today
-              </p>
-            )}
+          At lg: 2-col grid, action-left / insights-right. Each column wrapper uses
+          `contents` on mobile (flattens into the parent flex, preserving source order)
+          and `lg:flex lg:flex-col` on desktop so each column stacks its own children
+          tightly with no row-height coupling to the other column. */}
+      <div className="flex flex-col gap-3 pb-dock lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-x-6 lg:items-start">
+        {/* ── Left column: header, intentions, active timer ── */}
+        <div className="contents lg:flex lg:flex-col lg:gap-3">
+          {/* ── Header card: greeting + garden anchored together ── */}
+          <div className="glass-panel rounded-2xl p-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}</h1>
+              {entries.length > 0 && (
+                <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
+                  {entries.length} {entries.length === 1 ? "entry" : "entries"} today
+                </p>
+              )}
+            </div>
+            <CheckInGarden hasLoggedToday={streak?.hasLoggedToday ?? false} />
           </div>
-          <CheckInGarden hasLoggedToday={streak?.hasLoggedToday ?? false} />
+
+          {/* ── Daily Intentions (top priority position) ── */}
+          {intentions.length > 0 && (
+            <div className="relative z-10">
+              <IntentionsCard
+                intentions={intentions}
+                onComplete={handleIntentionComplete}
+                onDelete={handleIntentionDelete}
+                intentionCategories={intentionCategories}
+                onCategoryChange={handleIntentionCategoryChange}
+                onTextChange={handleIntentionTextChange}
+              />
+            </div>
+          )}
+
+          {/* ── Active entry ── */}
+          {activeEntry && (
+            <div
+              className="rounded-xl p-4 border-2 border-[var(--color-accent)] animate-fade-in animate-breathe"
+              style={{ backgroundColor: "var(--color-accent-soft)" }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-now-pulse" />
+                  <span className="text-xs font-semibold text-[var(--color-accent)]">Active now</span>
+                </div>
+                <span className="text-sm font-semibold tabular-nums text-[var(--color-accent)]">
+                  {formatElapsed(now - activeEntry.startTime)}
+                </span>
+              </div>
+              <p className="text-sm mb-3">{activeEntry.summary || activeEntry.text}</p>
+              <button
+                onClick={handleFinishActive}
+                className="w-full h-11 rounded-lg bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-medium active:scale-[0.98] transition-transform"
+              >
+                Just Finished
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* ── Daily Intentions (top priority position) ── */}
-        {intentions.length > 0 && (
-          <div className="lg:col-start-1 relative z-10">
-            <IntentionsCard
-              intentions={intentions}
-              onComplete={handleIntentionComplete}
-              onDelete={handleIntentionDelete}
-              intentionCategories={intentionCategories}
-              onCategoryChange={handleIntentionCategoryChange}
-              onTextChange={handleIntentionTextChange}
-            />
-          </div>
-        )}
-
-        {/* ── Active entry ── */}
-        {activeEntry && (
-          <div
-            className="lg:col-start-1 rounded-xl p-4 border-2 border-[var(--color-accent)] animate-fade-in animate-breathe"
-            style={{ backgroundColor: "var(--color-accent-soft)" }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-now-pulse" />
-                <span className="text-xs font-semibold text-[var(--color-accent)]">Active now</span>
-              </div>
-              <span className="text-sm font-semibold tabular-nums text-[var(--color-accent)]">
-                {formatElapsed(now - activeEntry.startTime)}
-              </span>
-            </div>
-            <p className="text-sm mb-3">{activeEntry.summary || activeEntry.text}</p>
-            <button
-              onClick={handleFinishActive}
-              className="w-full h-11 rounded-lg bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-medium active:scale-[0.98] transition-transform"
-            >
-              Just Finished
-            </button>
-          </div>
-        )}
-
-        {/* ── Empty state ── */}
-        {entries.length === 0 && intentions.length === 0 && streak && (
-          <div className="lg:col-start-2 text-center py-6 animate-fade-in">
-            {streak.totalDays === 0 ? (
-              <>
-                <p className="text-lg font-semibold mb-1">Welcome to ADDit</p>
+        {/* ── Right column: ta-da, insights, reflection ── */}
+        <div className="contents lg:flex lg:flex-col lg:gap-3">
+          {/* ── Empty state ── */}
+          {entries.length === 0 && intentions.length === 0 && streak && (
+            <div className="text-center py-6 animate-fade-in">
+              {streak.totalDays === 0 ? (
+                <>
+                  <p className="text-lg font-semibold mb-1">Welcome to ADDit</p>
+                  <p className="text-sm text-[var(--color-text-muted)]">
+                    Just type what you&apos;re doing — we&apos;ll handle the rest.
+                  </p>
+                </>
+              ) : (
                 <p className="text-sm text-[var(--color-text-muted)]">
-                  Just type what you&apos;re doing — we&apos;ll handle the rest.
+                  {streak.currentStreak > 0
+                    ? `Your streak is at ${streak.currentStreak}! Keep it going with a quick log.`
+                    : "New day, clean slate. What are you up to?"}
                 </p>
-              </>
-            ) : (
-              <p className="text-sm text-[var(--color-text-muted)]">
-                {streak.currentStreak > 0
-                  ? `Your streak is at ${streak.currentStreak}! Keep it going with a quick log.`
-                  : "New day, clean slate. What are you up to?"}
-              </p>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {/* ── Today's Ta-Da List ── */}
-        {tadaEntries.length > 0 && (
-          <div className="lg:col-start-2 lg:row-start-1">
+          {/* ── Today's Ta-Da List ── */}
+          {tadaEntries.length > 0 && (
             <TaDaTimeline
               entries={tadaEntries}
               categories={categories}
               onTap={setSelectedEntry}
               highlightIds={recentTaDaIds}
             />
-          </div>
-        )}
+          )}
 
-        {/* ── Insights section: daily + weekly grouped ── */}
-        {hasInsights && (
-          <section className="lg:col-start-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3 px-1">
-              Insights
-            </h2>
-            <div className="flex flex-col gap-3">
-              <DailySummary entries={entries} categories={categories} />
-              <WeeklyInsights categories={categories} />
-            </div>
-          </section>
-        )}
+          {/* ── Insights section: daily + weekly grouped ── */}
+          {hasInsights && (
+            <section>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3 px-1">
+                Insights
+              </h2>
+              <div className="flex flex-col gap-3">
+                <DailySummary entries={entries} categories={categories} />
+                <WeeklyInsights categories={categories} />
+              </div>
+            </section>
+          )}
 
-        {/* Show weekly insights even with no entries today (it covers the whole week) */}
-        {!hasInsights && (
-          <div className="lg:col-start-2">
-            <WeeklyInsights categories={categories} />
-          </div>
-        )}
+          {/* Show weekly insights even with no entries today (it covers the whole week) */}
+          {!hasInsights && <WeeklyInsights categories={categories} />}
 
-        {/* ── End-of-day reflection ── */}
-        <div className="lg:col-start-2">
+          {/* ── End-of-day reflection ── */}
           <ReflectionPrompt entries={entries} />
         </div>
       </div>

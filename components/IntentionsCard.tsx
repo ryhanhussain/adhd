@@ -22,7 +22,13 @@ const UNCATEGORIZED_KEY = "__uncategorized__";
 const LONG_PRESS_MS = 400;
 const MOVE_CANCEL_PX = 5;
 
-type Section = { key: string; label: string | null; color: string | null; items: Intention[] };
+type Section = {
+  key: string;
+  label: string | null;
+  color: string | null;
+  description: string | null;
+  items: Intention[];
+};
 
 export default function IntentionsCard({
   intentions,
@@ -213,6 +219,7 @@ export default function IntentionsCard({
           key: b.id,
           label: b.name,
           color: b.color,
+          description: b.description?.trim() || null,
           items: sortWithOverride(b.id, items),
         });
       }
@@ -222,6 +229,7 @@ export default function IntentionsCard({
           key: UNCATEGORIZED_KEY,
           label: "Other",
           color: null,
+          description: null,
           items: sortWithOverride(UNCATEGORIZED_KEY, uncategorized),
         });
       }
@@ -230,6 +238,7 @@ export default function IntentionsCard({
         key: UNCATEGORIZED_KEY,
         label: null,
         color: null,
+        description: null,
         items: sortWithOverride(UNCATEGORIZED_KEY, intentions.slice().sort((a, b) => a.order - b.order)),
       });
     }
@@ -259,13 +268,11 @@ export default function IntentionsCard({
         Daily Intentions
       </h2>
       <div
-        className="bg-[var(--color-accent-soft)] rounded-2xl p-3 border border-[var(--color-accent)]/15 relative"
+        className="glass-panel rounded-2xl p-3"
         onPointerDown={handlePointerDownCapture}
       >
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-[var(--color-accent)]/10 rounded-full blur-3xl pointer-events-none" />
-
         {/* Progress header */}
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-1 px-1">
           <span className="text-sm font-semibold text-[var(--color-text)]">
             {pending} remaining
           </span>
@@ -275,40 +282,67 @@ export default function IntentionsCard({
         </div>
 
         {/* Progress bar */}
-        <div className="h-1 rounded-full bg-[var(--color-border)]/40 mb-3 overflow-hidden">
+        <div className="h-1 rounded-full bg-[var(--color-border)]/40 mb-3 mx-1 overflow-hidden">
           <div
             className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-500 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>
 
-        {/* Grouped sections — empty buckets are completely hidden to avoid whitespace */}
-        <div className="flex flex-col">
+        {/* Grouped sections — each bucket is its own tinted mini-zone */}
+        <div className="flex flex-col gap-3">
           {sections.map((section) => {
             const pendingItems = section.items.filter((i) => !i.completed);
-            // Hide sections that have no pending items
             if (pendingItems.length === 0 && section.items.length === 0) return null;
-            // Also hide sections where all items are completed (already filtered out by IntentionItem)
-            const visibleCount = section.items.filter((i) => !i.completed).length;
+            const visibleCount = pendingItems.length;
             if (visibleCount === 0 && showHeaders) return null;
+
+            const totalInBucket = section.items.length;
+            const completedInBucket = totalInBucket - pendingItems.length;
+            const isColoredBucket = showHeaders && !!section.color && !!section.label;
+
+            const zoneStyle: React.CSSProperties | undefined = isColoredBucket
+              ? {
+                  backgroundColor: `color-mix(in srgb, ${section.color} 10%, transparent)`,
+                  borderLeft: `3px solid ${section.color}`,
+                }
+              : undefined;
+
+            const zoneClass = isColoredBucket
+              ? "rounded-xl pl-3 pr-2 py-2"
+              : "flex flex-col";
+
             return (
-              <div key={section.key} className="flex flex-col">
+              <div key={section.key} className={zoneClass} style={zoneStyle}>
                 {showHeaders && section.label && (
-                  <div className="flex items-center gap-2 mt-2 mb-1 px-1">
-                    {section.color && (
+                  <>
+                    <div className="flex items-center gap-2 px-1">
+                      {section.color && (
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: section.color }}
+                          aria-hidden="true"
+                        />
+                      )}
                       <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: section.color }}
-                        aria-hidden="true"
-                      />
+                        className="text-sm font-semibold flex-1 truncate"
+                        style={section.color ? { color: section.color } : undefined}
+                      >
+                        {section.label}
+                      </span>
+                      <span
+                        className="text-xs tabular-nums font-medium"
+                        style={section.color ? { color: section.color } : undefined}
+                      >
+                        {completedInBucket}/{totalInBucket}
+                      </span>
+                    </div>
+                    {section.description && (
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-1 px-1 leading-snug">
+                        {section.description}
+                      </p>
                     )}
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      {section.label}
-                    </span>
-                    <span className="text-[11px] text-[var(--color-text-muted)] tabular-nums">
-                      {visibleCount}
-                    </span>
-                  </div>
+                  </>
                 )}
                 {section.items.map((intention) => (
                   <div
