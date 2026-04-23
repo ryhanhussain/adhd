@@ -1,4 +1,4 @@
-import { getEntriesForDateRange, type Entry } from "./db";
+import { getEntriesForDateRange, toLocalDateStr, type Entry } from "./db";
 import { getCategoryStyle, type Category } from "./categories";
 
 export interface WeeklyMetrics {
@@ -15,14 +15,12 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function getWeekRange(weeksAgo: number): [string, string] {
   const now = new Date();
-  const utcDay = now.getUTCDay(); // 0=Sun
-  const mondayOffset = utcDay === 0 ? -6 : 1 - utcDay;
-
-  const mondayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + mondayOffset - weeksAgo * 7);
-  const sundayMs = mondayMs + 6 * 86400000;
-
-  const fmt = (ms: number) => new Date(ms).toISOString().split("T")[0];
-  return [fmt(mondayMs), fmt(sundayMs)];
+  const day = now.getDay(); // 0=Sun, local
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset - weeksAgo * 7);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return [toLocalDateStr(monday), toLocalDateStr(sunday)];
 }
 
 function getEntryDuration(e: Entry): number {
@@ -42,12 +40,6 @@ export async function getWeeklyMetrics(categories: Category[]): Promise<WeeklyMe
     getEntriesForDateRange(thisStart, thisEnd),
     getEntriesForDateRange(prevStart, prevEnd),
   ]);
-
-  console.log("[WeeklyMetrics] range:", thisStart, "to", thisEnd, "| entries:", thisWeek.length);
-  for (const e of thisWeek) {
-    const dur = getEntryDuration(e);
-    console.log(`  [Entry] date=${e.date} text="${e.text.slice(0, 40)}" start=${e.startTime} end=${e.endTime} dur=${dur}m`);
-  }
 
   let totalMinutes = 0;
   for (const e of thisWeek) totalMinutes += getEntryDuration(e);
@@ -90,11 +82,11 @@ export async function getWeeklyMetrics(categories: Category[]): Promise<WeeklyMe
 
   // Build full 7-day breakdown (Mon-Sun)
   const dailyBreakdown: { day: string; minutes: number }[] = [];
-  const mondayMs = new Date(thisStart + "T00:00:00Z").getTime();
+  const [y, mo, d] = thisStart.split("-").map(Number);
   for (let i = 0; i < 7; i++) {
-    const dayMs = mondayMs + i * 86400000;
-    const ds = new Date(dayMs).toISOString().split("T")[0];
-    const dayOfWeek = new Date(dayMs).getUTCDay();
+    const dayDate = new Date(y, mo - 1, d + i);
+    const ds = toLocalDateStr(dayDate);
+    const dayOfWeek = dayDate.getDay();
     dailyBreakdown.push({ day: DAY_NAMES[dayOfWeek], minutes: dailyMinutes[ds] || 0 });
   }
 

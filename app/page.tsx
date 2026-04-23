@@ -12,6 +12,8 @@ import CheckInGarden from "@/components/CheckInGarden";
 import IntentionsCard from "@/components/IntentionsCard";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import CarryoverPrompt from "@/components/CarryoverPrompt";
+import EmptyHome from "@/components/EmptyHome";
+import Toast from "@/components/Toast";
 import { getEntriesByDate, updateEntry, deleteEntry, addEntry, getSettings, saveSettings, getIntentionsByDate, getPendingIntentionsByDate, archiveIntentions, addIntentions, updateIntention, deleteIntention, toLocalDateStr, markEntryPendingDelete, unmarkEntryPendingDelete, type Entry, type Intention } from "@/lib/db";
 import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
@@ -98,6 +100,9 @@ export default function Home() {
     } catch (e) {
       console.error("Failed to load data:", e);
       setStreak({ currentStreak: 0, longestStreak: 0, totalDays: 0, hasLoggedToday: false });
+      setToast({ message: "Couldn't load today's data — try reloading" });
+      if (toastTimeout.current) clearTimeout(toastTimeout.current);
+      toastTimeout.current = setTimeout(() => setToast(null), 4000);
     }
   }, [today]);
 
@@ -351,22 +356,7 @@ export default function Home() {
         <div className="contents lg:flex lg:flex-col lg:gap-3">
           {/* ── Empty state ── */}
           {entries.length === 0 && intentions.length === 0 && streak && (
-            <div className="text-center py-6 animate-fade-in">
-              {streak.totalDays === 0 ? (
-                <>
-                  <p className="text-lg font-semibold mb-1">Welcome to ADDit</p>
-                  <p className="text-sm text-[var(--color-text-muted)]">
-                    Just type what you&apos;re doing — we&apos;ll handle the rest.
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-[var(--color-text-muted)]">
-                  {streak.currentStreak > 0
-                    ? `Your streak is at ${streak.currentStreak}! Keep it going with a quick log.`
-                    : "New day, clean slate. What are you up to?"}
-                </p>
-              )}
-            </div>
+            <EmptyHome totalDays={streak.totalDays} currentStreak={streak.currentStreak} />
           )}
 
           {/* ── Today's Ta-Da List ── */}
@@ -517,17 +507,10 @@ export default function Home() {
       />
 
       {toast && (
-        <div className="fixed above-dock left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 px-5 py-2.5 rounded-full bg-[var(--color-text)] text-[var(--color-bg)] text-sm font-medium shadow-lg animate-toast-in">
-          <span>{toast.message}</span>
-          {toast.undo && (
-            <button
-              onClick={toast.undo}
-              className="font-bold underline underline-offset-2"
-            >
-              Undo
-            </button>
-          )}
-        </div>
+        <Toast
+          message={toast.message}
+          action={toast.undo ? { label: "Undo", onClick: toast.undo } : undefined}
+        />
       )}
 
       {milestoneToShow && (

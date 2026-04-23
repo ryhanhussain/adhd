@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { type MilestoneInfo } from "@/lib/streaks";
+import { COLOR_OPTIONS } from "@/lib/categories";
 
 interface MilestoneCelebrationProps {
   milestone: MilestoneInfo;
@@ -39,7 +40,7 @@ export default function MilestoneCelebration({ milestone, onDismiss }: Milestone
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (!reduceMotion) {
-      const colors = ["#7c5cfc", "#22c55e", "#f59e0b", "#ec4899", "#3b82f6", "#f97316"];
+      const colors = COLOR_OPTIONS.map((c) => c.color);
       const newParticles = Array.from({ length: 40 }, (_, i) => ({
         id: i,
         x: Math.random() * 100,
@@ -91,12 +92,12 @@ export default function MilestoneCelebration({ milestone, onDismiss }: Milestone
       {/* Center content */}
       <div className="flex flex-col items-center gap-4 animate-pop-in relative z-10 transition-transform hover:scale-105 duration-500">
         <div
-          className="text-[5rem] font-black tabular-nums text-white"
+          className="text-[5rem] font-black tabular-nums text-[var(--color-on-accent)]"
           style={{ textShadow: "0 0 30px var(--color-accent), 0 0 60px rgba(139,92,246,0.6)" }}
         >
           {milestone.isFirstEntry ? (
-            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2L9 9l-7 1 5 5-1.5 7L12 18l6.5 4L17 15l5-5-7-1z" fill="white" fillOpacity="0.2" />
+            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-[var(--color-on-accent)]">
+              <path d="M12 2L9 9l-7 1 5 5-1.5 7L12 18l6.5 4L17 15l5-5-7-1z" fill="currentColor" fillOpacity="0.2" />
             </svg>
           ) : milestone.milestone}
         </div>

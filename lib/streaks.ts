@@ -1,4 +1,4 @@
-import { getEntriesSince } from "./db";
+import { getEntriesSince, toLocalDateStr } from "./db";
 
 export interface StreakInfo {
   currentStreak: number;
@@ -12,15 +12,11 @@ export interface StreakInfo {
  *  math and isn't worth paying to scan on every page load. */
 const WINDOW_DAYS = 400;
 
-function dateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
-}
-
 function daysAgoStr(days: number): string {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() - days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return toLocalDateStr(d);
 }
 
 function daysBetween(a: string, b: string): number {
@@ -41,7 +37,7 @@ export async function getStreakInfo(): Promise<StreakInfo> {
     datesSet.add(e.date);
   }
   const dates = Array.from(datesSet).sort();
-  const today = dateStr(new Date());
+  const today = toLocalDateStr(new Date());
   const hasLoggedToday = datesSet.has(today);
 
   // Calculate current streak with forgiveness (1 grace day)
@@ -50,7 +46,7 @@ export async function getStreakInfo(): Promise<StreakInfo> {
 
   if (!hasLoggedToday) {
     // Check if yesterday was logged
-    const yesterday = dateStr(new Date(Date.now() - 86400000));
+    const yesterday = toLocalDateStr(Date.now() - 86400000);
     if (!datesSet.has(yesterday)) {
       // No entries today or yesterday -- streak is broken
       return { currentStreak: 0, longestStreak: calcLongest(dates), totalDays: dates.length, hasLoggedToday: false };
@@ -65,12 +61,12 @@ export async function getStreakInfo(): Promise<StreakInfo> {
   while (true) {
     if (datesSet.has(current)) {
       currentStreak++;
-      const prev = dateStr(new Date(new Date(current + "T12:00:00").getTime() - 86400000));
+      const prev = toLocalDateStr(new Date(current + "T12:00:00").getTime() - 86400000);
       current = prev;
     } else if (!graceUsed) {
       // Use grace day - skip this day
       graceUsed = true;
-      const prev = dateStr(new Date(new Date(current + "T12:00:00").getTime() - 86400000));
+      const prev = toLocalDateStr(new Date(current + "T12:00:00").getTime() - 86400000);
       current = prev;
     } else {
       break;

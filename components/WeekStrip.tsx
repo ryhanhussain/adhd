@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getEntriesForDateRange, type Entry } from "@/lib/db";
+import { getEntriesForDateRange, toLocalDateStr, type Entry } from "@/lib/db";
 import { getCategoryStyle, type Category } from "@/lib/categories";
 
 interface WeekStripProps {
@@ -20,7 +20,7 @@ function getWeekDates(centerDate: string): string[] {
   for (let i = 0; i < 7; i++) {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
-    dates.push(date.toISOString().split("T")[0]);
+    dates.push(toLocalDateStr(date));
   }
   return dates;
 }
@@ -36,7 +36,7 @@ function getDayNumber(dateStr: string): string {
 export default function WeekStrip({ selectedDate, onSelectDate, categories }: WeekStripProps) {
   const [entriesByDate, setEntriesByDate] = useState<Record<string, Entry[]>>({});
   const weekDates = getWeekDates(selectedDate);
-  const today = new Date().toISOString().split("T")[0];
+  const today = toLocalDateStr(new Date());
 
   useEffect(() => {
     const start = weekDates[0];

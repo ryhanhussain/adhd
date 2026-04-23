@@ -9,6 +9,7 @@ import {
   toLocalDateStr,
   type Intention,
 } from "@/lib/db";
+import Skeleton from "./Skeleton";
 
 function formatDateHeading(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
@@ -70,7 +71,13 @@ export default function ArchiveList() {
   };
 
   if (loading) {
-    return <p className="text-sm text-[var(--color-text-muted)]">Loading...</p>;
+    return (
+      <div className="flex flex-col gap-3 py-2">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-14 rounded-xl" />
+        ))}
+      </div>
+    );
   }
 
   if (archived.length === 0) {

@@ -5,6 +5,7 @@ import { getWeeklyMetrics, type WeeklyMetrics } from "@/lib/insights";
 import { type Category } from "@/lib/categories";
 import WeeklyEnergyHeatmap from "./WeeklyEnergyHeatmap";
 import VibeCloud from "./VibeCloud";
+import Skeleton from "./Skeleton";
 
 interface WeeklyInsightsProps {
   categories: Category[];
@@ -29,7 +30,10 @@ export default function WeeklyInsights({ categories }: WeeklyInsightsProps) {
     return () => window.removeEventListener("entry-updated", handle);
   }, [categories]);
 
-  if (!metrics || (metrics.totalMinutes === 0 && metrics.daysLogged === 0)) return null;
+  if (metrics === null) {
+    return <Skeleton className="w-full h-32 rounded-[2rem]" />;
+  }
+  if (metrics.totalMinutes === 0 && metrics.daysLogged === 0) return null;
 
   const diff = metrics.totalMinutes - metrics.prevWeekMinutes;
   const diffPct = metrics.prevWeekMinutes > 0 ? Math.round((diff / metrics.prevWeekMinutes) * 100) : 0;

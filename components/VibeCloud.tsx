@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { getEntriesForDateRange, type Entry } from "@/lib/db";
+import { getEntriesForDateRange, toLocalDateStr, type Entry } from "@/lib/db";
 import { getWordFrequencies, type WordFrequency } from "@/lib/wordcloud";
 
 function getWeekRange(): [string, string] {
@@ -13,7 +13,7 @@ function getWeekRange(): [string, string] {
   monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  return [monday.toISOString().split("T")[0], sunday.toISOString().split("T")[0]];
+  return [toLocalDateStr(monday), toLocalDateStr(sunday)];
 }
 
 // Deterministic pseudo-random rotation based on word string

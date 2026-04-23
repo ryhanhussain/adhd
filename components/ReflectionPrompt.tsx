@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { addReflection, getReflectionByDate, type Entry } from "@/lib/db";
+import { useState, useEffect, useRef } from "react";
+import { addReflection, getReflectionByDate, toLocalDateStr, type Entry } from "@/lib/db";
 
 type MoodIconProps = { active: boolean };
 
@@ -87,8 +87,9 @@ export default function ReflectionPrompt({ entries }: ReflectionPromptProps) {
   const [note, setNote] = useState("");
   const [saved, setSaved] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const moodButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = toLocalDateStr(new Date());
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -148,15 +149,32 @@ export default function ReflectionPrompt({ entries }: ReflectionPromptProps) {
       <p className="text-xs text-[var(--color-text-muted)] mb-3">{summary}</p>
 
       {/* Mood picker */}
-      <div className="flex justify-between mb-3" role="radiogroup" aria-label="How was today">
+      <div
+        className="flex justify-between mb-3"
+        role="radiogroup"
+        aria-label="How was today"
+        onKeyDown={(e) => {
+          if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+          e.preventDefault();
+          const current = mood ?? 0;
+          const next =
+            e.key === "ArrowRight" || e.key === "ArrowDown"
+              ? current < 5 ? current + 1 : 1
+              : current > 1 ? current - 1 : 5;
+          setMood(next);
+          moodButtonRefs.current[next - 1]?.focus();
+        }}
+      >
         {MOODS.map((m, i) => {
           const isActive = mood === i + 1;
           const Icon = m.Icon;
           return (
             <button
               key={i}
+              ref={(el) => { moodButtonRefs.current[i] = el; }}
               onClick={() => setMood(i + 1)}
               role="radio"
+              tabIndex={isActive ? 0 : mood === null && i === 0 ? 0 : -1}
               aria-checked={isActive}
               aria-label={m.label}
               className="flex flex-col items-center gap-1 min-w-11 min-h-11 p-2 rounded-lg transition-all"

@@ -13,6 +13,7 @@ import {
 } from "@/lib/categories";
 import { useAuth } from "@/components/AuthProvider";
 import { fetchQuota, type QuotaSnapshot } from "@/lib/quota";
+import PageLayout from "@/components/PageLayout";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -236,7 +237,7 @@ export default function SettingsPage() {
   if (!loaded) return null;
 
   return (
-    <div className="flex flex-col gap-8 lg:max-w-lg lg:mx-auto">
+    <PageLayout gap="8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm mt-1 text-[var(--color-text-muted)]">
@@ -438,7 +439,9 @@ export default function SettingsPage() {
                   )}
                 </div>
 
+                <label htmlFor={`bucket-name-${bucket.id}`} className="sr-only">Bucket name</label>
                 <input
+                  id={`bucket-name-${bucket.id}`}
                   value={bucket.name}
                   onChange={(e) => updateIntentionBucket(bucket.id, { name: e.target.value.slice(0, INTENTION_CATEGORY_NAME_MAX) })}
                   placeholder="Bucket name"
@@ -459,7 +462,9 @@ export default function SettingsPage() {
                 </button>
               </div>
 
+              <label htmlFor={`bucket-desc-${bucket.id}`} className="sr-only">Bucket description — what belongs in this bucket?</label>
               <textarea
+                id={`bucket-desc-${bucket.id}`}
                 value={bucket.description}
                 onChange={(e) => updateIntentionBucket(bucket.id, { description: e.target.value.slice(0, INTENTION_CATEGORY_DESCRIPTION_MAX) })}
                 placeholder="One sentence: what belongs in this bucket?"
@@ -582,6 +587,6 @@ export default function SettingsPage() {
           Data synced securely via Supabase
         </p>
       </section>
-    </div>
+    </PageLayout>
   );
 }

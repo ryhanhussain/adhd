@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
-import { getEntriesByDate, updateEntry, type Entry } from "@/lib/db";
+import { getEntriesByDate, updateEntry, toLocalDateStr, type Entry } from "@/lib/db";
 
 function formatElapsed(ms: number): string {
   const minutes = Math.floor(ms / 60000);
@@ -19,7 +19,7 @@ export default function ActiveTimerBar() {
   const [finishing, setFinishing] = useState(false);
 
   const checkForActive = useCallback(async () => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateStr(new Date());
     const entries = await getEntriesByDate(today);
     const active = entries.find((e) => e.endTime === 0) || null;
     setActiveEntry(active);
@@ -77,7 +77,7 @@ export default function ActiveTimerBar() {
           onClick={handleFinish}
           disabled={finishing}
           aria-label="Finish active timer"
-          className="px-4 h-9 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-xs font-bold transition-all duration-300 hover:scale-[1.05] hover:shadow-[0_0_15px_var(--color-accent-soft)] active:scale-[0.95] disabled:opacity-50 disabled:hover:scale-100 flex-shrink-0"
+          className="px-4 h-11 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-xs font-bold transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_15px_var(--color-accent-soft)] active:scale-[0.95] disabled:opacity-50 disabled:hover:scale-100 flex-shrink-0"
         >
           Done
         </button>

@@ -6,6 +6,7 @@ import { categorizeEntry } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
 import { getCategoryNames } from "@/lib/categories";
 import DatePill from "./DatePill";
+import Toast from "./Toast";
 
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -166,11 +167,7 @@ export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProp
         </button>
       </div>
 
-      {toast && (
-        <div className="fixed above-dock left-1/2 -translate-x-1/2 z-[70] px-5 py-2.5 rounded-full bg-[var(--color-text)] text-[var(--color-bg)] text-sm font-medium shadow-lg animate-toast-in">
-          {toast}
-        </div>
-      )}
+      {toast && <Toast message={toast} />}
     </div>
   );
 }

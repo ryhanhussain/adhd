@@ -3,13 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { type Entry, type EnergyLevel, updateEntry } from "@/lib/db";
 import { getCategoryStyle, type Category } from "@/lib/categories";
-
-const ENERGY_OPTIONS: { value: EnergyLevel; emoji: string; label: string }[] = [
-  { value: "high", emoji: "🔋", label: "High" },
-  { value: "medium", emoji: "⚡", label: "Medium" },
-  { value: "low", emoji: "🪫", label: "Low" },
-  { value: "scattered", emoji: "🌪️", label: "Scattered" },
-];
+import { ENERGY_LEVELS, getEnergyEmoji, getEnergyLabel } from "@/lib/energy";
 import BottomSheet from "./BottomSheet";
 
 interface EntryEditSheetProps {
@@ -232,22 +226,25 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
           Energy
         </label>
         <div className="flex gap-1.5">
-          {ENERGY_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setEnergy(energy === opt.value ? null : opt.value)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${energy === opt.value
-                  ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)] border border-[var(--color-accent)]/40"
-                  : "border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
-                }`}
-              aria-pressed={energy === opt.value}
-              aria-label={`Energy: ${opt.label}`}
-            >
-              <span>{opt.emoji}</span>
-              <span>{opt.label}</span>
-            </button>
-          ))}
+          {ENERGY_LEVELS.map((level) => {
+            const label = getEnergyLabel(level);
+            return (
+              <button
+                key={level}
+                type="button"
+                onClick={() => setEnergy(energy === level ? null : level)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 active:scale-95 ${energy === level
+                    ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)] border border-[var(--color-accent)]/40"
+                    : "border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
+                  }`}
+                aria-pressed={energy === level}
+                aria-label={`Energy: ${label}`}
+              >
+                <span>{getEnergyEmoji(level)}</span>
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <button

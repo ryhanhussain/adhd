@@ -1,4 +1,4 @@
-import { getEntriesSince } from "./db";
+import { getEntriesSince, toLocalDateStr } from "./db";
 
 export interface GardenData {
   /** Map of YYYY-MM-DD → entry count for that day */
@@ -15,7 +15,7 @@ function daysAgoStr(days: number): string {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() - days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return toLocalDateStr(d);
 }
 
 export async function getGardenData(): Promise<GardenData> {
@@ -50,7 +50,7 @@ export function getGardenDates(weeksBack: number = 4): string[] {
   const cursor = new Date(startMonday);
 
   while (cursor <= today) {
-    dates.push(cursor.toISOString().split("T")[0]);
+    dates.push(toLocalDateStr(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
 
@@ -58,8 +58,7 @@ export function getGardenDates(weeksBack: number = 4): string[] {
   const remaining = 7 - (dates.length % 7);
   if (remaining < 7) {
     for (let i = 0; i < remaining; i++) {
-      cursor.setDate(cursor.getDate());
-      dates.push(cursor.toISOString().split("T")[0]);
+      dates.push(toLocalDateStr(cursor));
       cursor.setDate(cursor.getDate() + 1);
     }
   }

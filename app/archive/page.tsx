@@ -1,10 +1,11 @@
 "use client";
 
 import ArchiveList from "@/components/ArchiveList";
+import PageLayout from "@/components/PageLayout";
 
 export default function ArchivePage() {
   return (
-    <div className="flex flex-col gap-5 pb-nav lg:max-w-lg lg:mx-auto">
+    <PageLayout>
       <div className="glass-panel rounded-2xl p-4">
         <h1 className="text-2xl font-bold tracking-tight">Archive</h1>
         <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
@@ -12,6 +13,6 @@ export default function ArchivePage() {
         </p>
       </div>
       <ArchiveList />
-    </div>
+    </PageLayout>
   );
 }

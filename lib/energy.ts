@@ -1,4 +1,4 @@
-import { type Entry, type EnergyLevel } from "./db";
+import { toLocalDateStr, type Entry, type EnergyLevel } from "./db";
 
 export interface EnergyPoint {
   hour: number; // 0-23
@@ -42,6 +42,17 @@ export function getEnergyEmoji(level: EnergyLevel): string {
   }
 }
 
+export function getEnergyLabel(level: EnergyLevel): string {
+  switch (level) {
+    case "high": return "High";
+    case "medium": return "Medium";
+    case "low": return "Low";
+    case "scattered": return "Scattered";
+  }
+}
+
+export const ENERGY_LEVELS: EnergyLevel[] = ["high", "medium", "low", "scattered"];
+
 export function getDailyEnergyData(entries: Entry[]): DailyEnergyData {
   const points: EnergyPoint[] = [];
   const counts = { high: 0, medium: 0, low: 0, scattered: 0 };
@@ -72,7 +83,7 @@ export function getWeeklyEnergyData(entries: Entry[], weekStartDate: string): We
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = toLocalDateStr(d);
     days.push({
       day: DAY_NAMES[d.getDay()],
       date: dateStr,

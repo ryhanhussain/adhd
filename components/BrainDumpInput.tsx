@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { ParsedIntention } from "@/lib/gemini";
 import type { IntentionCategory } from "@/lib/categories";
+import Toast from "./Toast";
 
 interface BrainDumpInputProps {
   onIntentionsParsed: (intentions: ParsedIntention[]) => Promise<void>;
@@ -75,7 +76,9 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
     <div className="flex flex-col gap-3">
       {/* Transcript area — always editable as textarea */}
       <div className="relative">
+        <label htmlFor="brain-dump-textarea" className="sr-only">Brain dump — what do you need to do today?</label>
         <textarea
+          id="brain-dump-textarea"
           ref={textareaRef}
           value={transcript}
           onChange={(e) => {
@@ -113,11 +116,7 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
       </div>
 
       {/* Toast */}
-      {toast && (
-        <div className="fixed above-dock left-1/2 -translate-x-1/2 z-[70] px-5 py-2.5 rounded-full bg-[var(--color-text)] text-[var(--color-bg)] text-sm font-medium shadow-lg animate-toast-in">
-          {toast}
-        </div>
-      )}
+      {toast && <Toast message={toast} />}
     </div>
   );
 }

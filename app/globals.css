@@ -10,7 +10,7 @@
   --color-surface: #FFFFFF;
   --color-surface-elevated: #FFFFFF;
   --color-text: #111113;
-  --color-text-muted: #4A4A54;
+  --color-text-muted: #3E3E47;
   --color-border: #E5E5E7;
 
   /* Accent: Vibrant Indigo */
@@ -44,7 +44,7 @@
     --color-surface: #141523;
     --color-surface-elevated: #1D1E30;
     --color-text: #F3F4F6;
-    --color-text-muted: #B2B5C0;
+    --color-text-muted: #C4C7D0;
     --color-border: #2D3045;
 
     /* Accent: Neon Violet */
@@ -66,7 +66,7 @@ html.dark {
   --color-surface: #141523;
   --color-surface-elevated: #1D1E30;
   --color-text: #F3F4F6;
-  --color-text-muted: #B2B5C0;
+  --color-text-muted: #C4C7D0;
   --color-border: #2D3045;
 
   --color-accent: #8b5cf6;
@@ -183,6 +183,34 @@ html[data-keyboard="open"] .nav-dock {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+   Design-system scales. Prefer these over ad-hoc Tailwind sizes.
+
+   Button heights:   btn-sm (h-10 / 40px)
+                     btn-md (h-11 / 44px — mobile hit target)
+                     btn-lg (h-12 / 48px — primary actions)
+
+   Radius:           rounded-lg (inputs)
+                     rounded-xl (buttons)
+                     rounded-2xl (cards)
+                     rounded-[2rem] (hero panels)
+
+   Hover scale:      use hover:scale-[1.02] — 1.05 feels jumpy on mobile
+
+   Z-index tiers:    10 = in-flow content lift
+                     20 = sticky within-page (week-strip, header)
+                     30 = floating dock / nav
+                     40 = input dock / pinned overlays
+                     50 = popover (bucket, category, date pickers)
+                     60 = sheets (BottomSheet, EntryEditSheet)
+                     70 = toasts (always on top of sheets)
+                     80 = popovers opened from within sheets
+                     100 = milestone celebration (full-screen takeover)
+   ────────────────────────────────────────────────────────────────── */
+.btn-sm { height: 2.5rem; }
+.btn-md { height: 2.75rem; }
+.btn-lg { height: 3rem; }
 
 h1, h2, h3 {
   letter-spacing: -0.04em;

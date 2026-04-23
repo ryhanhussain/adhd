@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getEntriesForDateRange, type Entry, type EnergyLevel } from "@/lib/db";
+import { getEntriesForDateRange, toLocalDateStr, type Entry, type EnergyLevel } from "@/lib/db";
 import { getWeeklyEnergyData, getEnergyColor } from "@/lib/energy";
 
 function getWeekStart(): string {
@@ -11,13 +11,13 @@ function getWeekStart(): string {
   const monday = new Date(now);
   monday.setDate(now.getDate() + mondayOffset);
   monday.setHours(0, 0, 0, 0);
-  return monday.toISOString().split("T")[0];
+  return toLocalDateStr(monday);
 }
 
 function getWeekEnd(startDate: string): string {
   const d = new Date(startDate + "T12:00:00");
   d.setDate(d.getDate() + 6);
-  return d.toISOString().split("T")[0];
+  return toLocalDateStr(d);
 }
 
 // Map multiple energy levels in one cell to a dominant one

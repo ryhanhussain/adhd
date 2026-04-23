@@ -7,6 +7,7 @@ import ThemeProvider from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
 import LoginGate from "@/components/LoginGate";
 import KeyboardInsetProvider from "@/components/KeyboardInsetProvider";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -52,7 +53,7 @@ export default function RootLayout({
             <div className="fixed inset-0 z-[-1] pointer-events-none noise-bg" />
             <div className="fixed inset-0 z-[-1] pointer-events-none gradient-mesh opacity-40 dark:opacity-20" />
             <main className="max-w-lg lg:max-w-5xl mx-auto px-5 pt-6 relative z-0">
-              {children}
+              <ErrorBoundary>{children}</ErrorBoundary>
             </main>
             <ActiveTimerBar />
             <NavBar />

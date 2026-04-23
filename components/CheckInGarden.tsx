@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getGardenData, getGardenDates, type GardenData } from "@/lib/garden";
+import { toLocalDateStr } from "@/lib/db";
 
 interface CheckInGardenProps {
   hasLoggedToday: boolean;
@@ -29,7 +30,7 @@ export default function CheckInGarden({ hasLoggedToday }: CheckInGardenProps) {
 
   if (!data) return null;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = toLocalDateStr(new Date());
   const compactDates = getGardenDates(4); // Last 4 weeks
   const expandedDates = getGardenDates(12); // Last 12 weeks
 
@@ -78,7 +79,7 @@ export default function CheckInGarden({ hasLoggedToday }: CheckInGardenProps) {
                     key={dayIdx}
                     className={`rounded-[2px] transition-all duration-300 ${
                       isToday ? "ring-1 ring-[var(--color-accent)]/50" : ""
-                    }`}
+                    } ${isToday && count > 0 ? "animate-breathe" : ""}`}
                     style={{
                       width: 10,
                       height: 10,

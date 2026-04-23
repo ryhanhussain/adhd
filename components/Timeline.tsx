@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getEntriesByDate, deleteEntry, addEntry, searchEntries, markEntryPendingDelete, unmarkEntryPendingDelete, type Entry } from "@/lib/db";
+import { getEntriesByDate, deleteEntry, addEntry, searchEntries, markEntryPendingDelete, unmarkEntryPendingDelete, toLocalDateStr, type Entry } from "@/lib/db";
 import { categorizeEntry } from "@/lib/gemini";
 import { getCategoryNames, getCategoryStyle } from "@/lib/categories";
 import { useCategories } from "@/lib/useCategories";
@@ -9,13 +9,15 @@ import TimelineEntry from "./TimelineEntry";
 import EntryEditSheet from "./EntryEditSheet";
 import WeekStrip from "./WeekStrip";
 import EntryInput from "./EntryInput";
+import Toast from "./Toast";
+import Skeleton from "./Skeleton";
 
 function formatTimeShort(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 export default function Timeline() {
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => toLocalDateStr(new Date()));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const categories = useCategories();
@@ -60,6 +62,7 @@ export default function Timeline() {
     } catch (e) {
       console.error("Failed to load entries:", e);
       setEntries([]);
+      showToast("Couldn't load entries — try reloading");
     } finally {
       setLoading(false);
     }
@@ -76,13 +79,13 @@ export default function Timeline() {
   const shiftDate = (days: number) => {
     const d = new Date(date + "T12:00:00");
     d.setDate(d.getDate() + days);
-    const newDate = d.toISOString().split("T")[0];
-    const todayStr = new Date().toISOString().split("T")[0];
+    const newDate = toLocalDateStr(d);
+    const todayStr = toLocalDateStr(new Date());
     if (newDate > todayStr) return;
     setDate(newDate);
   };
 
-  const isToday = date === new Date().toISOString().split("T")[0];
+  const isToday = date === toLocalDateStr(new Date());
 
   const displayDate = new Date(date + "T12:00:00").toLocaleDateString("en-US", {
     weekday: "long",
@@ -120,9 +123,16 @@ export default function Timeline() {
     }
     setIsSearching(true);
     searchTimeout.current = setTimeout(async () => {
-      const results = await searchEntries(query.trim());
-      setSearchResults(results.slice(0, 50));
-      setIsSearching(false);
+      try {
+        const results = await searchEntries(query.trim());
+        setSearchResults(results.slice(0, 50));
+      } catch (e) {
+        console.error("Search failed:", e);
+        setSearchResults([]);
+        showToast("Search failed — try again");
+      } finally {
+        setIsSearching(false);
+      }
     }, 300);
   };
 
@@ -153,7 +163,7 @@ export default function Timeline() {
     setIsQuickSubmitting(true);
     try {
       const nowTs = Date.now();
-      const dateStr = new Date(nowTs).toISOString().split("T")[0];
+      const dateStr = toLocalDateStr(nowTs);
 
       const geminiResult = await categorizeEntry(trimmed, getCategoryNames(categories));
 
@@ -257,7 +267,7 @@ export default function Timeline() {
     if (fillingGap) return;
     setFillingGap(true);
     try {
-      const dateStr = new Date(gapStart).toISOString().split("T")[0];
+      const dateStr = toLocalDateStr(gapStart);
       await addEntry({
         id: crypto.randomUUID(),
         text: label.text,
@@ -284,7 +294,7 @@ export default function Timeline() {
     if (!trimmed || fillingGap) return;
     setFillingGap(true);
     try {
-      const dateStr = new Date(gapStart).toISOString().split("T")[0];
+      const dateStr = toLocalDateStr(gapStart);
 
       const geminiResult = await categorizeEntry(trimmed, getCategoryNames(categories));
 
@@ -371,7 +381,7 @@ export default function Timeline() {
           {isSearching ? (
             <div className="flex flex-col gap-3 py-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-16 rounded-2xl animate-shimmer" />
+                <Skeleton key={i} className="h-16 rounded-2xl" />
               ))}
             </div>
           ) : searchResults.length === 0 ? (
@@ -388,7 +398,7 @@ export default function Timeline() {
               return (
                 <div key={dateKey}>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)] mb-3 pl-2">
-                    {dateKey === new Date().toISOString().split("T")[0] ? "Today" : label}
+                    {dateKey === toLocalDateStr(new Date()) ? "Today" : label}
                   </h3>
                   <div className="flex flex-col gap-3">
                     {dateEntries.map((entry, i) => (
@@ -425,7 +435,7 @@ export default function Timeline() {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
-            <div className="text-center group cursor-pointer" onClick={() => setDate(new Date().toISOString().split("T")[0])}>
+            <div className="text-center group cursor-pointer" onClick={() => setDate(toLocalDateStr(new Date()))}>
               <h2 className="text-[17px] font-bold tracking-tight">{isToday ? "Today" : displayDate}</h2>
               {isToday && (
                 <p className="text-xs font-medium text-[var(--color-accent)] animate-pulse-soft mt-0.5">Logging Now</p>
@@ -460,7 +470,7 @@ export default function Timeline() {
               <button
                 onClick={handleQuickAdd}
                 disabled={!quickText.trim() || isQuickSubmitting}
-                className="h-12 px-5 rounded-xl bg-[var(--color-accent)] shadow-md shadow-[var(--color-accent)]/20 text-white font-semibold disabled:opacity-40 disabled:shadow-none active:scale-[0.98] transition-all"
+                className="h-12 px-5 rounded-xl bg-[var(--color-accent)] shadow-md shadow-[var(--color-accent)]/20 text-[var(--color-on-accent)] font-semibold disabled:opacity-40 disabled:shadow-none active:scale-[0.98] transition-all"
               >
                 {isQuickSubmitting ? "..." : "Log"}
               </button>
@@ -513,8 +523,8 @@ export default function Timeline() {
             <div className="flex flex-col gap-5 py-4">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="flex gap-4">
-                  <div className="w-[50px] shrink-0 h-4 mt-2 rounded bg-[var(--color-surface)] animate-shimmer" />
-                  <div className="flex-1 h-24 rounded-2xl animate-shimmer" />
+                  <Skeleton className="w-[50px] shrink-0 h-4 mt-2" />
+                  <Skeleton card className="flex-1" />
                 </div>
               ))}
             </div>
@@ -687,17 +697,15 @@ export default function Timeline() {
       />
 
       {toast && (
-        <div className="fixed above-nav left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 px-5 py-2.5 rounded-full bg-[var(--color-text)] text-[var(--color-bg)] text-sm font-medium shadow-lg animate-toast-in">
-          <span>{toast === "__undo__" ? "Entry deleted" : toast}</span>
-          {toast === "__undo__" && undoRef.current && (
-            <button
-              onClick={() => undoRef.current?.()}
-              className="font-bold underline underline-offset-2"
-            >
-              Undo
-            </button>
-          )}
-        </div>
+        <Toast
+          position="nav"
+          message={toast === "__undo__" ? "Entry deleted" : toast}
+          action={
+            toast === "__undo__" && undoRef.current
+              ? { label: "Undo", onClick: () => undoRef.current?.() }
+              : undefined
+          }
+        />
       )}
     </div>
   );

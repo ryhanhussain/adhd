@@ -73,11 +73,13 @@ export default function IntentionItem({
       setChecked(false);
       return;
     }
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(10);
     setChecked(true);
     setExpanded(true);
   };
 
   const handleLogIt = async () => {
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([8, 40, 8]);
     setIsLogging(true);
     try {
       let start = timeStringToTimestampOnDate(startTime, targetDate);
@@ -261,7 +263,7 @@ export default function IntentionItem({
           <button
             onClick={handleLogIt}
             disabled={isLogging}
-            className="w-full mt-3 h-10 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full mt-3 h-11 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {isLogging ? (
               <>
