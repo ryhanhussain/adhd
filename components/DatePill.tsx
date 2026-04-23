@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toLocalDateStr } from "@/lib/db";
 
 interface DatePillProps {
@@ -47,7 +48,10 @@ export default function DatePill({
 }: DatePillProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; placeAbove: boolean } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   const today = toLocalDateStr(Date.now());
 
@@ -115,7 +119,7 @@ export default function DatePill({
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-      {open && pos && (
+      {mounted && open && pos && createPortal(
         <>
           <div
             className="fixed inset-0"
@@ -156,7 +160,8 @@ export default function DatePill({
               );
             })}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
