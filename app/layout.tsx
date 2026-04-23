@@ -15,14 +15,51 @@ const outfit = Outfit({
   display: "swap",
 });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+  "https://addit.pages.dev";
+
+const tagline = "Your second brain for the day in front of you.";
+const description =
+  "A frictionless second brain for brain dumps, interstitial journaling, and quiet time tracking. Capture thoughts by voice or text, plan your day, and reflect — all in one calm app.";
+
 export const metadata: Metadata = {
-  title: "ADDit",
-  description: "Frictionless journaling & time tracking for ADHD brains",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: `ADDit — ${tagline}`,
+    template: "%s · ADDit",
+  },
+  description,
+  applicationName: "ADDit",
+  keywords: [
+    "second brain",
+    "brain dump",
+    "interstitial journaling",
+    "task tracker",
+    "time tracking",
+    "voice journal",
+    "daily intentions",
+    "reflection",
+    "PWA",
+  ],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "ADDit",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "ADDit",
+    title: `ADDit — ${tagline}`,
+    description,
+    url: siteUrl,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `ADDit — ${tagline}`,
+    description,
   },
 };
 
@@ -42,9 +79,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={outfit.variable} suppressHydrationWarning>
-      <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-      </head>
       <body className="min-h-screen pb-nav font-sans antialiased text-[var(--color-text)] bg-[var(--color-bg)] selection:bg-[var(--color-accent)] selection:text-white transition-colors duration-500" suppressHydrationWarning>
         <ThemeProvider>
           <KeyboardInsetProvider />
