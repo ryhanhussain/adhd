@@ -43,6 +43,7 @@ export const metadata: Metadata = {
     "PWA",
   ],
   manifest: "/manifest.json",
+  icons: { icon: "/icon.svg" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
