@@ -1,5 +1,6 @@
-import { getEntriesForDateRange, toLocalDateStr, type Entry } from "./db";
+import { getEntriesForDateRange, toLocalDateStr } from "./db";
 import { getCategoryStyle, type Category } from "./categories";
+import { getEntryDuration } from "./analysis";
 
 export interface WeeklyMetrics {
   totalMinutes: number;
@@ -21,15 +22,6 @@ function getWeekRange(weeksAgo: number): [string, string] {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return [toLocalDateStr(monday), toLocalDateStr(sunday)];
-}
-
-function getEntryDuration(e: Entry): number {
-  const start = e.startTime || e.timestamp;
-  if (!start || isNaN(start)) return 0;
-  const end = e.endTime === 0 ? Date.now() : (e.endTime || e.timestamp);
-  if (!end || isNaN(end)) return 0;
-  const mins = Math.round((end - start) / 60000);
-  return isNaN(mins) ? 0 : Math.max(0, mins);
 }
 
 export async function getWeeklyMetrics(categories: Category[]): Promise<WeeklyMetrics> {

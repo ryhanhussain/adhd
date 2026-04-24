@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import { fetchQuota, type QuotaSnapshot } from "@/lib/quota";
 import PageLayout from "@/components/PageLayout";
+import ArchiveList from "@/components/ArchiveList";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -513,6 +514,34 @@ export default function SettingsPage() {
             {exportStatus}
           </p>
         )}
+      </section>
+
+      {/* Archived intentions */}
+      <section id="archived" className="scroll-mt-4">
+        <details className="group">
+          <summary className="flex items-center justify-between cursor-pointer list-none select-none">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              Archived intentions
+            </h2>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-[var(--color-text-muted)] transition-transform group-open:rotate-180"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </summary>
+          <p className="text-sm mt-2 mb-4 text-[var(--color-text-muted)]">
+            Past intentions you didn&apos;t carry forward. Restore any that still matter.
+          </p>
+          <ArchiveList />
+        </details>
       </section>
 
       {/* AI Usage */}

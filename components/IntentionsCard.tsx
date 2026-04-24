@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { Intention } from "@/lib/db";
+import type { Intention, EnergyLevel } from "@/lib/db";
 import { reorderIntentions } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
 import IntentionItem from "./IntentionItem";
 
 interface IntentionsCardProps {
   intentions: Intention[];
-  onComplete: (id: string, note: string, startTime: number, endTime: number) => Promise<void>;
+  onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   /** If provided and non-empty, intentions render grouped by bucket. */
   intentionCategories?: IntentionCategory[];

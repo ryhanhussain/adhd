@@ -43,20 +43,29 @@ const COLOR_VARIANTS = [
   "color-mix(in srgb, var(--color-accent) 60%, var(--color-danger))",
 ];
 
-export default function VibeCloud() {
-  const [entries, setEntries] = useState<Entry[]>([]);
+interface VibeCloudProps {
+  /** Pre-fetched entries. If omitted, the component fetches this week's entries itself. */
+  entries?: Entry[];
+  /** Heading text. Defaults to "This Week's Vibe" for backwards compatibility. */
+  title?: string;
+}
+
+export default function VibeCloud({ entries: externalEntries, title }: VibeCloudProps = {}) {
+  const [fetchedEntries, setFetchedEntries] = useState<Entry[]>([]);
+  const entries = externalEntries ?? fetchedEntries;
 
   useEffect(() => {
+    if (externalEntries) return;
     const [start, end] = getWeekRange();
-    getEntriesForDateRange(start, end).then(setEntries);
+    getEntriesForDateRange(start, end).then(setFetchedEntries);
 
     const handle = () => {
       const [s, e] = getWeekRange();
-      getEntriesForDateRange(s, e).then(setEntries);
+      getEntriesForDateRange(s, e).then(setFetchedEntries);
     };
     window.addEventListener("entry-updated", handle);
     return () => window.removeEventListener("entry-updated", handle);
-  }, []);
+  }, [externalEntries]);
 
   const words = useMemo(() => getWordFrequencies(entries, 30), [entries]);
 
@@ -65,7 +74,7 @@ export default function VibeCloud() {
   return (
     <div className="animate-fade-in">
       <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
-        This Week&apos;s Vibe
+        {title ?? "This Week's Vibe"}
       </h3>
 
       <div className="flex flex-wrap justify-center gap-x-2.5 gap-y-1.5 px-2">

@@ -7,6 +7,11 @@ export const runtime = "edge";
 export const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 export const DAILY_CAP = 500;
+/** Per-feature daily cap for the period-analysis route. Sits on top of the
+ *  global cap — an analyze call consumes one slot from both counters, but
+ *  this one caps the analyze feature specifically so it can be tightened
+ *  independently as the userbase grows without touching other routes. */
+export const ANALYZE_DAILY_CAP = 20;
 /** Minimum ms between two allowed calls from the same user. Blocks scripted
  *  bursts that would otherwise drain the daily cap in a single second. 1500ms
  *  is short enough that normal human-paced usage (brain-dump, reflection,
@@ -85,6 +90,43 @@ export async function checkAndIncrementQuota(userId: string): Promise<QuotaResul
   if (data.allowed) {
     return { allowed: true, count: data.count };
   }
+  const reason: "cap" | "burst" = data.reason === "burst" ? "burst" : "cap";
+  return { allowed: false, reason, count: data.count };
+}
+
+/**
+ * Atomically checks and increments a per-feature daily counter, independent
+ * from the global quota. Uses the same RPC but namespaces the `p_day` key
+ * so the counter sits in its own row.
+ *
+ * Burst guard is disabled (p_burst_ms=0) — the global quota check already
+ * enforces burst; a second guard here would double-penalize the same user
+ * action. Fails CLOSED on DB errors, same as the global helper.
+ */
+export async function checkAndIncrementFeatureCap(
+  userId: string,
+  featureKey: string,
+  cap: number
+): Promise<QuotaResult> {
+  const supabase = getServiceSupabase();
+  const today = new Date().toISOString().split("T")[0];
+  const day = `${today}#${featureKey}`;
+
+  const { data, error } = await supabase
+    .rpc("increment_and_check_quota", {
+      p_user_id: userId,
+      p_day: day,
+      p_cap: cap,
+      p_burst_ms: 0,
+    })
+    .single<{ allowed: boolean; reason: string | null; count: number }>();
+
+  if (error || !data) {
+    console.error(`feature-quota RPC error (${featureKey}):`, error);
+    return { allowed: false, reason: "error", count: 0 };
+  }
+
+  if (data.allowed) return { allowed: true, count: data.count };
   const reason: "cap" | "burst" = data.reason === "burst" ? "burst" : "cap";
   return { allowed: false, reason, count: data.count };
 }

@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Intention } from "@/lib/db";
+import type { Intention, EnergyLevel } from "@/lib/db";
 import { toLocalDateStr, timeStringToTimestampOnDate } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
 import BucketChipPicker from "./BucketChipPicker";
 import DatePill from "./DatePill";
+import EnergyPicker from "./EnergyPicker";
+import { confettiBurst } from "@/lib/confetti";
 
 interface IntentionItemProps {
   intention: Intention;
-  onComplete: (id: string, note: string, startTime: number, endTime: number) => Promise<void>;
+  onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   /** Current user buckets; when non-empty, a chip is shown that opens a picker. */
   intentionCategories?: IntentionCategory[];
@@ -48,8 +50,10 @@ export default function IntentionItem({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(intention.text);
   const [bucketFlash, setBucketFlash] = useState(false);
+  const [selectedEnergy, setSelectedEnergy] = useState<EnergyLevel | null>(null);
   const prevCategoryId = useRef(intention.categoryId);
   const editRef = useRef<HTMLInputElement>(null);
+  const logButtonRef = useRef<HTMLButtonElement>(null);
 
   // Flash highlight when bucket changes
   useEffect(() => {
@@ -81,11 +85,17 @@ export default function IntentionItem({
   const handleLogIt = async () => {
     if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([8, 40, 8]);
     setIsLogging(true);
+    // Capture the button's tap position *before* awaiting — the element may
+    // unmount as part of the fly-out once the completion lands.
+    const rect = logButtonRef.current?.getBoundingClientRect();
+    const burstX = rect ? rect.left + rect.width / 2 : 0;
+    const burstY = rect ? rect.top + rect.height / 2 : 0;
     try {
       let start = timeStringToTimestampOnDate(startTime, targetDate);
       let end = timeStringToTimestampOnDate(endTime, targetDate);
       if (end < start) [start, end] = [end, start];
-      await onComplete(intention.id, note, start, end);
+      await onComplete(intention.id, note, start, end, selectedEnergy);
+      if (rect) confettiBurst(burstX, burstY);
       // Collapse the form first so the layout box for the expanded textarea is
       // released before the fly-out starts. Without this, mobile Safari keeps
       // the expanded height reserved and the parent card doesn't shrink when
@@ -260,7 +270,12 @@ export default function IntentionItem({
               />
             </div>
           </div>
+          <div className="mt-2">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] block mb-1">Energy</label>
+            <EnergyPicker value={selectedEnergy} onChange={setSelectedEnergy} />
+          </div>
           <button
+            ref={logButtonRef}
             onClick={handleLogIt}
             disabled={isLogging}
             className="w-full mt-3 h-11 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"

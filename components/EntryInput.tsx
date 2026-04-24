@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { addEntry, toLocalDateStr, timeStringToTimestampOnDate, clampToLocalDate } from "@/lib/db";
+import { addEntry, toLocalDateStr, timeStringToTimestampOnDate, clampToLocalDate, type EnergyLevel } from "@/lib/db";
 import { categorizeEntry } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
 import { getCategoryNames } from "@/lib/categories";
 import DatePill from "./DatePill";
+import EnergyPicker from "./EnergyPicker";
 import Toast from "./Toast";
 
 
@@ -33,6 +34,7 @@ export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProp
   const [placeholder] = useState(() => PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)]);
   const [toast, setToast] = useState<string | null>(null);
   const [targetDate, setTargetDate] = useState(() => initialDate ?? toLocalDateStr(Date.now()));
+  const [selectedEnergy, setSelectedEnergy] = useState<EnergyLevel | null>(null);
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -97,12 +99,13 @@ export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProp
         date: targetDate,
         location: null,
         tags: geminiResult.tags,
-        energy: geminiResult.energy,
+        energy: selectedEnergy ?? geminiResult.energy,
         summary: geminiResult.summary,
         createdAt: now,
       });
 
       setText("");
+      setSelectedEnergy(null);
       if (textareaRef.current) textareaRef.current.style.height = "80px";
       setShowSuccess(isOngoing ? "timer" : "logged");
       setTimeout(() => setShowSuccess(false), 2000);
@@ -145,6 +148,7 @@ export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProp
         />
       </div>
 
+      <EnergyPicker value={selectedEnergy} onChange={setSelectedEnergy} />
 
 
       <div className="flex gap-2">

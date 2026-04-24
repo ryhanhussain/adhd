@@ -6,6 +6,12 @@ import { toLocalDateStr } from "@/lib/db";
 
 interface CheckInGardenProps {
   hasLoggedToday: boolean;
+  /**
+   * "compact" (default): ~10px cells, 4-week view by default, tap to expand to 12.
+   * "hero": ~14px cells, 12-week view by default, staggered paint-in animation —
+   * used as the visual centrepiece in the morning home hero.
+   */
+  variant?: "compact" | "hero";
 }
 
 function getCellOpacity(count: number): number {
@@ -17,7 +23,7 @@ function getCellOpacity(count: number): number {
 
 const DAY_LABELS = ["M", "", "W", "", "F", "", ""];
 
-export default function CheckInGarden({ hasLoggedToday }: CheckInGardenProps) {
+export default function CheckInGarden({ hasLoggedToday, variant = "compact" }: CheckInGardenProps) {
   const [data, setData] = useState<GardenData | null>(null);
   const [expanded, setExpanded] = useState(false);
 
@@ -30,30 +36,37 @@ export default function CheckInGarden({ hasLoggedToday }: CheckInGardenProps) {
 
   if (!data) return null;
 
-  const today = toLocalDateStr(new Date());
-  const compactDates = getGardenDates(4); // Last 4 weeks
-  const expandedDates = getGardenDates(12); // Last 12 weeks
+  const isHero = variant === "hero";
+  const cellSize = isHero ? 14 : 10;
+  const labelWidth = isHero ? 10 : 8;
 
-  const dates = expanded ? expandedDates : compactDates;
+  const today = toLocalDateStr(new Date());
+  const compactDates = getGardenDates(4);
+  const expandedDates = getGardenDates(12);
+
+  // Hero defaults to the 12-week view without needing a tap; still tap-toggles.
+  const showExpanded = isHero ? !expanded : expanded;
+  const dates = showExpanded ? expandedDates : compactDates;
   const weeks = Math.ceil(dates.length / 7);
+  const showLabels = showExpanded;
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      {/* Compact garden grid */}
+    <div className={`flex flex-col gap-1.5 ${isHero ? "items-start" : "items-end"}`}>
+      {/* Garden grid */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex flex-col items-end gap-0.5 group cursor-pointer"
-        aria-label={`${data.totalDays} days planted. Tap to ${expanded ? "collapse" : "expand"} garden.`}
+        className={`flex flex-col gap-0.5 group cursor-pointer ${isHero ? "items-start" : "items-end"}`}
+        aria-label={`${data.totalDays} days planted. Tap to ${showExpanded ? "collapse" : "expand"} garden.`}
       >
         <div className="flex gap-0.5">
-          {/* Day labels (only in expanded) */}
-          {expanded && (
+          {/* Day labels (only when expanded) */}
+          {showLabels && (
             <div className="flex flex-col gap-0.5 mr-0.5">
               {DAY_LABELS.map((label, i) => (
                 <div
                   key={i}
                   className="flex items-center justify-end"
-                  style={{ width: 8, height: 10 }}
+                  style={{ width: labelWidth, height: cellSize }}
                 >
                   <span className="text-[6px] text-[var(--color-text-muted)]">{label}</span>
                 </div>
@@ -67,24 +80,30 @@ export default function CheckInGarden({ hasLoggedToday }: CheckInGardenProps) {
               {Array.from({ length: 7 }, (_, dayIdx) => {
                 const dateIdx = weekIdx * 7 + dayIdx;
                 const date = dates[dateIdx];
-                if (!date) return <div key={dayIdx} style={{ width: 10, height: 10 }} />;
+                if (!date)
+                  return <div key={dayIdx} style={{ width: cellSize, height: cellSize }} />;
 
                 const count = data.dayCounts.get(date) || 0;
                 const isToday = date === today;
                 const isFuture = date > today;
                 const opacity = isFuture ? 0.03 : getCellOpacity(count);
 
+                const heroDelay = isHero ? `${weekIdx * 20}ms` : undefined;
+
                 return (
                   <div
                     key={dayIdx}
                     className={`rounded-[2px] transition-all duration-300 ${
                       isToday ? "ring-1 ring-[var(--color-accent)]/50" : ""
-                    } ${isToday && count > 0 ? "animate-breathe" : ""}`}
+                    } ${isToday && count > 0 ? "animate-breathe" : ""} ${
+                      isHero ? "animate-fade-in" : ""
+                    }`}
                     style={{
-                      width: 10,
-                      height: 10,
+                      width: cellSize,
+                      height: cellSize,
                       backgroundColor: count > 0 ? "var(--color-accent)" : "var(--color-border)",
                       opacity,
+                      animationDelay: heroDelay,
                     }}
                     title={`${date}: ${count} ${count === 1 ? "entry" : "entries"}`}
                   />
@@ -100,7 +119,7 @@ export default function CheckInGarden({ hasLoggedToday }: CheckInGardenProps) {
         {hasLoggedToday && (
           <span className="text-[10px] text-[var(--color-success)]">●</span>
         )}
-        <span className="text-[10px] font-medium text-[var(--color-text-muted)]">
+        <span className={`font-medium text-[var(--color-text-muted)] ${isHero ? "text-xs" : "text-[10px]"}`}>
           {data.totalDays} {data.totalDays === 1 ? "day" : "days"} planted
         </span>
       </div>

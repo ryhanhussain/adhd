@@ -165,3 +165,88 @@ export async function parseBrainDump(
   if (!Array.isArray(data.intentions)) return { ok: false, reason: "server" };
   return { ok: true, intentions: data.intentions as ParsedIntention[] };
 }
+
+// ---------------------------------------------------------------------------
+// Period analysis — 2–3 paragraph qualitative summary over aggregated stats.
+// Never sends raw entry text; only AI-cleaned summaries + numeric aggregates.
+// ---------------------------------------------------------------------------
+
+export type AnalyzePeriodReason =
+  | "auth"
+  | "cap"
+  | "analysis_cap"
+  | "burst"
+  | "quota_error"
+  | "network"
+  | "server";
+
+export type AnalyzePeriodResult =
+  | { ok: true; summary: string }
+  | { ok: false; reason: AnalyzePeriodReason };
+
+export interface AnalyzeAggregatesPayload {
+  totalMinutes: number;
+  daysLogged: number;
+  categoryBreakdown: { name: string; minutes: number; deltaPct: number | null }[];
+  energyCounts: { high: number; medium: number; low: number; scattered: number };
+  intentionStats: { created: number; completed: number; completionRate: number };
+  moodStats: { avgMood: number | null; count: number };
+  mostProductiveDayOfWeek: string | null;
+  mostProductiveHourWindow: string | null;
+  topActivities: { summary: string; count: number; minutes: number }[];
+  growers: { name: string; deltaPct: number }[];
+  shrinkers: { name: string; deltaPct: number }[];
+}
+
+export async function analyzePeriod(
+  windowDays: 7 | 30 | 90 | 400,
+  startDate: string,
+  endDate: string,
+  aggregates: AnalyzeAggregatesPayload
+): Promise<AnalyzePeriodResult> {
+  const token = await getAuthTokenWithRefresh();
+  if (!token) return { ok: false, reason: "auth" };
+
+  let res: Response;
+  try {
+    res = await fetch("/api/gemini/analyze-period/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ windowDays, startDate, endDate, aggregates }),
+    });
+  } catch (e) {
+    console.error("analyze-period fetch failed:", e);
+    return { ok: false, reason: "network" };
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) return { ok: false, reason: "auth" };
+    if (res.status === 429) {
+      let quotaReason: string | undefined;
+      try {
+        const body = (await res.json()) as { _quota?: unknown };
+        if (typeof body._quota === "string") quotaReason = body._quota;
+      } catch {}
+      if (quotaReason === "analysis_cap") return { ok: false, reason: "analysis_cap" };
+      if (quotaReason === "burst") return { ok: false, reason: "burst" };
+      if (quotaReason === "error") return { ok: false, reason: "quota_error" };
+      return { ok: false, reason: "cap" };
+    }
+    console.error("analyze-period API error:", res.status);
+    return { ok: false, reason: "server" };
+  }
+
+  let data: { summary?: unknown };
+  try {
+    data = await res.json();
+  } catch {
+    return { ok: false, reason: "server" };
+  }
+  if (typeof data.summary !== "string" || !data.summary.trim()) {
+    return { ok: false, reason: "server" };
+  }
+  return { ok: true, summary: data.summary };
+}

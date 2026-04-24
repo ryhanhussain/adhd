@@ -534,6 +534,21 @@ export async function getPendingIntentionsByDate(date: string): Promise<Intentio
     .sort((a, b) => a.order - b.order);
 }
 
+/** Returns intentions with `date` in [startDate, endDate] inclusive (YYYY-MM-DD), excluding tombstones. */
+export async function getIntentionsForDateRange(startDate: string, endDate: string): Promise<Intention[]> {
+  const db = await getDB();
+  const range = IDBKeyRange.bound(startDate, endDate);
+  const rows = await db.getAllFromIndex("intentions", "by-date", range);
+  return rows.filter((i) => !i.deleted);
+}
+
+/** Returns reflections with `date` in [startDate, endDate] inclusive, excluding tombstones. */
+export async function getReflectionsForDateRange(startDate: string, endDate: string): Promise<Reflection[]> {
+  const db = await getDB();
+  const all = await db.getAll("reflections");
+  return all.filter((r) => !r.deleted && r.date >= startDate && r.date <= endDate);
+}
+
 /** All archived intentions, newest original-date first. */
 export async function getArchivedIntentions(): Promise<Intention[]> {
   const db = await getDB();

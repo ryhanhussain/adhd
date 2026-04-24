@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import EntryInput from "@/components/EntryInput";
 import TaDaTimeline from "@/components/TaDaTimeline";
 import DailySummary from "@/components/DailySummary";
-import WeeklyInsights from "@/components/WeeklyInsights";
+import WeekTeaser from "@/components/WeekTeaser";
 import ReflectionPrompt from "@/components/ReflectionPrompt";
 import MilestoneCelebration from "@/components/MilestoneCelebration";
 import EntryEditSheet from "@/components/EntryEditSheet";
@@ -13,6 +13,8 @@ import IntentionsCard from "@/components/IntentionsCard";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import CarryoverPrompt from "@/components/CarryoverPrompt";
 import EmptyHome from "@/components/EmptyHome";
+import YesterdayGlance from "@/components/YesterdayGlance";
+import ReflectionTease from "@/components/ReflectionTease";
 import Toast from "@/components/Toast";
 import { getEntriesByDate, updateEntry, deleteEntry, addEntry, getSettings, saveSettings, getIntentionsByDate, getPendingIntentionsByDate, archiveIntentions, addIntentions, updateIntention, deleteIntention, toLocalDateStr, markEntryPendingDelete, unmarkEntryPendingDelete, type Entry, type Intention } from "@/lib/db";
 import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
@@ -91,7 +93,14 @@ export default function Home() {
         if (staleIds.length > 0) await archiveIntentions(staleIds);
 
         if (pendingYesterday.length > 0) {
-          setCarryoverItems(pendingYesterday);
+          // If today already has intentions (e.g. carried over from another device),
+          // don't show the prompt again — just archive yesterday's leftovers silently.
+          if (todayIntentions.length > 0) {
+            await archiveIntentions(pendingYesterday.map((i) => i.id));
+            await saveSettings({ lastCarryoverPromptDate: today });
+          } else {
+            setCarryoverItems(pendingYesterday);
+          }
         } else {
           // No prompt needed — still record that we checked today.
           await saveSettings({ lastCarryoverPromptDate: today });
@@ -235,7 +244,7 @@ export default function Home() {
     return () => window.removeEventListener("keydown", onKey);
   }, [activeInput, carryoverItems.length, selectedEntry, milestoneToShow]);
 
-  const handleIntentionComplete = async (id: string, note: string, startTime: number, endTime: number) => {
+  const handleIntentionComplete = async (id: string, note: string, startTime: number, endTime: number, userEnergy?: import("@/lib/db").EnergyLevel | null) => {
     const intention = intentions.find((i) => i.id === id);
     if (!intention) return;
 
@@ -250,7 +259,7 @@ export default function Home() {
     );
     const tags = result.tags;
     const summary = result.summary || intention.text;
-    const energy = result.energy;
+    const energy = userEnergy ?? result.energy;
 
     const entryId = crypto.randomUUID();
     await addEntry({
@@ -299,18 +308,28 @@ export default function Home() {
       <div className="flex flex-col gap-3 pb-dock lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-x-6 lg:items-start">
         {/* ── Left column: header, intentions, active timer ── */}
         <div className="contents lg:flex lg:flex-col lg:gap-3">
-          {/* ── Header card: greeting + garden anchored together ── */}
-          <div className="glass-panel rounded-2xl p-4 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}</h1>
-              {entries.length > 0 && (
-                <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
-                  {entries.length} {entries.length === 1 ? "entry" : "entries"} today
-                </p>
-              )}
+          {/* ── Header: morning hero (00:00–12:00) or compact greeting card ── */}
+          {new Date().getHours() < 12 ? (
+            <YesterdayGlance
+              greeting={getGreeting()}
+              entriesTodayCount={entries.length}
+              hasLoggedToday={streak?.hasLoggedToday ?? false}
+            />
+          ) : (
+            <div className="glass-panel rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}</h1>
+                {entries.length > 0 && (
+                  <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
+                    {entries.length} {entries.length === 1 ? "entry" : "entries"} today
+                  </p>
+                )}
+              </div>
+              <CheckInGarden hasLoggedToday={streak?.hasLoggedToday ?? false} />
             </div>
-            <CheckInGarden hasLoggedToday={streak?.hasLoggedToday ?? false} />
-          </div>
+          )}
+
+          <ReflectionTease />
 
           {/* ── Daily Intentions (top priority position) ── */}
           {intentions.length > 0 && (
@@ -369,7 +388,7 @@ export default function Home() {
             />
           )}
 
-          {/* ── Insights section: daily + weekly grouped ── */}
+          {/* ── Insights section: today's daily summary + compact week teaser ── */}
           {hasInsights && (
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3 px-1">
@@ -377,13 +396,13 @@ export default function Home() {
               </h2>
               <div className="flex flex-col gap-3">
                 <DailySummary entries={entries} categories={categories} />
-                <WeeklyInsights categories={categories} />
+                <WeekTeaser />
               </div>
             </section>
           )}
 
-          {/* Show weekly insights even with no entries today (it covers the whole week) */}
-          {!hasInsights && <WeeklyInsights categories={categories} />}
+          {/* Even with no entries today, show the week teaser if the week has any data */}
+          {!hasInsights && <WeekTeaser />}
 
           {/* ── End-of-day reflection ── */}
           <ReflectionPrompt entries={entries} />

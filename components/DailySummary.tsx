@@ -2,6 +2,7 @@
 
 import { type Entry } from "@/lib/db";
 import { getCategoryStyle, type Category } from "@/lib/categories";
+import { getEntryDuration } from "@/lib/analysis";
 import EnergyInsights from "./EnergyInsights";
 
 interface DailySummaryProps {
@@ -21,15 +22,6 @@ function getHourLabel(hour: number): string {
   const suffix = hour >= 12 ? "PM" : "AM";
   const h = hour % 12 || 12;
   return `${h}${suffix}`;
-}
-
-function getEntryDuration(entry: Entry): number {
-  const start = entry.startTime || entry.timestamp;
-  if (!start || isNaN(start)) return 0;
-  const end = entry.endTime === 0 ? Date.now() : (entry.endTime || entry.timestamp);
-  if (!end || isNaN(end)) return 0;
-  const mins = Math.round((end - start) / 60000);
-  return isNaN(mins) ? 0 : Math.max(0, mins);
 }
 
 export default function DailySummary({ entries, categories }: DailySummaryProps) {
