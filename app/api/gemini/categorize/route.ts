@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest, checkAndIncrementQuota, callGemini } from "../_shared";
+import { getUserFromRequest, checkAndIncrementQuota, callGemini, getLocalDateFromRequest } from "../_shared";
 
 export const runtime = "edge";
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Quota
-  const quota = await checkAndIncrementQuota(user.userId);
+  const quota = await checkAndIncrementQuota(user.userId, getLocalDateFromRequest(req));
   if (!quota.allowed) {
     console.error(
       `[categorize] 429 user=${user.userId} reason=${quota.reason} count=${quota.count}`

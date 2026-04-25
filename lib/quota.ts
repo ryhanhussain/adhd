@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { toLocalDateStr } from "@/lib/db";
 
 export interface QuotaSnapshot {
   count: number;
@@ -14,7 +15,10 @@ export async function fetchQuota(): Promise<QuotaSnapshot | null> {
 
   try {
     const res = await fetch("/api/gemini/quota", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Local-Date": toLocalDateStr(new Date()),
+      },
     });
     if (!res.ok) return null;
     const json = (await res.json()) as QuotaSnapshot;

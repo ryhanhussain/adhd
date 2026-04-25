@@ -15,10 +15,10 @@ interface CheckInGardenProps {
 }
 
 function getCellOpacity(count: number): number {
-  if (count === 0) return 0.08;
-  if (count === 1) return 0.3;
-  if (count <= 3) return 0.55;
-  return 0.9;
+  if (count === 0) return 0.18;
+  if (count === 1) return 0.4;
+  if (count <= 3) return 0.65;
+  return 1.0;
 }
 
 const DAY_LABELS = ["M", "", "W", "", "F", "", ""];

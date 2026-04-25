@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DAILY_CAP, getUserFromRequest, getServiceSupabase } from "../_shared";
+import {
+  DAILY_CAP,
+  getUserFromRequest,
+  getServiceSupabase,
+  getLocalDateFromRequest,
+} from "../_shared";
 
 export const runtime = "edge";
 
@@ -7,7 +12,7 @@ export async function GET(req: NextRequest) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const day = new Date().toISOString().split("T")[0];
+  const day = getLocalDateFromRequest(req);
 
   try {
     const supabase = getServiceSupabase();

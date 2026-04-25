@@ -105,21 +105,22 @@ export async function syncCategoriesNow(): Promise<void> {
       parsed = JSON.parse(localIntentionCategories);
     } catch {
       console.warn("[categoriesSync] local intention categories JSON is invalid, skipping push");
-      return;
     }
-    const { error: pushError } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: userId,
-          custom_intention_categories: parsed,
-          custom_intention_categories_updated_at: localIntentionTs,
-        },
-        { onConflict: "id" }
-      );
+    if (parsed !== undefined) {
+      const { error: pushError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: userId,
+            custom_intention_categories: parsed,
+            custom_intention_categories_updated_at: localIntentionTs,
+          },
+          { onConflict: "id" }
+        );
 
-    if (pushError) {
-      console.warn("[categoriesSync] intention push failed:", pushError.message);
+      if (pushError) {
+        console.warn("[categoriesSync] intention push failed:", pushError.message);
+      }
     }
   }
 

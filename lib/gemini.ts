@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { toLocalDateStr } from "@/lib/db";
 
 export type GeminiEnergyLevel = "high" | "medium" | "low" | "scattered";
 
@@ -73,6 +74,7 @@ export async function categorizeEntry(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        "X-Local-Date": toLocalDateStr(new Date()),
       },
       body: JSON.stringify({
         text,
@@ -126,6 +128,7 @@ export async function parseBrainDump(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        "X-Local-Date": toLocalDateStr(new Date()),
       },
       body: JSON.stringify({
         text: transcript,
@@ -214,6 +217,7 @@ export async function analyzePeriod(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        "X-Local-Date": toLocalDateStr(new Date()),
       },
       body: JSON.stringify({ windowDays, startDate, endDate, aggregates }),
     });

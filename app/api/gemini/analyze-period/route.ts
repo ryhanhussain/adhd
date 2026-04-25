@@ -5,6 +5,7 @@ import {
   checkAndIncrementFeatureCap,
   callGemini,
   ANALYZE_DAILY_CAP,
+  getLocalDateFromRequest,
 } from "../_shared";
 
 export const runtime = "edge";
@@ -225,7 +226,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Global quota (includes burst guard) — only after request is well-formed.
-  const globalQuota = await checkAndIncrementQuota(user.userId);
+  const localDate = getLocalDateFromRequest(req);
+  const globalQuota = await checkAndIncrementQuota(user.userId, localDate);
   if (!globalQuota.allowed) {
     console.error(
       `[analyze-period] 429 global user=${user.userId} reason=${globalQuota.reason}`
@@ -239,6 +241,7 @@ export async function POST(req: NextRequest) {
   // Feature cap (independent counter, tunable)
   const featureQuota = await checkAndIncrementFeatureCap(
     user.userId,
+    localDate,
     "analyze",
     ANALYZE_DAILY_CAP
   );

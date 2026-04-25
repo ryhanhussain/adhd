@@ -44,7 +44,7 @@
     --color-surface: #141523;
     --color-surface-elevated: #1D1E30;
     --color-text: #F3F4F6;
-    --color-text-muted: #C4C7D0;
+    --color-text-muted: #D8DCE8;
     --color-border: #2D3045;
 
     /* Accent: Neon Violet */
@@ -66,7 +66,7 @@ html.dark {
   --color-surface: #141523;
   --color-surface-elevated: #1D1E30;
   --color-text: #F3F4F6;
-  --color-text-muted: #C4C7D0;
+  --color-text-muted: #D8DCE8;
   --color-border: #2D3045;
 
   --color-accent: #8b5cf6;
@@ -434,9 +434,41 @@ h1, h2, h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Decorative loops + delight flashes are silenced entirely — they cycle
+     forever and contribute no information. */
+  .animate-pulse-soft,
+  .animate-now-pulse,
+  .animate-breathe,
+  .animate-mic-pulse,
+  .animate-shimmer,
+  .animate-streak-bounce,
+  .animate-bucket-flash,
+  .animate-success-flash,
+  .animate-check-draw {
+    animation: none !important;
+  }
+
+  /* Spatial/structural motion (sheets, popovers, expand/collapse, tada-land,
+     fade-in) is kept but tightened so users without motion-tolerance still
+     see the layout change rather than abrupt teleports. */
+  .animate-slide-up,
+  .animate-fade-in,
+  .animate-sheet-up,
+  .animate-sheet-fade,
+  .animate-toast-in,
+  .animate-toast-out,
+  .animate-pop-in,
+  .animate-tada-land,
+  .animate-intention-expand,
+  .animate-intention-collapse,
+  .animate-intention-fly-out,
+  .animate-slide-out-left {
+    animation-duration: 150ms !important;
+  }
+
+  /* Generic transitions are also tightened, not killed — losing focus-ring
+     fades and color hovers entirely makes the UI feel broken. */
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 120ms !important;
   }
 }

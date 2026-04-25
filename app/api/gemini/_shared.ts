@@ -58,6 +58,21 @@ export type QuotaResult =
   | { allowed: true; count: number }
   | { allowed: false; reason: "cap" | "burst" | "error"; count: number };
 
+const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Reads the user's local date from the `X-Local-Date` header. The whole app
+ * keys entries by local date (`toLocalDateStr`), so the quota counter has to
+ * match — otherwise a user in UTC-8 hits a fresh quota bucket at 16:00 local
+ * instead of midnight. Falls back to UTC if missing/malformed so legacy
+ * clients keep working, but new clients should always send the header.
+ */
+export function getLocalDateFromRequest(req: NextRequest): string {
+  const header = req.headers.get("X-Local-Date");
+  if (header && LOCAL_DATE_RE.test(header)) return header;
+  return new Date().toISOString().split("T")[0];
+}
+
 /**
  * Atomically checks and increments the per-user daily Gemini quota.
  *
@@ -66,17 +81,19 @@ export type QuotaResult =
  * (user_id, day) row, so concurrent requests from the same user serialize —
  * no TOCTOU window where two requests both see `count < cap` and bypass.
  *
+ * `day` should be the user's local YYYY-MM-DD (see `getLocalDateFromRequest`)
+ * so the quota window aligns with the user's perceived calendar day.
+ *
  * Fails CLOSED on DB errors (returns `allowed: false`) so a DB outage can't
  * silently grant unlimited calls. Callers should surface this as 429.
  */
-export async function checkAndIncrementQuota(userId: string): Promise<QuotaResult> {
+export async function checkAndIncrementQuota(userId: string, day: string): Promise<QuotaResult> {
   const supabase = getServiceSupabase();
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD UTC
 
   const { data, error } = await supabase
     .rpc("increment_and_check_quota", {
       p_user_id: userId,
-      p_day: today,
+      p_day: day,
       p_cap: DAILY_CAP,
       p_burst_ms: BURST_MIN_MS,
     })
@@ -105,12 +122,12 @@ export async function checkAndIncrementQuota(userId: string): Promise<QuotaResul
  */
 export async function checkAndIncrementFeatureCap(
   userId: string,
+  localDate: string,
   featureKey: string,
   cap: number
 ): Promise<QuotaResult> {
   const supabase = getServiceSupabase();
-  const today = new Date().toISOString().split("T")[0];
-  const day = `${today}#${featureKey}`;
+  const day = `${localDate}#${featureKey}`;
 
   const { data, error } = await supabase
     .rpc("increment_and_check_quota", {

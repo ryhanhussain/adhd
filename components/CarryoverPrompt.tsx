@@ -10,6 +10,7 @@ import {
   type Intention,
 } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
+import { syncIntentionsNow } from "@/lib/intentionsSync";
 import BucketChipPicker from "./BucketChipPicker";
 
 interface CarryoverPromptProps {
@@ -68,6 +69,14 @@ export default function CarryoverPrompt({
   const carryOver = async () => {
     setWorking(true);
     try {
+      // Pull any clones another device just made so the alreadyCloned guard
+      // below sees them. Without this, two devices opening the prompt at the
+      // same time both clone, producing duplicates with matching carriedFromId.
+      try {
+        await syncIntentionsNow();
+      } catch (err) {
+        console.warn("carryover: pre-sync failed, continuing with local view", err);
+      }
       const today = toLocalDateStr(new Date());
       const existing = await getIntentionsByDate(today);
       const offset = existing.length;

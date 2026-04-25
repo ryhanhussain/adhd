@@ -112,8 +112,17 @@ export default function ReflectionPrompt({ entries }: ReflectionPromptProps) {
 
   const handleSave = async () => {
     if (mood === null) return;
+    // Recompute the date at save time. If the local date has rolled over
+    // between mount and submit (long-open tab around midnight, timezone
+    // shift), the closure-captured `today` would write to the wrong day.
+    const saveDate = toLocalDateStr(new Date());
+    const existing = await getReflectionByDate(saveDate);
+    if (existing) {
+      setSaved(true);
+      return;
+    }
     await addReflection({
-      date: today,
+      date: saveDate,
       mood,
       note: note.trim(),
       summary,

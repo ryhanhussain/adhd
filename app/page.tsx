@@ -124,7 +124,19 @@ export default function Home() {
           // If today already has intentions (e.g. carried over from another device),
           // don't show the prompt again — just archive yesterday's leftovers silently.
           if (todayIntentions.length > 0) {
-            await archiveIntentions(pendingYesterday.map((i) => i.id));
+            // Final freshness check before silent archive: another device may
+            // have just carried these over between our sync and now. Re-sync,
+            // re-read, and only archive items that are *still* pending — so we
+            // don't tombstone the originals after another device cloned them.
+            const { data: sd2 } = await supabase.auth.getSession();
+            let toArchive = pendingYesterday.map((i) => i.id);
+            if (sd2.session?.user?.id) {
+              await syncIntentionsNow();
+              const stillPending = await getPendingIntentionsByDate(yesterday);
+              const stillIds = new Set(stillPending.map((i) => i.id));
+              toArchive = toArchive.filter((id) => stillIds.has(id));
+            }
+            if (toArchive.length > 0) await archiveIntentions(toArchive);
             await saveSettings({ lastCarryoverPromptDate: today });
           } else {
             setCarryoverItems(pendingYesterday);

@@ -154,11 +154,11 @@ export default function IntentionItem({
           onClick={handleCheck}
           onPointerDown={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
-          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 active:scale-90 ${
+          className={`hit-area w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 active:scale-90 ${
             checked
               ? "border-[var(--color-accent)] bg-[var(--color-accent)] scale-110"
               : "border-[var(--color-accent)]/50 hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
-          }`}
+          } ${animatingOut ? "animate-success-flash" : ""}`}
           aria-label={expanded ? "Collapse" : "Complete intention"}
         >
           {checked && (
@@ -225,7 +225,7 @@ export default function IntentionItem({
           onClick={() => onDelete(intention.id)}
           onPointerDown={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0"
+          className="hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0"
           aria-label="Delete intention"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -245,33 +245,33 @@ export default function IntentionItem({
             onChange={(e) => setNote(e.target.value)}
             placeholder="How did it go? Jot the time it took, energy level, or anything useful..."
             rows={2}
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 focus:border-[var(--color-accent)]"
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/60 focus:border-[var(--color-accent)] focus:bg-[var(--color-accent)]/5"
           />
           <div className="flex items-center gap-2 mt-2">
             <DatePill value={targetDate} onChange={setTargetDate} />
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <div className="flex items-center gap-1.5 flex-1">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">From</label>
+          <div className="flex flex-col gap-2 mt-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2 flex-1">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] w-10 shrink-0">From</label>
               <input
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/60 focus:border-[var(--color-accent)]"
               />
             </div>
-            <div className="flex items-center gap-1.5 flex-1">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">To</label>
+            <div className="flex items-center gap-2 flex-1">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] w-10 shrink-0">To</label>
               <input
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/60 focus:border-[var(--color-accent)]"
               />
             </div>
           </div>
           <div className="mt-2">
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] block mb-1">Energy</label>
+            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] block mb-1">Energy</label>
             <EnergyPicker value={selectedEnergy} onChange={setSelectedEnergy} />
           </div>
           <button

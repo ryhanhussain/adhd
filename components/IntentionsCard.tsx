@@ -316,29 +316,29 @@ export default function IntentionsCard({
               <div key={section.key} className={zoneClass} style={zoneStyle}>
                 {showHeaders && section.label && (
                   <>
-                    <div className="flex items-center gap-2 px-1">
+                    <div className="flex items-center gap-2 px-1 mb-0.5">
                       {section.color && (
                         <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: section.color }}
                           aria-hidden="true"
                         />
                       )}
                       <span
-                        className="text-sm font-semibold flex-1 truncate"
+                        className="text-sm font-bold flex-1 truncate tracking-tight"
                         style={section.color ? { color: section.color } : undefined}
                       >
                         {section.label}
                       </span>
                       <span
-                        className="text-xs tabular-nums font-medium"
+                        className="text-xs tabular-nums font-semibold"
                         style={section.color ? { color: section.color } : undefined}
                       >
                         {completedInBucket}/{totalInBucket}
                       </span>
                     </div>
                     {section.description && (
-                      <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-1 px-1 leading-snug">
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-1.5 px-1 leading-snug">
                         {section.description}
                       </p>
                     )}
