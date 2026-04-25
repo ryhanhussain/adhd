@@ -8,7 +8,10 @@ import {
   type PeriodMetrics,
   type PeriodWindow,
 } from "@/lib/analysis";
+import { getDistinctEntryDateCount } from "@/lib/db";
 import { analyzePeriod } from "@/lib/gemini";
+
+const MIN_DAYS_TO_UNLOCK = 7;
 
 interface AIPeriodSummaryProps {
   metrics: PeriodMetrics;
@@ -39,6 +42,7 @@ export default function AIPeriodSummary({ metrics, windowDays }: AIPeriodSummary
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalDaysLogged, setTotalDaysLogged] = useState<number | null>(null);
 
   useEffect(() => {
     setCacheLoaded(false);
@@ -47,6 +51,16 @@ export default function AIPeriodSummary({ metrics, windowDays }: AIPeriodSummary
       setCached(c);
       setCacheLoaded(true);
     });
+  }, [windowDays]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getDistinctEntryDateCount().then((n) => {
+      if (!cancelled) setTotalDaysLogged(n);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [windowDays]);
 
   const handleGenerate = useCallback(async () => {
@@ -100,11 +114,30 @@ export default function AIPeriodSummary({ metrics, windowDays }: AIPeriodSummary
     setGenerating(false);
   }, [metrics, windowDays]);
 
-  if (!cacheLoaded) {
+  if (!cacheLoaded || totalDaysLogged === null) {
     return <div className="h-24 rounded-2xl glass-panel animate-pulse" />;
   }
 
   const isStale = cached && cached.endDate !== metrics.endDate;
+  const locked = totalDaysLogged < MIN_DAYS_TO_UNLOCK;
+
+  // First-week users see a polite usage gate instead of the CTA. Numbers and
+  // patterns aren't meaningful until there's at least a week of data anyway.
+  if (locked && !cached) {
+    return (
+      <div className="glass-panel rounded-2xl p-5 flex flex-col gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+          AI analysis
+        </h3>
+        <p className="text-sm text-[var(--color-text-muted)]">
+          Use ADDit for at least {MIN_DAYS_TO_UNLOCK} days to unlock AI analysis — patterns sharpen with more data.
+        </p>
+        <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
+          {totalDaysLogged}/{MIN_DAYS_TO_UNLOCK} days logged so far.
+        </p>
+      </div>
+    );
+  }
 
   // No cached summary yet — show the CTA.
   if (!cached) {

@@ -19,6 +19,7 @@ import {
   type PeriodWindow,
 } from "@/lib/analysis";
 import { useCategories } from "@/lib/useCategories";
+import { useIntentionCategories } from "@/lib/useIntentionCategories";
 import { getEnergyColor, getEnergyLabel, ENERGY_LEVELS } from "@/lib/energy";
 
 function formatMinutes(minutes: number): string {
@@ -132,6 +133,7 @@ function TopActivitiesCard({
 
 function AnalysisPageInner() {
   const categories = useCategories();
+  const intentionCategories = useIntentionCategories();
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialWindow = parseWindowParam(searchParams.get("window"));
@@ -260,13 +262,16 @@ function AnalysisPageInner() {
                 {metrics.intentionStats.byCategory.map((b) => {
                   const pct =
                     b.total > 0 ? Math.round((b.completed / b.total) * 100) : 0;
+                  const displayName = b.bucketId
+                    ? intentionCategories.find((c) => c.id === b.bucketId)?.name ?? "Unknown bucket"
+                    : "Uncategorized";
                   return (
                     <div
                       key={b.bucketId ?? "__uncategorized__"}
                       className="flex items-center gap-3 text-sm"
                     >
                       <span className="font-semibold truncate flex-1">
-                        {b.bucketName}
+                        {displayName}
                       </span>
                       <span className="text-[var(--color-text-muted)] tabular-nums text-xs">
                         {b.completed}/{b.total}

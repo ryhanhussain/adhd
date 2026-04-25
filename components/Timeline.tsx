@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { getEntriesByDate, deleteEntry, addEntry, searchEntries, markEntryPendingDelete, unmarkEntryPendingDelete, toLocalDateStr, type Entry } from "@/lib/db";
 import { categorizeEntry } from "@/lib/gemini";
 import { getCategoryNames, getCategoryStyle } from "@/lib/categories";
@@ -363,16 +364,29 @@ export default function Timeline() {
             </button>
           </div>
         ) : (
-          <button
-            onClick={toggleSearch}
-            className="ml-auto min-w-11 min-h-11 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:shadow-sm active:scale-95 transition-all"
-            aria-label="Search entries"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <Link
+              href="/archive"
+              aria-label="View archive"
+              className="min-w-11 min-h-11 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:shadow-sm active:scale-95 transition-all"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="4" rx="1" />
+                <path d="M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7" />
+                <path d="M10 12h4" />
+              </svg>
+            </Link>
+            <button
+              onClick={toggleSearch}
+              className="min-w-11 min-h-11 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:shadow-sm active:scale-95 transition-all"
+              aria-label="Search entries"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
 

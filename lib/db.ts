@@ -74,6 +74,13 @@ export interface Settings {
   customIntentionCategories: string | null;
   /** Epoch ms timestamp of the last local intention-categories write; used for LWW push/pull. */
   intentionCategoriesSyncedAt: number;
+  /**
+   * Epoch ms timestamp of the last local write to `lastCarryoverPromptDate`.
+   * Synced via the same `profiles` row as categories so a carry-over performed
+   * on one device prevents the prompt from re-firing on another. Stamped
+   * automatically by `saveSettings` whenever `lastCarryoverPromptDate` is set.
+   */
+  lastCarryoverPromptDateSyncedAt: number;
 }
 
 export interface Intention {
@@ -89,6 +96,14 @@ export interface Intention {
   // --- intention categories (v8) ---
   /** id of an IntentionCategory; null = uncategorized; unknown id renders as uncategorized. */
   categoryId?: string | null;
+  /**
+   * id of the previous-day intention this row was cloned from on carry-over.
+   * Walking the chain to its root yields the user-perceived "single task" so
+   * analysis can dedupe carry-over clones, and CarryoverPrompt can stay
+   * idempotent across devices (skip cloning if today already has a row whose
+   * carriedFromId matches the candidate).
+   */
+  carriedFromId?: string | null;
   // --- sync metadata (v6) ---
   updatedAt: number;         // epoch ms of the last local or remote write; drives last-write-wins merge
   deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
@@ -318,6 +333,22 @@ export async function getEntriesSince(sinceDate: string): Promise<Entry[]> {
   return entries.filter((e) => !e.deleted && !pendingEntryDeletions.has(e.id));
 }
 
+/**
+ * Counts distinct local dates that have at least one non-deleted entry. Used by
+ * the AI-analysis gate, which unlocks after the user has logged on 7+ separate
+ * days. Bounded read over the last 400 days, matching `getEntriesSince` cost.
+ */
+export async function getDistinctEntryDateCount(): Promise<number> {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - 399);
+  const sinceDate = toLocalDateStr(cutoff);
+  const entries = await getEntriesSince(sinceDate);
+  const dates = new Set<string>();
+  for (const e of entries) dates.add(e.date);
+  return dates.size;
+}
+
 export async function searchEntries(query: string): Promise<Entry[]> {
   const db = await getDB();
   const all = await db.getAll("entries");
@@ -406,6 +437,8 @@ export async function getSettings(): Promise<Settings> {
   const customIntentionCategories = (await db.get("settings", "customIntentionCategories")) || null;
   const intentionCategoriesSyncedAtRaw = (await db.get("settings", "intentionCategoriesSyncedAt")) || "0";
   const intentionCategoriesSyncedAt = Number.parseInt(intentionCategoriesSyncedAtRaw, 10) || 0;
+  const lastCarryoverPromptDateSyncedAtRaw = (await db.get("settings", "lastCarryoverPromptDateSyncedAt")) || "0";
+  const lastCarryoverPromptDateSyncedAt = Number.parseInt(lastCarryoverPromptDateSyncedAtRaw, 10) || 0;
   return {
     customCategories,
     theme,
@@ -420,6 +453,7 @@ export async function getSettings(): Promise<Settings> {
     categoriesSyncedAt,
     customIntentionCategories,
     intentionCategoriesSyncedAt,
+    lastCarryoverPromptDateSyncedAt,
   };
 }
 
@@ -436,6 +470,16 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   }
   if (settings.lastCarryoverPromptDate !== undefined) {
     await db.put("settings", settings.lastCarryoverPromptDate || "", "lastCarryoverPromptDate");
+    // Auto-stamp the LWW timestamp unless caller is explicitly setting it
+    // (e.g. categoriesSync after applying a remote pull). This makes every
+    // local carryover-prompt write dirty for push without each call site
+    // having to remember.
+    if (settings.lastCarryoverPromptDateSyncedAt === undefined) {
+      await db.put("settings", String(Date.now()), "lastCarryoverPromptDateSyncedAt");
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("carryover-prompt-date-dirty"));
+    }
   }
   if (settings.intentionSyncOwner !== undefined) {
     await db.put("settings", settings.intentionSyncOwner || "", "intentionSyncOwner");
@@ -463,6 +507,13 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   }
   if (settings.intentionCategoriesSyncedAt !== undefined) {
     await db.put("settings", String(settings.intentionCategoriesSyncedAt ?? 0), "intentionCategoriesSyncedAt");
+  }
+  if (settings.lastCarryoverPromptDateSyncedAt !== undefined) {
+    await db.put(
+      "settings",
+      String(settings.lastCarryoverPromptDateSyncedAt ?? 0),
+      "lastCarryoverPromptDateSyncedAt"
+    );
   }
 }
 

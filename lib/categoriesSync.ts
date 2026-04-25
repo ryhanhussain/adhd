@@ -27,14 +27,16 @@ export async function syncCategoriesNow(): Promise<void> {
   const localCategories = settings.customCategories;
   const localIntentionTs = settings.intentionCategoriesSyncedAt ?? 0;
   const localIntentionCategories = settings.customIntentionCategories;
+  const localCarryoverTs = settings.lastCarryoverPromptDateSyncedAt ?? 0;
+  const localCarryoverDate = settings.lastCarryoverPromptDate;
 
-  // Pull remote profile row (both fields in one round-trip).
+  // Pull remote profile row (all fields in one round-trip).
   // `.maybeSingle()` returns null (not 406) when the row doesn't exist yet —
   // first-sync-after-signup, before any category push has happened.
   const { data: profile, error: pullError } = await supabase
     .from("profiles")
     .select(
-      "custom_categories, custom_categories_updated_at, custom_intention_categories, custom_intention_categories_updated_at"
+      "custom_categories, custom_categories_updated_at, custom_intention_categories, custom_intention_categories_updated_at, last_carryover_prompt_date, last_carryover_prompt_date_updated_at"
     )
     .eq("id", userId)
     .maybeSingle();
@@ -46,6 +48,7 @@ export async function syncCategoriesNow(): Promise<void> {
 
   const remoteTs: number = profile?.custom_categories_updated_at ?? 0;
   const remoteIntentionTs: number = profile?.custom_intention_categories_updated_at ?? 0;
+  const remoteCarryoverTs: number = profile?.last_carryover_prompt_date_updated_at ?? 0;
 
   // --- Activity categories ---
   if (remoteTs > localTs) {
@@ -119,6 +122,32 @@ export async function syncCategoriesNow(): Promise<void> {
       console.warn("[categoriesSync] intention push failed:", pushError.message);
     }
   }
+
+  // --- lastCarryoverPromptDate ---
+  // Same LWW pattern. Pulling sets the explicit syncedAt so saveSettings
+  // doesn't auto-stamp it (which would mark it dirty and bounce back).
+  if (remoteCarryoverTs > localCarryoverTs) {
+    const remoteDate = (profile?.last_carryover_prompt_date as string | null) ?? null;
+    await saveSettings({
+      lastCarryoverPromptDate: remoteDate,
+      lastCarryoverPromptDateSyncedAt: remoteCarryoverTs,
+    });
+  } else if (localCarryoverTs > remoteCarryoverTs && localCarryoverDate) {
+    const { error: pushError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          last_carryover_prompt_date: localCarryoverDate,
+          last_carryover_prompt_date_updated_at: localCarryoverTs,
+        },
+        { onConflict: "id" }
+      );
+
+    if (pushError) {
+      console.warn("[categoriesSync] carryover push failed:", pushError.message);
+    }
+  }
 }
 
 // --- Lifecycle ---------------------------------------------------------------
@@ -137,6 +166,7 @@ export function startCategoriesSync(): Unsubscribe {
 
   window.addEventListener("categories-dirty", onDirty);
   window.addEventListener("intention-categories-dirty", onDirty);
+  window.addEventListener("carryover-prompt-date-dirty", onDirty);
   document.addEventListener("visibilitychange", onVisible);
   window.addEventListener("online", onOnline);
   window.addEventListener("focus", onOnline);
@@ -146,6 +176,7 @@ export function startCategoriesSync(): Unsubscribe {
   teardown = () => {
     window.removeEventListener("categories-dirty", onDirty);
     window.removeEventListener("intention-categories-dirty", onDirty);
+    window.removeEventListener("carryover-prompt-date-dirty", onDirty);
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("online", onOnline);
     window.removeEventListener("focus", onOnline);

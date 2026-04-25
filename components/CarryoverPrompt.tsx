@@ -73,8 +73,21 @@ export default function CarryoverPrompt({
       const offset = existing.length;
       const now = Date.now();
 
-      const toCarry = items.filter((i) => selected.has(i.id));
+      // Idempotency guard: if today already has a row whose carriedFromId
+      // matches an item in the selection, another device already cloned it.
+      // Skip cloning that item — but still archive its yesterday-original.
+      const alreadyCloned = new Set<string>();
+      for (const e of existing) {
+        if (e.carriedFromId) alreadyCloned.add(e.carriedFromId);
+      }
+
+      const toCarry = items.filter((i) => selected.has(i.id) && !alreadyCloned.has(i.id));
       const toArchive = items.filter((i) => !selected.has(i.id)).map((i) => i.id);
+      // Selected items that already have a clone from another device: archive
+      // the original so it doesn't keep coming back.
+      const dupOriginals = items
+        .filter((i) => selected.has(i.id) && alreadyCloned.has(i.id))
+        .map((i) => i.id);
 
       if (toCarry.length > 0) {
         const cloned: Intention[] = toCarry.map((i, idx) => ({
@@ -87,6 +100,7 @@ export default function CarryoverPrompt({
           order: offset + idx,
           createdAt: now,
           categoryId: resolveCategory(i),
+          carriedFromId: i.id,
           updatedAt: now,
           archived: false,
           deleted: false,
@@ -99,8 +113,9 @@ export default function CarryoverPrompt({
         }
       }
 
-      if (toArchive.length > 0) {
-        await archiveIntentions(toArchive);
+      const allArchive = [...toArchive, ...dupOriginals];
+      if (allArchive.length > 0) {
+        await archiveIntentions(allArchive);
       }
 
       window.dispatchEvent(new Event("entry-updated"));

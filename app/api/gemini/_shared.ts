@@ -11,7 +11,7 @@ export const DAILY_CAP = 500;
  *  global cap — an analyze call consumes one slot from both counters, but
  *  this one caps the analyze feature specifically so it can be tightened
  *  independently as the userbase grows without touching other routes. */
-export const ANALYZE_DAILY_CAP = 20;
+export const ANALYZE_DAILY_CAP = 50;
 /** Minimum ms between two allowed calls from the same user. Blocks scripted
  *  bursts that would otherwise drain the daily cap in a single second. 1500ms
  *  is short enough that normal human-paced usage (brain-dump, reflection,

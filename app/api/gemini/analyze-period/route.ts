@@ -204,7 +204,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ summary: null }, { status: 401 });
   }
 
-  // Global quota (includes burst guard)
+  // Validate the request shape BEFORE touching quota counters — a malformed or
+  // aborted request should never burn a daily slot.
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ summary: null }, { status: 400 });
+  }
+
+  const b = (body ?? {}) as Record<string, unknown>;
+  const windowDays =
+    b.windowDays === 7 || b.windowDays === 30 || b.windowDays === 90 || b.windowDays === 400
+      ? b.windowDays
+      : 30;
+
+  const aggregates = sanitize(b.aggregates);
+  if (!aggregates) {
+    return NextResponse.json({ summary: null }, { status: 400 });
+  }
+
+  // Global quota (includes burst guard) — only after request is well-formed.
   const globalQuota = await checkAndIncrementQuota(user.userId);
   if (!globalQuota.allowed) {
     console.error(
@@ -230,24 +250,6 @@ export async function POST(req: NextRequest) {
       { summary: null, _quota: "analysis_cap" },
       { status: 429 }
     );
-  }
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ summary: null }, { status: 400 });
-  }
-
-  const b = (body ?? {}) as Record<string, unknown>;
-  const windowDays =
-    b.windowDays === 7 || b.windowDays === 30 || b.windowDays === 90 || b.windowDays === 400
-      ? b.windowDays
-      : 30;
-
-  const aggregates = sanitize(b.aggregates);
-  if (!aggregates) {
-    return NextResponse.json({ summary: null }, { status: 400 });
   }
 
   const prompt = buildPrompt(windowDays, aggregates);

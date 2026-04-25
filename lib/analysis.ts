@@ -203,36 +203,67 @@ export async function getPeriodMetrics(
     if (e.energy) energyCounts[e.energy as EnergyLevel]++;
   }
 
-  // Intentions (current period only)
+  // Intentions (current period only) — collapsed by carry-over lineage so a
+  // task carried Mon→Tue→Wed counts as one user-perceived intention, not three.
   const currIntentions: Intention[] = intentions.filter(
     (i) => i.date >= startDate && i.date <= endDate
   );
-  const created = currIntentions.length;
-  const completed = currIntentions.filter((i) => i.completed).length;
-  const completionRate = created > 0 ? completed / created : 0;
+  const idMap = new Map<string, Intention>();
+  for (const i of currIntentions) idMap.set(i.id, i);
 
+  // Walk carriedFromId pointers up to the deepest ancestor still visible in
+  // the current window. Once we leave the window, stop — that ancestor became
+  // the root for analysis purposes. Cycles can't happen because carriedFromId
+  // is set once at clone time, but we cap the walk just in case.
+  const rootOf = (id: string): string => {
+    let cur: Intention | undefined = idMap.get(id);
+    let safety = 100;
+    while (cur && cur.carriedFromId && idMap.has(cur.carriedFromId) && safety-- > 0) {
+      cur = idMap.get(cur.carriedFromId);
+    }
+    return cur ? cur.id : id;
+  };
+
+  // Group intentions by their lineage root.
+  const groups = new Map<string, Intention[]>();
+  for (const i of currIntentions) {
+    const root = rootOf(i.id);
+    const list = groups.get(root) ?? [];
+    list.push(i);
+    groups.set(root, list);
+  }
+
+  let created = 0;
+  let completed = 0;
   const bucketBuckets = new Map<
     string,
     { bucketId: string | null; bucketName: string; completed: number; total: number }
   >();
   // Bucket name lookup from customIntentionCategories requires a Settings read,
   // which the caller doesn't provide. For now bucket name = bucketId or "Uncategorized".
-  // The /analysis page can resolve names at render time via useIntentionCategories.
-  for (const i of currIntentions) {
-    const key = i.categoryId ?? "__uncategorized__";
+  // The /analysis page resolves names at render time via useIntentionCategories.
+  for (const members of groups.values()) {
+    created++;
+    const groupCompleted = members.some((m) => m.completed);
+    if (groupCompleted) completed++;
+    // Use the most recent clone's categoryId — that's the bucket the user
+    // most recently assigned.
+    const latest = members.reduce((a, b) => (a.createdAt >= b.createdAt ? a : b));
+    const key = latest.categoryId ?? "__uncategorized__";
     const existing = bucketBuckets.get(key);
     if (existing) {
       existing.total++;
-      if (i.completed) existing.completed++;
+      if (groupCompleted) existing.completed++;
     } else {
       bucketBuckets.set(key, {
-        bucketId: i.categoryId ?? null,
-        bucketName: i.categoryId ?? "Uncategorized",
-        completed: i.completed ? 1 : 0,
+        bucketId: latest.categoryId ?? null,
+        bucketName: latest.categoryId ?? "Uncategorized",
+        completed: groupCompleted ? 1 : 0,
         total: 1,
       });
     }
   }
+  const completionRate = created > 0 ? completed / created : 0;
   const intentionStats: IntentionStats = {
     created,
     completed,

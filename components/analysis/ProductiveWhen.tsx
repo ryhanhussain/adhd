@@ -15,7 +15,7 @@ const HOUR_START = 6;
 const HOUR_END = 22;
 
 function fmtHour(h: number): string {
-  const suffix = h >= 12 ? "p" : "a";
+  const suffix = h >= 12 ? "pm" : "am";
   const hr = h % 12 || 12;
   return `${hr}${suffix}`;
 }

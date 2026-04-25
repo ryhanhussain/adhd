@@ -22,6 +22,9 @@ import { useCategories } from "@/lib/useCategories";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
 import { getCategoryNames } from "@/lib/categories";
 import { getStreakInfo, getMilestone, type StreakInfo, type MilestoneInfo } from "@/lib/streaks";
+import { syncIntentionsNow } from "@/lib/intentionsSync";
+import { syncCategoriesNow } from "@/lib/categoriesSync";
+import { supabase } from "@/lib/supabase";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -53,6 +56,10 @@ export default function Home() {
   const [recentTaDaIds, setRecentTaDaIds] = useState<Set<string>>(new Set());
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const deleteTimeout = useRef<NodeJS.Timeout>(undefined);
+  // Ensures the carry-over flow waits for one full sync round-trip the first
+  // time Home loads in a session, so a clone made on another device reaches
+  // local DB before we evaluate "yesterday still has pending items".
+  const initialSyncDoneRef = useRef(false);
   const today = toLocalDateStr(new Date());
 
   const loadData = useCallback(async () => {
@@ -74,6 +81,27 @@ export default function Home() {
         if (settings.lastSeenMilestone !== key) {
           setMilestoneToShow(milestone);
           await saveSettings({ lastSeenMilestone: key });
+        }
+      }
+
+      // Wait once per session for sync to converge before evaluating the
+      // carryover flow. Without this, opening Home on phone seconds after
+      // carrying over on laptop can show the prompt again and clone tasks.
+      if (!initialSyncDoneRef.current) {
+        initialSyncDoneRef.current = true;
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.user?.id) {
+          await Promise.all([syncIntentionsNow(), syncCategoriesNow()]);
+          // Re-read after sync so carryover logic uses converged state.
+          const [refreshedIntentions, refreshedSettings] = await Promise.all([
+            getIntentionsByDate(today),
+            getSettings(),
+          ]);
+          settings.lastCarryoverPromptDate = refreshedSettings.lastCarryoverPromptDate;
+          setIntentions(refreshedIntentions);
+          // Use the refreshed list for the in-flight decision below.
+          todayIntentions.length = 0;
+          todayIntentions.push(...refreshedIntentions);
         }
       }
 
