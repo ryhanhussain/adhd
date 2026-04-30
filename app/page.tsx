@@ -222,16 +222,15 @@ export default function Home() {
     window.dispatchEvent(new Event("entry-updated"));
   };
 
-  const handleIntentionsParsed = async (parsed: ParsedIntention[]) => {
+  const handleIntentionsParsed = async (parsed: ParsedIntention[], targetDate: string) => {
     const now = Date.now();
-    const dateStr = toLocalDateStr(now);
-    const existing = await getIntentionsByDate(dateStr);
+    const existing = await getIntentionsByDate(targetDate);
     const orderOffset = existing.length;
 
     const newIntentions: Intention[] = parsed.map((p, i) => ({
       id: crypto.randomUUID(),
       text: p.text,
-      date: dateStr,
+      date: targetDate,
       completed: false,
       completedAt: null,
       entryId: null,

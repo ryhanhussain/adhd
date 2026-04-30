@@ -3,20 +3,35 @@
 import { useState, useRef, useEffect } from "react";
 import type { ParsedIntention } from "@/lib/gemini";
 import type { IntentionCategory } from "@/lib/categories";
+import { toLocalDateStr } from "@/lib/db";
+import DatePill from "./DatePill";
 import Toast from "./Toast";
 
 interface BrainDumpInputProps {
-  onIntentionsParsed: (intentions: ParsedIntention[]) => Promise<void>;
+  onIntentionsParsed: (intentions: ParsedIntention[], targetDate: string) => Promise<void>;
   onClose: () => void;
   /** Current intention buckets; forwarded to the Gemini prompt for dynamic classification. */
   intentionCategories?: IntentionCategory[];
+}
+
+function tomorrowStr(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
+  return toLocalDateStr(d);
 }
 
 export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionCategories }: BrainDumpInputProps) {
   const [transcript, setTranscript] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [targetDate, setTargetDate] = useState(() => toLocalDateStr(Date.now()));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const today = toLocalDateStr(Date.now());
+  const tomorrow = tomorrowStr();
+  const isToday = targetDate === today;
+  const isTomorrow = targetDate === tomorrow;
 
   useEffect(() => {
     const t = setTimeout(() => textareaRef.current?.focus(), 250);
@@ -61,7 +76,7 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
         return;
       }
       if (result.intentions.length > 0) {
-        await onIntentionsParsed(result.intentions);
+        await onIntentionsParsed(result.intentions, targetDate);
       }
       onClose();
     } catch (e) {
@@ -74,6 +89,39 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Target-day pills: which day these intentions are planned for. */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mr-1">Plan for</span>
+        <button
+          type="button"
+          onClick={() => setTargetDate(today)}
+          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all active:scale-95 ${
+            isToday
+              ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-sm shadow-[var(--color-accent)]/20"
+              : "border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/40"
+          }`}
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          onClick={() => setTargetDate(tomorrow)}
+          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all active:scale-95 ${
+            isTomorrow
+              ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-sm shadow-[var(--color-accent)]/20"
+              : "border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/40"
+          }`}
+        >
+          Tomorrow
+        </button>
+        <DatePill
+          value={targetDate}
+          onChange={setTargetDate}
+          direction="future"
+          maxDaysForward={14}
+        />
+      </div>
+
       {/* Transcript area — always editable as textarea */}
       <div className="relative">
         <label htmlFor="brain-dump-textarea" className="sr-only">Brain dump — what do you need to do today?</label>

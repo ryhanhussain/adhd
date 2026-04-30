@@ -221,6 +221,25 @@ export default function IntentionItem({
           />
         )}
 
+        {canEdit && !editing && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              startEdit();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            className="hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0"
+            aria-label="Edit intention"
+            title="Edit"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+          </button>
+        )}
+
         <button
           onClick={() => onDelete(intention.id)}
           onPointerDown={(e) => e.stopPropagation()}

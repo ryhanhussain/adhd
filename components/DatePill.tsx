@@ -8,8 +8,12 @@ interface DatePillProps {
   /** YYYY-MM-DD */
   value: string;
   onChange: (next: string) => void;
-  /** How many days back to offer, counting today. Default 7 (today + 6 prior). */
+  /** How many days back to offer, counting today. Default 7 (today + 6 prior). Used when direction is "past". */
   maxDaysBack?: number;
+  /** How many days forward to offer, counting today. Default 14. Used when direction is "future". */
+  maxDaysForward?: number;
+  /** Whether the popover lists past or future days. Default "past". */
+  direction?: "past" | "future";
   /** Z-index for the popover surface. Defaults to 70 so it sits above modals/docks. */
   popoverZ?: number;
   /** Optional compact mode (smaller chip). */
@@ -31,6 +35,7 @@ function formatLabel(value: string, today: string): string {
   const diff = dayOffset(value, today);
   if (diff === 0) return "Today";
   if (diff === 1) return "Yesterday";
+  if (diff === -1) return "Tomorrow";
   const [y, m, d] = value.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, {
     weekday: "short",
@@ -43,6 +48,8 @@ export default function DatePill({
   value,
   onChange,
   maxDaysBack = 7,
+  maxDaysForward = 14,
+  direction = "past",
   popoverZ = 70,
   compact = false,
 }: DatePillProps) {
@@ -55,8 +62,9 @@ export default function DatePill({
 
   const today = toLocalDateStr(Date.now());
 
+  const optionCount = direction === "future" ? maxDaysForward : maxDaysBack;
   // Estimated popover height: header + N rows × ~40px + padding. Good enough for placement choice.
-  const estimatedPopoverHeight = Math.min(360, maxDaysBack * 40 + 16);
+  const estimatedPopoverHeight = Math.min(360, optionCount * 40 + 16);
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
@@ -74,10 +82,10 @@ export default function DatePill({
   }, [open, estimatedPopoverHeight]);
 
   const options: { value: string; label: string }[] = [];
-  for (let i = 0; i < maxDaysBack; i++) {
+  for (let i = 0; i < optionCount; i++) {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
+    d.setDate(d.getDate() + (direction === "future" ? i : -i));
     const v = toLocalDateStr(d);
     options.push({ value: v, label: formatLabel(v, today) });
   }
