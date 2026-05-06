@@ -4,6 +4,39 @@ export interface Category {
 }
 
 /**
+ * Available bucket icon keys. Keep in sync with `BucketIcon`'s switch.
+ * Defaults to "sparkle" when a bucket has no icon set.
+ */
+export type BucketIconKey =
+  | "sparkle"
+  | "briefcase"
+  | "heart"
+  | "cart"
+  | "heart-pulse"
+  | "dumbbell"
+  | "book"
+  | "leaf"
+  | "brain"
+  | "home"
+  | "code"
+  | "palette";
+
+export const BUCKET_ICON_KEYS: BucketIconKey[] = [
+  "sparkle",
+  "briefcase",
+  "heart",
+  "cart",
+  "heart-pulse",
+  "dumbbell",
+  "book",
+  "leaf",
+  "brain",
+  "home",
+  "code",
+  "palette",
+];
+
+/**
  * Intention category ("bucket"). User-defined, up to 3, each with a short
  * description that's passed verbatim to the brain-dump Gemini prompt so the
  * model can sort tasks by the user's own mental model rather than a canned
@@ -14,6 +47,8 @@ export interface IntentionCategory {
   name: string;        // short label, 1-20 chars
   description: string; // 1-sentence prompt hint, <=140 chars
   color: string;       // hex from COLOR_OPTIONS
+  /** v9: optional icon shown on the bucket card. Default = "sparkle". */
+  icon?: BucketIconKey;
 }
 
 export const MAX_INTENTION_CATEGORIES = 3;

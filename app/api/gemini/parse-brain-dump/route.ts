@@ -72,8 +72,8 @@ Only use the exact ids above. Do not invent new buckets or ids.`
     : "";
 
   const outputShape = hasBuckets
-    ? `[{"text": "Task description", "categoryId": "<one of: ${buckets.map((b) => `\"${b.id}\"`).join(", ")}, or null>"}]`
-    : `[{"text": "Task description"}]`;
+    ? `[{"text": "Task description", "categoryId": "<one of: ${buckets.map((b) => `\"${b.id}\"`).join(", ")}, or null>", "energy": "<high|medium|low|scattered|null>"}]`
+    : `[{"text": "Task description", "energy": "<high|medium|low|scattered|null>"}]`;
 
   const prompt = `You are an ADHD-friendly task parser. Given a brain dump transcript, extract only real, actionable tasks or intentions.
 
@@ -86,6 +86,7 @@ Rules:
 - Filter out anything that isn't a real task: fragments, rhetorical questions, self-commentary, test phrases
 - Rewrite each task as a short, scannable to-do label (ideally 3–8 words). Strip filler like "I need to", "I have to", "do some", "a full", "a bit of". Prefer an imperative verb or a clean noun phrase. Preserve specifics (names, deliverables, qualifiers like "draft" or "final") — don't over-compress or lose meaning.
 - Example cleanup: "I need to work on the product design for the startup pivot" → "Product design for startup pivot"; "i need to do a full regulatory assessment for the new startup pivot" → "Regulatory assessment for pivot"; "do some research on the go to market for the pivot" → "Research go-to-market for pivot"; "I need to email Sarah about the Q3 numbers" → "Email Sarah about Q3 numbers"${bucketRule}
+- Infer the user's likely energy level for each task: "high" for deep cognitive work, creative output, or high-stakes meetings; "medium" for routine focused work or normal coordination; "low" for admin/email/passive tasks that need attention but not much fuel; "scattered" for context-switching errand-list or chore tasks. Use null only when truly ambiguous — most real tasks have a discernible energy level, so prefer a guess over null.
 - Return at most 10 items
 - If nothing actionable is found, return an empty array
 
@@ -109,18 +110,24 @@ Respond with ONLY a JSON array of objects like ${outputShape}. No other text.`;
 
     const validIds = new Set(buckets.map((b) => b.id));
     const idByName = new Map(buckets.map((b) => [b.name.toLowerCase(), b.id]));
+    const validEnergies = new Set(["high", "medium", "low", "scattered"]);
 
     const intentions = parsed
       .filter((item: { text?: string }) => typeof item.text === "string" && item.text.trim().length > 0)
       .slice(0, 10)
-      .map((item: { text: string; categoryId?: unknown }) => {
+      .map((item: { text: string; categoryId?: unknown; energy?: unknown }) => {
         const rawId = item.categoryId;
         let categoryId: string | null = null;
         if (hasBuckets && typeof rawId === "string") {
           if (validIds.has(rawId)) categoryId = rawId;
           else categoryId = idByName.get(rawId.toLowerCase()) ?? null;
         }
-        return { text: item.text.trim(), categoryId };
+        const rawEnergy = item.energy;
+        const energy =
+          typeof rawEnergy === "string" && validEnergies.has(rawEnergy.toLowerCase())
+            ? (rawEnergy.toLowerCase() as "high" | "medium" | "low" | "scattered")
+            : null;
+        return { text: item.text.trim(), categoryId, energy };
       });
 
     return NextResponse.json({ intentions });

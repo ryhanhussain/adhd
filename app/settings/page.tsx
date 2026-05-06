@@ -8,9 +8,12 @@ import {
   MAX_INTENTION_CATEGORIES,
   INTENTION_CATEGORY_NAME_MAX,
   INTENTION_CATEGORY_DESCRIPTION_MAX,
+  BUCKET_ICON_KEYS,
   type Category,
   type IntentionCategory,
+  type BucketIconKey,
 } from "@/lib/categories";
+import BucketIcon from "@/components/home/BucketIcon";
 import { useAuth } from "@/components/AuthProvider";
 import { fetchQuota, type QuotaSnapshot } from "@/lib/quota";
 import PageLayout from "@/components/PageLayout";
@@ -29,6 +32,7 @@ export default function SettingsPage() {
   const [pendingReset, setPendingReset] = useState(false);
   const [intentionCategories, setIntentionCategories] = useState<IntentionCategory[]>([]);
   const [intentionOpenColorPicker, setIntentionOpenColorPicker] = useState<string | null>(null);
+  const [intentionOpenIconPicker, setIntentionOpenIconPicker] = useState<string | null>(null);
   const [intentionPendingRemoveId, setIntentionPendingRemoveId] = useState<string | null>(null);
   const [quota, setQuota] = useState<QuotaSnapshot | null>(null);
 
@@ -163,6 +167,7 @@ export default function SettingsPage() {
       name: "New bucket",
       description: "",
       color: available.color,
+      icon: "sparkle",
     };
     handleSaveIntentionCategories([...intentionCategories, newBucket]);
   };
@@ -435,6 +440,55 @@ export default function SettingsPage() {
                             />
                           </button>
                         ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Icon picker — sits beside the color dot, mirrors its popover pattern. */}
+                <div className="relative">
+                  <button
+                    className="min-w-11 min-h-11 flex items-center justify-center flex-shrink-0 rounded-xl"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, ${bucket.color} 14%, transparent)`,
+                      color: bucket.color,
+                    }}
+                    onClick={() => setIntentionOpenIconPicker(intentionOpenIconPicker === bucket.id ? null : bucket.id)}
+                    aria-label={`Change icon for ${bucket.name}`}
+                    aria-expanded={intentionOpenIconPicker === bucket.id}
+                  >
+                    <BucketIcon name={bucket.icon ?? "sparkle"} size={18} />
+                  </button>
+                  {intentionOpenIconPicker === bucket.id && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIntentionOpenIconPicker(null)} />
+                      <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 grid grid-cols-6 gap-1 w-[280px] animate-slide-up">
+                        {BUCKET_ICON_KEYS.map((key) => {
+                          const selected = (bucket.icon ?? "sparkle") === key;
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                updateIntentionBucket(bucket.id, { icon: key as BucketIconKey });
+                                setIntentionOpenIconPicker(null);
+                              }}
+                              className="min-h-11 flex items-center justify-center rounded-lg transition-transform active:scale-90"
+                              style={
+                                selected
+                                  ? {
+                                      color: bucket.color,
+                                      backgroundColor: `color-mix(in srgb, ${bucket.color} 14%, transparent)`,
+                                      boxShadow: `inset 0 0 0 2px ${bucket.color}`,
+                                    }
+                                  : { color: "var(--color-text-muted)" }
+                              }
+                              title={key}
+                              aria-label={key}
+                            >
+                              <BucketIcon name={key} size={18} />
+                            </button>
+                          );
+                        })}
                       </div>
                     </>
                   )}

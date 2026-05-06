@@ -101,6 +101,8 @@ export async function categorizeEntry(
 export interface ParsedIntention {
   text: string;
   categoryId?: string | null;
+  /** Gemini-inferred energy level for the task; null when ambiguous. */
+  energy?: GeminiEnergyLevel | null;
 }
 
 /** Minimal shape the route needs; callers pass their full IntentionCategory list. */

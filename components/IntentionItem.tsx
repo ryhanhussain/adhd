@@ -6,6 +6,7 @@ import { toLocalDateStr, timeStringToTimestampOnDate } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
 import BucketChipPicker from "./BucketChipPicker";
 import DatePill from "./DatePill";
+import EnergyChipPicker from "./EnergyChipPicker";
 import EnergyPicker from "./EnergyPicker";
 import { confettiBurst } from "@/lib/confetti";
 
@@ -17,8 +18,16 @@ interface IntentionItemProps {
   intentionCategories?: IntentionCategory[];
   /** Sets or clears the category for this intention. Pass null to clear. */
   onCategoryChange?: (id: string, categoryId: string | null) => Promise<void>;
+  /** Sets or clears the energy level for this intention. Pass null to clear. */
+  onEnergyChange?: (id: string, energy: EnergyLevel | null) => Promise<void>;
   /** Updates the intention's text. When omitted, inline edit is disabled. */
   onTextChange?: (id: string, text: string) => Promise<void>;
+  /**
+   * Compact variant for bucket cards: hides the bucket chip (the card already
+   * implies it), keeps edit/delete affordances visible only on hover, and
+   * trims vertical padding so rows feel like a checklist line.
+   */
+  compact?: boolean;
 }
 
 function defaultStartTime(): string {
@@ -37,7 +46,9 @@ export default function IntentionItem({
   onDelete,
   intentionCategories = [],
   onCategoryChange,
+  onEnergyChange,
   onTextChange,
+  compact = false,
 }: IntentionItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState("");
@@ -114,6 +125,11 @@ export default function IntentionItem({
     await onCategoryChange(intention.id, categoryId);
   };
 
+  const handlePickEnergy = async (energy: EnergyLevel | null) => {
+    if (!onEnergyChange) return;
+    await onEnergyChange(intention.id, energy);
+  };
+
   const canEdit = !!onTextChange && !expanded && !animatingOut;
 
   const startEdit = () => {
@@ -146,10 +162,10 @@ export default function IntentionItem({
       data-intention-id={intention.id}
       data-expanded={expanded ? "true" : undefined}
       data-editing={editing ? "true" : undefined}
-      className={`${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""}`}
+      className={`group ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""}`}
     >
       {/* Row: checkbox + text + category chip + delete */}
-      <div className="flex items-center gap-2 py-2">
+      <div className={`flex items-center gap-2 ${compact ? "py-1.5" : "py-2"}`}>
         <button
           onClick={handleCheck}
           onPointerDown={(e) => e.stopPropagation()}
@@ -212,12 +228,24 @@ export default function IntentionItem({
           </span>
         )}
 
-        {/* Category chip — only when user has buckets defined */}
+        {/* Category chip — only when user has buckets defined. In compact mode
+            the parent BucketCard already implies the bucket, so we render an
+            icon-only chip that still allows reassignment. */}
         {hasBuckets && !editing && (
           <BucketChipPicker
             buckets={intentionCategories}
             value={intention.categoryId ?? null}
             onChange={handlePickCategory}
+            compact={compact}
+          />
+        )}
+
+        {/* Energy chip — only when an onEnergyChange handler is wired. */}
+        {onEnergyChange && !editing && (
+          <EnergyChipPicker
+            value={intention.energy ?? null}
+            onChange={handlePickEnergy}
+            compact={compact}
           />
         )}
 
@@ -229,7 +257,9 @@ export default function IntentionItem({
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
-            className="hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0"
+            className={`hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0 ${
+              compact ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""
+            }`}
             aria-label="Edit intention"
             title="Edit"
           >
@@ -244,7 +274,9 @@ export default function IntentionItem({
           onClick={() => onDelete(intention.id)}
           onPointerDown={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
-          className="hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0"
+          className={`hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0 ${
+            compact ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""
+          }`}
           aria-label="Delete intention"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

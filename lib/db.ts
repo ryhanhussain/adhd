@@ -85,25 +85,38 @@ export interface Settings {
 
 export interface Intention {
   id: string;
+  /**
+   * Free-form task text. Edited inline; the AI does not see this text after
+   * brain-dump parsing — only at completion time when an Entry is created.
+   */
   text: string;
-  date: string; // YYYY-MM-DD (original date the intention was created for)
+  /**
+   * YYYY-MM-DD of the local creation date. Retained for analytics and the
+   * `by-date` index, but no longer drives the home view (intentions persist
+   * in the backlog regardless of `date`).
+   */
+  date: string;
   completed: boolean;
   completedAt: number | null;
   entryId: string | null; // links to Entry created on completion
   order: number;
   createdAt: number;
-  archived?: boolean; // true = user declined carryover or auto-archived; hidden from Home
+  archived?: boolean; // true = user manually archived; hidden from the backlog
   // --- intention categories (v8) ---
-  /** id of an IntentionCategory; null = uncategorized; unknown id renders as uncategorized. */
+  /** id of an IntentionCategory; null = uncategorized; unknown id falls back to Inbox. */
   categoryId?: string | null;
   /**
-   * id of the previous-day intention this row was cloned from on carry-over.
-   * Walking the chain to its root yields the user-perceived "single task" so
-   * analysis can dedupe carry-over clones, and CarryoverPrompt can stay
-   * idempotent across devices (skip cloning if today already has a row whose
-   * carriedFromId matches the candidate).
+   * @deprecated Carry-over chains are no longer created by the home flow
+   * (intentions persist in the backlog instead). Kept for `lib/analysis.ts`
+   * dedupe of historical multi-day clones written before v9.
    */
   carriedFromId?: string | null;
+  /**
+   * v9: optional energy hint. Inferred at brain-dump time by Gemini and used
+   * by the Energy view to slice the backlog. Pre-fills the Entry's energy
+   * when the intention is completed; user can still override.
+   */
+  energy?: EnergyLevel | null;
   // --- sync metadata (v6) ---
   updatedAt: number;         // epoch ms of the last local or remote write; drives last-write-wins merge
   deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
@@ -145,7 +158,7 @@ let dbPromise: Promise<IDBPDatabase<ADDitDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<ADDitDB>("addit-db", 8, {
+    dbPromise = openDB<ADDitDB>("addit-db", 9, {
       upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           const entryStore = db.createObjectStore("entries", { keyPath: "id" });
@@ -171,6 +184,9 @@ function getDB() {
         // v8: categoryId added to Intention (optional, defaults to undefined → "uncategorized")
         //     and customIntentionCategories/intentionCategoriesSyncedAt added to Settings.
         //     No store changes; Settings keys default to null/0 when absent.
+        // v9: optional `energy` field on Intention; optional `icon` on
+        //     IntentionCategory (lives inside customIntentionCategories JSON).
+        //     No schema/index changes; backfill is implicit (undefined → null).
         //
         // Both backfills share a single async block so that any upgrade path
         // (e.g. fresh install → v7, or v3 → v7) runs whatever is needed in
@@ -598,6 +614,27 @@ export async function getReflectionsForDateRange(startDate: string, endDate: str
   const db = await getDB();
   const all = await db.getAll("reflections");
   return all.filter((r) => !r.deleted && r.date >= startDate && r.date <= endDate);
+}
+
+/**
+ * Backlog: every active intention regardless of `date`. Sorted by `order`
+ * ascending (drag-reorder respects this), with `createdAt desc` as a stable
+ * tiebreaker so newly-added items surface near the top within a bucket of
+ * equal-`order` rows.
+ *
+ * "Active" = not completed, not archived, not soft-deleted. Realistic ceiling
+ * is a few hundred rows per user, so a `getAll()` + filter is cheaper than
+ * adding an index.
+ */
+export async function getActiveIntentions(): Promise<Intention[]> {
+  const db = await getDB();
+  const all = await db.getAll("intentions");
+  return all
+    .filter((i) => !i.completed && !i.archived && !i.deleted)
+    .sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return b.createdAt - a.createdAt;
+    });
 }
 
 /** All archived intentions, newest original-date first. */

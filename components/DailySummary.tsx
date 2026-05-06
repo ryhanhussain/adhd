@@ -8,6 +8,11 @@ import EnergyInsights from "./EnergyInsights";
 interface DailySummaryProps {
   entries: Entry[];
   categories: Category[];
+  /**
+   * Compact variant for the desktop right rail: just the donut + total label,
+   * no category bars, no peak insight, no energy chart.
+   */
+  compact?: boolean;
 }
 
 function formatDuration(minutes: number): string {
@@ -24,7 +29,7 @@ function getHourLabel(hour: number): string {
   return `${h}${suffix}`;
 }
 
-export default function DailySummary({ entries, categories }: DailySummaryProps) {
+export default function DailySummary({ entries, categories, compact = false }: DailySummaryProps) {
   if (entries.length === 0) return null;
 
   // Aggregate duration by category
@@ -88,10 +93,63 @@ export default function DailySummary({ entries, categories }: DailySummaryProps)
     }
   }
 
+  if (compact) {
+    return (
+      <div className="glass-panel p-4 rounded-2xl animate-fade-in shadow-sm relative overflow-hidden">
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="relative flex-shrink-0" style={{ width: 80, height: 80 }}>
+            <svg viewBox="0 0 120 120" width="80" height="80" role="img" aria-label={`Today: ${formatDuration(totalMinutes)}`}>
+              <circle
+                cx="60"
+                cy="60"
+                r={radius}
+                fill="none"
+                stroke="var(--color-border)"
+                strokeWidth="10"
+                opacity="0.3"
+              />
+              {segments.map((seg) => (
+                <circle
+                  key={seg.tag}
+                  cx="60"
+                  cy="60"
+                  r={radius}
+                  fill="none"
+                  stroke={seg.color}
+                  strokeWidth="10"
+                  strokeDasharray={`${seg.dashLength} ${circumference - seg.dashLength}`}
+                  strokeDashoffset={-seg.offset}
+                  strokeLinecap="round"
+                  transform="rotate(-90 60 60)"
+                />
+              ))}
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-sm font-black tabular-nums tracking-tight">
+                {formatDuration(totalMinutes)}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
+              Today
+            </p>
+            <p className="text-sm font-semibold">
+              {sorted.length} {sorted.length === 1 ? "category" : "categories"}
+            </p>
+            {peakInsight && (
+              <p className="text-[11px] text-[var(--color-text-muted)] truncate">{peakInsight}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="glass-panel p-5 rounded-3xl animate-fade-in shadow-xl relative overflow-hidden">
       <div className="absolute -top-10 -right-10 w-32 h-32 bg-[var(--color-accent)]/10 rounded-full blur-3xl pointer-events-none" />
-      
+
       {/* Donut + total */}
       <div className="flex items-center gap-6 mb-4 relative z-10">
         <div className="relative flex-shrink-0" style={{ width: 120, height: 120 }}>

@@ -8,15 +8,32 @@ import WeekTeaser from "@/components/WeekTeaser";
 import ReflectionPrompt from "@/components/ReflectionPrompt";
 import MilestoneCelebration from "@/components/MilestoneCelebration";
 import EntryEditSheet from "@/components/EntryEditSheet";
-import CheckInGarden from "@/components/CheckInGarden";
-import IntentionsCard from "@/components/IntentionsCard";
 import BrainDumpInput from "@/components/BrainDumpInput";
-import CarryoverPrompt from "@/components/CarryoverPrompt";
 import EmptyHome from "@/components/EmptyHome";
-import YesterdayGlance from "@/components/YesterdayGlance";
-import ReflectionTease from "@/components/ReflectionTease";
+import ActiveTimerCard from "@/components/ActiveTimerCard";
+import HomeTabs, { type HomeTab } from "@/components/home/HomeTabs";
+import BucketGrid from "@/components/home/BucketGrid";
+import EnergyView from "@/components/home/EnergyView";
+import MiniSidebar from "@/components/home/MiniSidebar";
 import Toast from "@/components/Toast";
-import { getEntriesByDate, updateEntry, deleteEntry, addEntry, getSettings, saveSettings, getIntentionsByDate, getPendingIntentionsByDate, archiveIntentions, addIntentions, updateIntention, deleteIntention, toLocalDateStr, markEntryPendingDelete, unmarkEntryPendingDelete, type Entry, type Intention } from "@/lib/db";
+import {
+  getEntriesByDate,
+  updateEntry,
+  deleteEntry,
+  addEntry,
+  getSettings,
+  saveSettings,
+  getActiveIntentions,
+  addIntentions,
+  updateIntention,
+  deleteIntention,
+  toLocalDateStr,
+  markEntryPendingDelete,
+  unmarkEntryPendingDelete,
+  type Entry,
+  type Intention,
+  type EnergyLevel,
+} from "@/lib/db";
 import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
@@ -33,12 +50,12 @@ function getGreeting(): string {
   return "Good evening.";
 }
 
-function formatElapsed(ms: number): string {
-  const minutes = Math.floor(ms / 60000);
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+function formatTodayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function Home() {
@@ -46,35 +63,32 @@ export default function Home() {
   const intentionCategories = useIntentionCategories();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
-  const [now, setNow] = useState(Date.now());
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
   const [milestoneToShow, setMilestoneToShow] = useState<MilestoneInfo | null>(null);
   const [activeInput, setActiveInput] = useState<"none" | "log" | "plan">("none");
   const [intentions, setIntentions] = useState<Intention[]>([]);
-  const [carryoverItems, setCarryoverItems] = useState<Intention[]>([]);
   const [recentTaDaIds, setRecentTaDaIds] = useState<Set<string>>(new Set());
+  const [homeTab, setHomeTab] = useState<HomeTab>("life");
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const deleteTimeout = useRef<NodeJS.Timeout>(undefined);
-  // Ensures the carry-over flow waits for one full sync round-trip the first
-  // time Home loads in a session, so a clone made on another device reaches
-  // local DB before we evaluate "yesterday still has pending items".
+  // First-mount sync gate so the backlog reflects converged remote state on
+  // load (intentions added on another device show up immediately).
   const initialSyncDoneRef = useRef(false);
   const today = toLocalDateStr(new Date());
 
   const loadData = useCallback(async () => {
     try {
-      const [todayEntries, streakInfo, settings, todayIntentions] = await Promise.all([
+      const [todayEntries, streakInfo, settings, activeIntentions] = await Promise.all([
         getEntriesByDate(today),
         getStreakInfo(),
         getSettings(),
-        getIntentionsByDate(today),
+        getActiveIntentions(),
       ]);
       setEntries(todayEntries);
       setStreak(streakInfo);
-      setIntentions(todayIntentions);
+      setIntentions(activeIntentions);
 
-      // Check for milestone
       const milestone = getMilestone(streakInfo);
       if (milestone) {
         const key = String(milestone.milestone);
@@ -84,66 +98,15 @@ export default function Home() {
         }
       }
 
-      // Wait once per session for sync to converge before evaluating the
-      // carryover flow. Without this, opening Home on phone seconds after
-      // carrying over on laptop can show the prompt again and clone tasks.
+      // Wait once per session for sync to converge so a brain-dump performed
+      // on another device is visible in the backlog immediately.
       if (!initialSyncDoneRef.current) {
         initialSyncDoneRef.current = true;
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session?.user?.id) {
           await Promise.all([syncIntentionsNow(), syncCategoriesNow()]);
-          // Re-read after sync so carryover logic uses converged state.
-          const [refreshedIntentions, refreshedSettings] = await Promise.all([
-            getIntentionsByDate(today),
-            getSettings(),
-          ]);
-          settings.lastCarryoverPromptDate = refreshedSettings.lastCarryoverPromptDate;
-          setIntentions(refreshedIntentions);
-          // Use the refreshed list for the in-flight decision below.
-          todayIntentions.length = 0;
-          todayIntentions.push(...refreshedIntentions);
-        }
-      }
-
-      // First Home visit of the day: offer to carry over yesterday's pending intentions,
-      // and auto-archive anything older than yesterday that's still pending.
-      if (settings.lastCarryoverPromptDate !== today) {
-        const yesterday = toLocalDateStr(new Date(Date.now() - 864e5));
-        const pendingYesterday = await getPendingIntentionsByDate(yesterday);
-
-        // Auto-archive anything pending from 2+ days ago (up to 7 days back, for cleanup).
-        const staleIds: string[] = [];
-        for (let days = 2; days <= 7; days++) {
-          const d = toLocalDateStr(new Date(Date.now() - days * 864e5));
-          const stale = await getPendingIntentionsByDate(d);
-          for (const s of stale) staleIds.push(s.id);
-        }
-        if (staleIds.length > 0) await archiveIntentions(staleIds);
-
-        if (pendingYesterday.length > 0) {
-          // If today already has intentions (e.g. carried over from another device),
-          // don't show the prompt again — just archive yesterday's leftovers silently.
-          if (todayIntentions.length > 0) {
-            // Final freshness check before silent archive: another device may
-            // have just carried these over between our sync and now. Re-sync,
-            // re-read, and only archive items that are *still* pending — so we
-            // don't tombstone the originals after another device cloned them.
-            const { data: sd2 } = await supabase.auth.getSession();
-            let toArchive = pendingYesterday.map((i) => i.id);
-            if (sd2.session?.user?.id) {
-              await syncIntentionsNow();
-              const stillPending = await getPendingIntentionsByDate(yesterday);
-              const stillIds = new Set(stillPending.map((i) => i.id));
-              toArchive = toArchive.filter((id) => stillIds.has(id));
-            }
-            if (toArchive.length > 0) await archiveIntentions(toArchive);
-            await saveSettings({ lastCarryoverPromptDate: today });
-          } else {
-            setCarryoverItems(pendingYesterday);
-          }
-        } else {
-          // No prompt needed — still record that we checked today.
-          await saveSettings({ lastCarryoverPromptDate: today });
+          const refreshed = await getActiveIntentions();
+          setIntentions(refreshed);
         }
       }
     } catch (e) {
@@ -162,19 +125,10 @@ export default function Home() {
     return () => window.removeEventListener("entry-updated", handleUpdate);
   }, [loadData]);
 
-  // Find active entry (endTime === 0 means timer is running)
   const activeEntry = entries.find((e) => e.endTime === 0);
-
-  useEffect(() => {
-    const ms = activeEntry ? 1000 : 30000;
-    const interval = setInterval(() => setNow(Date.now()), ms);
-    return () => clearInterval(interval);
-  }, [activeEntry]);
-
-  // All completed entries for the Ta-Da timeline (excluding active)
   const tadaEntries = entries.filter((e) => e.id !== activeEntry?.id);
 
-  const handleSave = async (updated: Entry) => {
+  const handleSave = async (_updated: Entry) => {
     setSelectedEntry(null);
     await loadData();
   };
@@ -183,11 +137,9 @@ export default function Home() {
     const entryToDelete = entries.find((e) => e.id === id);
     setSelectedEntry(null);
 
-    // Remove from UI immediately
     setEntries((prev) => prev.filter((e) => e.id !== id));
     markEntryPendingDelete(id);
 
-    // Schedule actual delete after 5 seconds
     if (deleteTimeout.current) clearTimeout(deleteTimeout.current);
     deleteTimeout.current = setTimeout(async () => {
       await deleteEntry(id);
@@ -195,21 +147,20 @@ export default function Home() {
       setToast(null);
     }, 5000);
 
-    // Show undo toast
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
     setToast({
       message: "Entry deleted",
       undo: entryToDelete
         ? () => {
-          if (deleteTimeout.current) clearTimeout(deleteTimeout.current);
-          unmarkEntryPendingDelete(id);
-          setEntries((prev) =>
-            [...prev, entryToDelete].sort(
-              (a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp)
-            )
-          );
-          setToast(null);
-        }
+            if (deleteTimeout.current) clearTimeout(deleteTimeout.current);
+            unmarkEntryPendingDelete(id);
+            setEntries((prev) =>
+              [...prev, entryToDelete].sort(
+                (a, b) => (a.startTime || a.timestamp) - (b.startTime || b.timestamp)
+              )
+            );
+            setToast(null);
+          }
         : undefined,
     });
     toastTimeout.current = setTimeout(() => setToast(null), 5000);
@@ -222,21 +173,25 @@ export default function Home() {
     window.dispatchEvent(new Event("entry-updated"));
   };
 
-  const handleIntentionsParsed = async (parsed: ParsedIntention[], targetDate: string) => {
+  const handleIntentionsParsed = async (parsed: ParsedIntention[]) => {
     const now = Date.now();
-    const existing = await getIntentionsByDate(targetDate);
-    const orderOffset = existing.length;
+    const todayDate = toLocalDateStr(now);
+    // Append to the end of the backlog: bump `order` past the largest existing
+    // value so newly added rows don't visually jump above older ones until the
+    // user reorders.
+    const maxOrder = intentions.reduce((acc, i) => Math.max(acc, i.order), -1);
 
     const newIntentions: Intention[] = parsed.map((p, i) => ({
       id: crypto.randomUUID(),
       text: p.text,
-      date: targetDate,
+      date: todayDate,
       completed: false,
       completedAt: null,
       entryId: null,
-      order: orderOffset + i,
+      order: maxOrder + 1 + i,
       createdAt: now,
       categoryId: p.categoryId ?? null,
+      energy: p.energy ?? null,
       updatedAt: now,
       deleted: false,
       syncedAt: null,
@@ -256,16 +211,20 @@ export default function Home() {
     window.dispatchEvent(new Event("entry-updated"));
   };
 
+  const handleIntentionEnergyChange = async (id: string, energy: EnergyLevel | null) => {
+    await updateIntention(id, { energy });
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
   const handleIntentionTextChange = async (id: string, text: string) => {
     await updateIntention(id, { text });
     window.dispatchEvent(new Event("entry-updated"));
   };
 
-  // Keyboard shortcuts: ⌘K log, ⌘⇧K plan, Esc collapse. Modals short-circuit.
+  // Keyboard shortcuts: ⌘K log, ⌘⇧K plan, Esc collapse.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const modalOpen =
-        carryoverItems.length > 0 || !!selectedEntry || !!milestoneToShow;
+      const modalOpen = !!selectedEntry || !!milestoneToShow;
       if (modalOpen) return;
 
       const cmdOrCtrl = e.metaKey || e.ctrlKey;
@@ -281,9 +240,15 @@ export default function Home() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeInput, carryoverItems.length, selectedEntry, milestoneToShow]);
+  }, [activeInput, selectedEntry, milestoneToShow]);
 
-  const handleIntentionComplete = async (id: string, note: string, startTime: number, endTime: number, userEnergy?: import("@/lib/db").EnergyLevel | null) => {
+  const handleIntentionComplete = async (
+    id: string,
+    note: string,
+    startTime: number,
+    endTime: number,
+    userEnergy?: EnergyLevel | null
+  ) => {
     const intention = intentions.find((i) => i.id === id);
     if (!intention) return;
 
@@ -298,7 +263,9 @@ export default function Home() {
     );
     const tags = result.tags;
     const summary = result.summary || intention.text;
-    const energy = userEnergy ?? result.energy;
+    // Prefer the user's pick at completion; fall back to the intention's
+    // brain-dump-time energy; only consult the fresh AI guess as a last resort.
+    const energy = userEnergy ?? intention.energy ?? result.energy;
 
     const entryId = crypto.randomUUID();
     await addEntry({
@@ -321,9 +288,7 @@ export default function Home() {
       entryId,
     });
 
-    // Track this entry for the "just landed" highlight in TaDa list
     setRecentTaDaIds((prev) => new Set(prev).add(entryId));
-    // Clear highlight after animation completes
     setTimeout(() => {
       setRecentTaDaIds((prev) => {
         const next = new Set(prev);
@@ -336,88 +301,57 @@ export default function Home() {
   };
 
   const hasInsights = entries.length > 0;
+  const hasBacklog = intentions.length > 0;
 
   return (
     <>
-      {/* Scrollable content — padded at bottom to clear the pinned input dock.
-          At lg: 2-col grid, action-left / insights-right. Each column wrapper uses
-          `contents` on mobile (flattens into the parent flex, preserving source order)
-          and `lg:flex lg:flex-col` on desktop so each column stacks its own children
-          tightly with no row-height coupling to the other column. */}
-      <div className="flex flex-col gap-3 pb-dock lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-x-6 lg:items-start">
-        {/* ── Left column: header, intentions, active timer ── */}
-        <div className="contents lg:flex lg:flex-col lg:gap-3">
-          {/* ── Header: morning hero (00:00–12:00) or compact greeting card ── */}
-          {new Date().getHours() < 12 ? (
-            <YesterdayGlance
-              greeting={getGreeting()}
-              entriesTodayCount={entries.length}
-              hasLoggedToday={streak?.hasLoggedToday ?? false}
-            />
-          ) : (
-            <div className="glass-panel rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">{getGreeting()}</h1>
-                {entries.length > 0 && (
-                  <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
-                    {entries.length} {entries.length === 1 ? "entry" : "entries"} today
-                  </p>
-                )}
-              </div>
-              <CheckInGarden hasLoggedToday={streak?.hasLoggedToday ?? false} />
-            </div>
-          )}
+      {/* Two-column layout on desktop:
+          - main column hosts the bucket grid (or energy view), TaDa list, and
+            mobile-only insights;
+          - 360px right rail composes streak + mini insights.
+          On mobile, the rail is hidden and insights collapse into the main flow. */}
+      <div className="flex flex-col gap-4 pb-dock lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-6 lg:items-start">
+        {/* ── Centerpiece ── */}
+        <div className="contents lg:flex lg:flex-col lg:gap-4">
+          <HomeTabs value={homeTab} onChange={setHomeTab} dateLabel={formatTodayLabel()} />
+          <p className="text-sm text-[var(--color-text-muted)] -mt-2">{getGreeting()}</p>
 
-          <ReflectionTease />
-
-          {/* ── Daily Intentions (top priority position) ── */}
-          {intentions.length > 0 && (
-            <div className="relative z-10">
-              <IntentionsCard
+          {hasBacklog ? (
+            homeTab === "life" ? (
+              <BucketGrid
                 intentions={intentions}
+                intentionCategories={intentionCategories}
                 onComplete={handleIntentionComplete}
                 onDelete={handleIntentionDelete}
-                intentionCategories={intentionCategories}
                 onCategoryChange={handleIntentionCategoryChange}
+                onEnergyChange={handleIntentionEnergyChange}
                 onTextChange={handleIntentionTextChange}
               />
-            </div>
-          )}
-
-          {/* ── Active entry ── */}
-          {activeEntry && (
-            <div
-              className="rounded-xl p-4 border-2 border-[var(--color-accent)] animate-fade-in animate-breathe"
-              style={{ backgroundColor: "var(--color-accent-soft)" }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-now-pulse" />
-                  <span className="text-xs font-semibold text-[var(--color-accent)]">Active now</span>
-                </div>
-                <span className="text-sm font-semibold tabular-nums text-[var(--color-accent)]">
-                  {formatElapsed(now - activeEntry.startTime)}
-                </span>
-              </div>
-              <p className="text-sm mb-3">{activeEntry.summary || activeEntry.text}</p>
-              <button
-                onClick={handleFinishActive}
-                className="w-full h-11 rounded-lg bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-medium active:scale-[0.98] transition-transform"
-              >
-                Just Finished
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* ── Right column: ta-da, insights, reflection ── */}
-        <div className="contents lg:flex lg:flex-col lg:gap-3">
-          {/* ── Empty state ── */}
-          {entries.length === 0 && intentions.length === 0 && streak && (
+            ) : (
+              <EnergyView
+                intentions={intentions}
+                intentionCategories={intentionCategories}
+                onComplete={handleIntentionComplete}
+                onDelete={handleIntentionDelete}
+                onCategoryChange={handleIntentionCategoryChange}
+                onTextChange={handleIntentionTextChange}
+                onEnergyChange={handleIntentionEnergyChange}
+              />
+            )
+          ) : streak ? (
             <EmptyHome totalDays={streak.totalDays} currentStreak={streak.currentStreak} />
+          ) : null}
+
+          {/* Active timer is shown inline on mobile; on desktop it lives in the
+              sidebar so the centerpiece stays focused on the backlog. */}
+          {activeEntry && (
+            <ActiveTimerCard
+              activeEntry={activeEntry}
+              onFinish={handleFinishActive}
+              className="lg:hidden"
+            />
           )}
 
-          {/* ── Today's Ta-Da List ── */}
           {tadaEntries.length > 0 && (
             <TaDaTimeline
               entries={tadaEntries}
@@ -427,39 +361,41 @@ export default function Home() {
             />
           )}
 
-          {/* ── Insights section: today's daily summary + compact week teaser ── */}
-          {hasInsights && (
-            <section>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3 px-1">
-                Insights
-              </h2>
-              <div className="flex flex-col gap-3">
-                <DailySummary entries={entries} categories={categories} />
-                <WeekTeaser />
-              </div>
-            </section>
-          )}
-
-          {/* Even with no entries today, show the week teaser if the week has any data */}
-          {!hasInsights && <WeekTeaser />}
-
-          {/* ── End-of-day reflection ── */}
-          <ReflectionPrompt entries={entries} />
+          {/* Mobile-only insights. Desktop shows the compact versions in the rail. */}
+          <div className="lg:hidden flex flex-col gap-3">
+            {hasInsights && <DailySummary entries={entries} categories={categories} />}
+            <WeekTeaser />
+            <ReflectionPrompt entries={entries} />
+          </div>
         </div>
+
+        {/* ── Desktop right rail ── */}
+        <aside className="hidden lg:block lg:sticky lg:top-4">
+          <MiniSidebar
+            activeEntry={activeEntry}
+            onFinishActive={handleFinishActive}
+            entries={entries}
+            categories={categories}
+            streak={streak}
+          />
+          <div className="mt-3">
+            <ReflectionPrompt entries={entries} />
+          </div>
+        </aside>
       </div>
 
       {/* ── Pinned input dock (fixed above navbar, lifts above keyboard on mobile) ── */}
       <div
         className="fixed left-0 right-0 z-40 pointer-events-none"
         style={{
-          bottom:
-            "max(calc(var(--nav-clearance) + 0.5rem), calc(var(--kb, 0px) + 0.5rem))",
+          bottom: "max(calc(var(--nav-clearance) + 0.5rem), calc(var(--kb, 0px) + 0.5rem))",
         }}
       >
         <div className="max-w-lg mx-auto px-4 pointer-events-auto">
           <div
-            className={`glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] overflow-hidden ${activeInput !== "none" ? "p-4" : "p-1.5"
-              }`}
+            className={`glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] overflow-hidden ${
+              activeInput !== "none" ? "p-4" : "p-1.5"
+            }`}
           >
             {activeInput === "log" ? (
               <div className="animate-fade-in">
@@ -486,7 +422,7 @@ export default function Home() {
               <div className="animate-fade-in">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                    Brain-dump your day...
+                    Brain-dump anything...
                   </span>
                   <button
                     onClick={() => setActiveInput("none")}
@@ -540,9 +476,9 @@ export default function Home() {
                     </svg>
                   </div>
                   <div className="flex flex-col text-left relative pr-2">
-                    <span className="text-sm font-bold text-[var(--color-text)] leading-tight">Plan Day</span>
+                    <span className="text-sm font-bold text-[var(--color-text)] leading-tight">Brain Dump</span>
                     <span className="text-[10px] text-[var(--color-text-muted)] font-medium mt-0.5">
-                      To-Do List
+                      Add to backlog
                       <span className="hidden lg:inline ml-1.5 opacity-70">⌘⇧K</span>
                     </span>
                     <span className="absolute -top-1 right-0 text-[10px] text-indigo-500">&#x2728;</span>
@@ -575,19 +511,6 @@ export default function Home() {
         <MilestoneCelebration
           milestone={milestoneToShow}
           onDismiss={() => setMilestoneToShow(null)}
-        />
-      )}
-
-      {carryoverItems.length > 0 && (
-        <CarryoverPrompt
-          items={carryoverItems}
-          intentionCategories={intentionCategories}
-          onCategoryChange={handleIntentionCategoryChange}
-          onDone={async () => {
-            setCarryoverItems([]);
-            await saveSettings({ lastCarryoverPromptDate: today });
-            await loadData();
-          }}
         />
       )}
     </>

@@ -14,6 +14,8 @@ interface IntentionsCardProps {
   intentionCategories?: IntentionCategory[];
   /** Sets or clears the category for an intention. Pass null to clear. */
   onCategoryChange?: (id: string, categoryId: string | null) => Promise<void>;
+  /** Sets or clears the energy level for an intention. Pass null to clear. */
+  onEnergyChange?: (id: string, energy: EnergyLevel | null) => Promise<void>;
   /** Renames an intention. When omitted, inline edit is disabled on items. */
   onTextChange?: (id: string, text: string) => Promise<void>;
 }
@@ -36,6 +38,7 @@ export default function IntentionsCard({
   onDelete,
   intentionCategories,
   onCategoryChange,
+  onEnergyChange,
   onTextChange,
 }: IntentionsCardProps) {
   const buckets = intentionCategories ?? [];
@@ -359,6 +362,7 @@ export default function IntentionsCard({
                       onDelete={onDelete}
                       intentionCategories={buckets}
                       onCategoryChange={onCategoryChange}
+                      onEnergyChange={onEnergyChange}
                       onTextChange={onTextChange}
                     />
                   </div>

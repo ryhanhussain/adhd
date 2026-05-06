@@ -1,37 +1,31 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import type { IntentionCategory } from "@/lib/categories";
+import type { EnergyLevel } from "@/lib/db";
+import { ENERGY_LEVELS, getEnergyColor, getEnergyEmoji, getEnergyLabel } from "@/lib/energy";
 import { computePopoverAnchor, type PopoverAnchor } from "@/lib/popoverAnchor";
 
-interface BucketChipPickerProps {
-  buckets: IntentionCategory[];
-  /** Currently selected bucket id, or null when uncategorized. */
-  value: string | null;
-  onChange: (nextId: string | null) => void;
-  /** Compact rows hide the text label and show only the colored dot. */
+interface EnergyChipPickerProps {
+  /** Currently selected energy level, or null when unset. */
+  value: EnergyLevel | null;
+  onChange: (next: EnergyLevel | null) => void;
+  /** Compact rows hide the text label and show only the emoji + dot. */
   compact?: boolean;
-  /**
-   * Z-index for the popover surface. Defaults to 50; pass 61 when the chip
-   * lives inside a modal (above z-60 backdrop).
-   */
+  /** Z-index for the popover surface. Defaults to 50; pass 61 inside modals. */
   popoverZ?: number;
 }
 
-const POPOVER_WIDTH = 224; // w-56 — kept in sync with the className below
+const POPOVER_WIDTH = 192;
 
-export default function BucketChipPicker({
-  buckets,
+export default function EnergyChipPicker({
   value,
   onChange,
   compact = false,
   popoverZ = 50,
-}: BucketChipPickerProps) {
+}: EnergyChipPickerProps) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<PopoverAnchor>({ side: "right" });
   const triggerRef = useRef<HTMLButtonElement>(null);
-
-  const current = value ? buckets.find((b) => b.id === value) ?? null : null;
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
@@ -39,10 +33,12 @@ export default function BucketChipPicker({
     setAnchor(computePopoverAnchor(rect, POPOVER_WIDTH, window.innerWidth));
   }, [open]);
 
-  const pick = (id: string | null) => {
+  const pick = (next: EnergyLevel | null) => {
     setOpen(false);
-    if ((value ?? null) !== id) onChange(id);
+    if ((value ?? null) !== next) onChange(next);
   };
+
+  const color = value ? getEnergyColor(value) : null;
 
   return (
     <div className="relative flex-shrink-0">
@@ -55,23 +51,36 @@ export default function BucketChipPicker({
         onPointerDown={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.stopPropagation()}
-        className={`h-7 rounded-full flex items-center text-[11px] font-medium transition-all active:scale-95 ${
-          compact ? "px-1.5 gap-1" : "px-2 gap-1.5"
+        className={`h-7 rounded-full flex items-center gap-1 text-[11px] font-medium transition-all active:scale-95 ${
+          compact ? "px-1.5" : "px-2 gap-1.5"
         } ${
-          current
+          value
             ? "bg-[var(--color-bg)]/70 border border-[var(--color-border)] text-[var(--color-text)]"
             : "bg-transparent border border-dashed border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)]/50"
         }`}
-        aria-label={current ? `Change bucket (currently ${current.name})` : "Set bucket"}
+        style={
+          value
+            ? { borderColor: `color-mix(in srgb, ${color} 60%, var(--color-border))` }
+            : undefined
+        }
+        aria-label={value ? `Change energy (currently ${getEnergyLabel(value)})` : "Set energy"}
         aria-expanded={open}
       >
-        <span
-          className="w-2 h-2 rounded-full flex-shrink-0"
-          style={{ backgroundColor: current?.color ?? "var(--color-text-muted)" }}
-          aria-hidden="true"
-        />
+        {value ? (
+          <span className="text-sm leading-none" aria-hidden="true">
+            {getEnergyEmoji(value)}
+          </span>
+        ) : (
+          <span
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: "var(--color-text-muted)" }}
+            aria-hidden="true"
+          />
+        )}
         {!compact && (
-          <span className="truncate max-w-[90px]">{current ? current.name : "Bucket"}</span>
+          <span className="truncate max-w-[80px]">
+            {value ? getEnergyLabel(value) : "Energy"}
+          </span>
         )}
       </button>
       {open && (
@@ -83,7 +92,7 @@ export default function BucketChipPicker({
             aria-hidden="true"
           />
           <div
-            className="absolute top-full mt-1 w-56 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
+            className="absolute top-full mt-1 w-48 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
             style={{
               zIndex: popoverZ,
               ...(anchor.side === "left" ? { left: 0 } : { right: 0 }),
@@ -91,12 +100,13 @@ export default function BucketChipPicker({
             }}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            {buckets.map((bucket) => {
-              const selected = bucket.id === value;
+            {ENERGY_LEVELS.map((level) => {
+              const selected = level === value;
+              const dotColor = getEnergyColor(level);
               return (
                 <button
-                  key={bucket.id}
-                  onClick={() => pick(bucket.id)}
+                  key={level}
+                  onClick={() => pick(level)}
                   className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left text-sm transition-colors active:scale-[0.99] ${
                     selected
                       ? "bg-[var(--color-accent-soft)] text-[var(--color-text)]"
@@ -105,10 +115,11 @@ export default function BucketChipPicker({
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: bucket.color }}
+                    style={{ backgroundColor: dotColor }}
                     aria-hidden="true"
                   />
-                  <span className="flex-1 truncate">{bucket.name}</span>
+                  <span aria-hidden="true">{getEnergyEmoji(level)}</span>
+                  <span className="flex-1 truncate">{getEnergyLabel(level)}</span>
                   {selected && (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <polyline points="20 6 9 17 4 12" />
@@ -126,8 +137,11 @@ export default function BucketChipPicker({
                   : "hover:bg-[var(--color-bg)]/60 text-[var(--color-text-muted)]"
               }`}
             >
-              <span className="w-2.5 h-2.5 rounded-full border border-dashed border-[var(--color-text-muted)] flex-shrink-0" aria-hidden="true" />
-              <span className="flex-1">No bucket</span>
+              <span
+                className="w-2.5 h-2.5 rounded-full border border-dashed border-[var(--color-text-muted)] flex-shrink-0"
+                aria-hidden="true"
+              />
+              <span className="flex-1">No energy</span>
               {!value && (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12" />

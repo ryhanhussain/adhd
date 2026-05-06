@@ -1,37 +1,36 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { ParsedIntention } from "@/lib/gemini";
+import type { ParsedIntention, GeminiEnergyLevel } from "@/lib/gemini";
 import type { IntentionCategory } from "@/lib/categories";
-import { toLocalDateStr } from "@/lib/db";
-import DatePill from "./DatePill";
+import BucketChipPicker from "./BucketChipPicker";
+import EnergyPicker from "./EnergyPicker";
 import Toast from "./Toast";
 
 interface BrainDumpInputProps {
-  onIntentionsParsed: (intentions: ParsedIntention[], targetDate: string) => Promise<void>;
+  /** Commits the parsed (and possibly user-edited) intentions to the backlog. */
+  onIntentionsParsed: (intentions: ParsedIntention[]) => Promise<void>;
   onClose: () => void;
   /** Current intention buckets; forwarded to the Gemini prompt for dynamic classification. */
   intentionCategories?: IntentionCategory[];
 }
 
-function tomorrowStr(): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 1);
-  return toLocalDateStr(d);
+interface DraftItem {
+  text: string;
+  categoryId: string | null;
+  energy: GeminiEnergyLevel | null;
 }
 
-export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionCategories }: BrainDumpInputProps) {
+export default function BrainDumpInput({
+  onIntentionsParsed,
+  onClose,
+  intentionCategories,
+}: BrainDumpInputProps) {
   const [transcript, setTranscript] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [targetDate, setTargetDate] = useState(() => toLocalDateStr(Date.now()));
+  const [drafts, setDrafts] = useState<DraftItem[] | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const today = toLocalDateStr(Date.now());
-  const tomorrow = tomorrowStr();
-  const isToday = targetDate === today;
-  const isTomorrow = targetDate === tomorrow;
 
   useEffect(() => {
     const t = setTimeout(() => textareaRef.current?.focus(), 250);
@@ -46,15 +45,13 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
   const autoResize = () => {
     const ta = textareaRef.current;
     if (!ta) return;
-    // Reset to auto first, then measure — batch both writes in one rAF
-    // to avoid forced synchronous layout (layout thrash) on every keystroke.
     requestAnimationFrame(() => {
       ta.style.height = "auto";
       ta.style.height = Math.max(80, ta.scrollHeight) + "px";
     });
   };
 
-  const handleDone = async () => {
+  const handleParse = async () => {
     if (!transcript.trim()) return;
     setIsParsing(true);
     try {
@@ -75,10 +72,17 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
         showToast(messages[result.reason]);
         return;
       }
-      if (result.intentions.length > 0) {
-        await onIntentionsParsed(result.intentions, targetDate);
+      if (result.intentions.length === 0) {
+        showToast("Couldn't find any tasks in there.");
+        return;
       }
-      onClose();
+      setDrafts(
+        result.intentions.map((i) => ({
+          text: i.text,
+          categoryId: i.categoryId ?? null,
+          energy: i.energy ?? null,
+        }))
+      );
     } catch (e) {
       console.error("Brain dump parse failed:", e);
       showToast("Something went wrong. Try again.");
@@ -87,44 +91,101 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
     }
   };
 
+  const handleConfirm = async () => {
+    if (!drafts || drafts.length === 0) return;
+    await onIntentionsParsed(
+      drafts.map((d) => ({ text: d.text, categoryId: d.categoryId, energy: d.energy }))
+    );
+    onClose();
+  };
+
+  const updateDraft = (idx: number, patch: Partial<DraftItem>) => {
+    setDrafts((prev) => (prev ? prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)) : prev));
+  };
+
+  const removeDraft = (idx: number) => {
+    setDrafts((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev));
+  };
+
+  // Stage 2: review + edit parsed items.
+  if (drafts) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+            {drafts.length} {drafts.length === 1 ? "task" : "tasks"} parsed — tweak before adding
+          </span>
+          <button
+            onClick={() => setDrafts(null)}
+            className="text-[11px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+          >
+            ← Back
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto pr-1">
+          {drafts.map((d, idx) => (
+            <div
+              key={idx}
+              className="flex flex-col gap-2 p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)]"
+            >
+              <div className="flex items-start gap-2">
+                <input
+                  value={d.text}
+                  onChange={(e) => updateDraft(idx, { text: e.target.value })}
+                  className="flex-1 text-sm bg-transparent border-b border-[var(--color-border)] focus:border-[var(--color-accent)] outline-none py-0.5"
+                />
+                <button
+                  onClick={() => removeDraft(idx)}
+                  className="hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all active:scale-90 flex-shrink-0"
+                  aria-label="Remove task"
+                  title="Remove"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {intentionCategories && intentionCategories.length > 0 && (
+                  <BucketChipPicker
+                    buckets={intentionCategories}
+                    value={d.categoryId}
+                    onChange={(next) => updateDraft(idx, { categoryId: next })}
+                    popoverZ={61}
+                  />
+                )}
+                <EnergyPicker
+                  value={d.energy}
+                  onChange={(level) => updateDraft(idx, { energy: level })}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleConfirm}
+            className="flex-1 h-12 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] shadow-lg shadow-[var(--color-accent)]/20"
+          >
+            Add {drafts.length} to backlog
+          </button>
+        </div>
+
+        {toast && <Toast message={toast} />}
+      </div>
+    );
+  }
+
+  // Stage 1: free-form transcript.
   return (
     <div className="flex flex-col gap-3">
-      {/* Target-day pills: which day these intentions are planned for. */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mr-1">Plan for</span>
-        <button
-          type="button"
-          onClick={() => setTargetDate(today)}
-          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all active:scale-95 ${
-            isToday
-              ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-sm shadow-[var(--color-accent)]/20"
-              : "border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/40"
-          }`}
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          onClick={() => setTargetDate(tomorrow)}
-          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all active:scale-95 ${
-            isTomorrow
-              ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-sm shadow-[var(--color-accent)]/20"
-              : "border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/40"
-          }`}
-        >
-          Tomorrow
-        </button>
-        <DatePill
-          value={targetDate}
-          onChange={setTargetDate}
-          direction="future"
-          maxDaysForward={14}
-        />
-      </div>
-
-      {/* Transcript area — always editable as textarea */}
       <div className="relative">
-        <label htmlFor="brain-dump-textarea" className="sr-only">Brain dump — what do you need to do today?</label>
+        <label htmlFor="brain-dump-textarea" className="sr-only">
+          Brain dump — what do you need to do?
+        </label>
         <textarea
           id="brain-dump-textarea"
           ref={textareaRef}
@@ -133,22 +194,21 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
             setTranscript(e.target.value);
             autoResize();
           }}
-          placeholder="Type your brain dump here..."
+          placeholder="Type or speak your brain dump — anything you want to track..."
           className="w-full rounded-xl glass-panel px-4 py-3 text-sm resize-none focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_12px_var(--color-accent-soft)] transition-all duration-200 placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
           style={{ minHeight: 80, transition: "height 0.15s ease" }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleDone();
+              handleParse();
             }
           }}
         />
       </div>
 
-      {/* Controls */}
       <div className="flex gap-2">
         <button
-          onClick={handleDone}
+          onClick={handleParse}
           disabled={!transcript.trim() || isParsing}
           className="flex-1 h-12 rounded-xl text-[var(--color-on-accent)] font-medium text-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_20px_var(--color-accent-soft)] disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed active:scale-[0.95] bg-[var(--color-accent)] shadow-lg shadow-[var(--color-accent)]/20 flex items-center justify-center gap-2"
         >
@@ -158,12 +218,11 @@ export default function BrainDumpInput({ onIntentionsParsed, onClose, intentionC
               Parsing intentions...
             </>
           ) : (
-            "Done"
+            "Parse"
           )}
         </button>
       </div>
 
-      {/* Toast */}
       {toast && <Toast message={toast} />}
     </div>
   );
