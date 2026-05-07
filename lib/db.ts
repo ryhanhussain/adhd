@@ -81,6 +81,14 @@ export interface Settings {
    * automatically by `saveSettings` whenever `lastCarryoverPromptDate` is set.
    */
   lastCarryoverPromptDateSyncedAt: number;
+  /**
+   * Selected home-page tab ("life" | "energy"). Synced via the same `profiles`
+   * row as categories so the tab choice follows the user across devices.
+   * `null` = never set; UI falls back to its own default.
+   */
+  homeTab: string | null;
+  /** Epoch ms of the last local write to `homeTab`; drives LWW push/pull. */
+  homeTabSyncedAt: number;
 }
 
 export interface Intention {
@@ -455,6 +463,9 @@ export async function getSettings(): Promise<Settings> {
   const intentionCategoriesSyncedAt = Number.parseInt(intentionCategoriesSyncedAtRaw, 10) || 0;
   const lastCarryoverPromptDateSyncedAtRaw = (await db.get("settings", "lastCarryoverPromptDateSyncedAt")) || "0";
   const lastCarryoverPromptDateSyncedAt = Number.parseInt(lastCarryoverPromptDateSyncedAtRaw, 10) || 0;
+  const homeTab = (await db.get("settings", "homeTab")) || null;
+  const homeTabSyncedAtRaw = (await db.get("settings", "homeTabSyncedAt")) || "0";
+  const homeTabSyncedAt = Number.parseInt(homeTabSyncedAtRaw, 10) || 0;
   return {
     customCategories,
     theme,
@@ -470,6 +481,8 @@ export async function getSettings(): Promise<Settings> {
     customIntentionCategories,
     intentionCategoriesSyncedAt,
     lastCarryoverPromptDateSyncedAt,
+    homeTab,
+    homeTabSyncedAt,
   };
 }
 
@@ -530,6 +543,21 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
       String(settings.lastCarryoverPromptDateSyncedAt ?? 0),
       "lastCarryoverPromptDateSyncedAt"
     );
+  }
+  if (settings.homeTab !== undefined) {
+    await db.put("settings", settings.homeTab || "", "homeTab");
+    // Auto-stamp the LWW timestamp unless the caller is applying a remote pull
+    // (which sets homeTabSyncedAt explicitly). Keeps every local tab change
+    // dirty for push without each call site having to remember.
+    if (settings.homeTabSyncedAt === undefined) {
+      await db.put("settings", String(Date.now()), "homeTabSyncedAt");
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("home-tab-dirty"));
+    }
+  }
+  if (settings.homeTabSyncedAt !== undefined) {
+    await db.put("settings", String(settings.homeTabSyncedAt ?? 0), "homeTabSyncedAt");
   }
 }
 

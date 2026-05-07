@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getSettings, saveSettings } from "@/lib/db";
 
 export type HomeTab = "life" | "energy";
-
-const STORAGE_KEY = "addit:home-tab";
 
 interface HomeTabsProps {
   value: HomeTab;
@@ -15,30 +14,52 @@ interface HomeTabsProps {
 
 /**
  * Pill tab switcher for the home centerpiece. Persists selection in
- * localStorage so a hard refresh keeps the user in the view they were last
- * using, rather than snapping back to "Life areas".
+ * IndexedDB Settings (synced via Supabase profiles row) so the choice
+ * follows the user across devices.
  */
 export default function HomeTabs({ value, onChange, dateLabel }: HomeTabsProps) {
   const [hydrated, setHydrated] = useState(false);
 
-  // Read persisted choice exactly once after mount (avoids SSR mismatch).
   useEffect(() => {
-    if (hydrated) return;
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "life" || stored === "energy") {
-        if (stored !== value) onChange(stored);
-      }
-    } catch {
-      // localStorage may be unavailable (private mode); silently fall back.
+    let cancelled = false;
+    if (!hydrated) {
+      void (async () => {
+        try {
+          const settings = await getSettings();
+          const stored = settings.homeTab;
+          if (!cancelled && (stored === "life" || stored === "energy") && stored !== value) {
+            onChange(stored);
+          }
+        } catch {
+          // IndexedDB may be unavailable; fall through with default.
+        }
+        if (!cancelled) setHydrated(true);
+      })();
     }
-    setHydrated(true);
+
+    // React to remote pulls (categoriesSync applied a newer tab from another device).
+    const onRemote = () => {
+      void (async () => {
+        try {
+          const settings = await getSettings();
+          const stored = settings.homeTab;
+          if (!cancelled && (stored === "life" || stored === "energy") && stored !== value) {
+            onChange(stored);
+          }
+        } catch { /* ignore */ }
+      })();
+    };
+    window.addEventListener("home-tab-updated", onRemote);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("home-tab-updated", onRemote);
+    };
   }, [hydrated, value, onChange]);
 
   const set = (next: HomeTab) => {
     if (next === value) return;
     onChange(next);
-    try { localStorage.setItem(STORAGE_KEY, next); } catch { /* ignore */ }
+    void saveSettings({ homeTab: next });
   };
 
   return (

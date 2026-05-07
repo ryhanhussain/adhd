@@ -29,6 +29,8 @@ export async function syncCategoriesNow(): Promise<void> {
   const localIntentionCategories = settings.customIntentionCategories;
   const localCarryoverTs = settings.lastCarryoverPromptDateSyncedAt ?? 0;
   const localCarryoverDate = settings.lastCarryoverPromptDate;
+  const localHomeTabTs = settings.homeTabSyncedAt ?? 0;
+  const localHomeTab = settings.homeTab;
 
   // Pull remote profile row (all fields in one round-trip).
   // `.maybeSingle()` returns null (not 406) when the row doesn't exist yet —
@@ -36,7 +38,7 @@ export async function syncCategoriesNow(): Promise<void> {
   const { data: profile, error: pullError } = await supabase
     .from("profiles")
     .select(
-      "custom_categories, custom_categories_updated_at, custom_intention_categories, custom_intention_categories_updated_at, last_carryover_prompt_date, last_carryover_prompt_date_updated_at"
+      "custom_categories, custom_categories_updated_at, custom_intention_categories, custom_intention_categories_updated_at, last_carryover_prompt_date, last_carryover_prompt_date_updated_at, home_tab, home_tab_updated_at"
     )
     .eq("id", userId)
     .maybeSingle();
@@ -49,6 +51,7 @@ export async function syncCategoriesNow(): Promise<void> {
   const remoteTs: number = profile?.custom_categories_updated_at ?? 0;
   const remoteIntentionTs: number = profile?.custom_intention_categories_updated_at ?? 0;
   const remoteCarryoverTs: number = profile?.last_carryover_prompt_date_updated_at ?? 0;
+  const remoteHomeTabTs: number = profile?.home_tab_updated_at ?? 0;
 
   // --- Activity categories ---
   if (remoteTs > localTs) {
@@ -149,6 +152,35 @@ export async function syncCategoriesNow(): Promise<void> {
       console.warn("[categoriesSync] carryover push failed:", pushError.message);
     }
   }
+
+  // --- homeTab ---
+  // Same LWW pattern. Pulling sets the explicit syncedAt so saveSettings
+  // doesn't auto-stamp the field as dirty.
+  if (remoteHomeTabTs > localHomeTabTs) {
+    const remoteTab = (profile?.home_tab as string | null) ?? null;
+    await saveSettings({
+      homeTab: remoteTab,
+      homeTabSyncedAt: remoteHomeTabTs,
+    });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("home-tab-updated"));
+    }
+  } else if (localHomeTabTs > remoteHomeTabTs && localHomeTab) {
+    const { error: pushError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          home_tab: localHomeTab,
+          home_tab_updated_at: localHomeTabTs,
+        },
+        { onConflict: "id" }
+      );
+
+    if (pushError) {
+      console.warn("[categoriesSync] home-tab push failed:", pushError.message);
+    }
+  }
 }
 
 // --- Lifecycle ---------------------------------------------------------------
@@ -168,6 +200,7 @@ export function startCategoriesSync(): Unsubscribe {
   window.addEventListener("categories-dirty", onDirty);
   window.addEventListener("intention-categories-dirty", onDirty);
   window.addEventListener("carryover-prompt-date-dirty", onDirty);
+  window.addEventListener("home-tab-dirty", onDirty);
   document.addEventListener("visibilitychange", onVisible);
   window.addEventListener("online", onOnline);
   window.addEventListener("focus", onOnline);
@@ -178,6 +211,7 @@ export function startCategoriesSync(): Unsubscribe {
     window.removeEventListener("categories-dirty", onDirty);
     window.removeEventListener("intention-categories-dirty", onDirty);
     window.removeEventListener("carryover-prompt-date-dirty", onDirty);
+    window.removeEventListener("home-tab-dirty", onDirty);
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("online", onOnline);
     window.removeEventListener("focus", onOnline);
