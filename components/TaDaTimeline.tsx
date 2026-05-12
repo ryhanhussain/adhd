@@ -108,7 +108,7 @@ export default function TaDaTimeline({ entries, categories, onTap, highlightIds 
   };
 
   return (
-    <div>
+    <div className="glass-panel rounded-3xl p-5 shadow-sm border border-[var(--glass-border)]">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
           Today&apos;s Ta-Da List
@@ -180,14 +180,11 @@ export default function TaDaTimeline({ entries, categories, onTap, highlightIds 
 
                 {/* Duration badge */}
                 <span
-                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 tabular-nums ${
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 tabular-nums flex items-center gap-1 bg-white dark:bg-white/10 shadow-[0_2px_4px_rgba(0,0,0,0.02)] text-purple-500 dark:text-purple-400 ${
                     isTimer ? "animate-pulse-soft" : ""
                   }`}
-                  style={{
-                    backgroundColor: style.color + "30",
-                    color: "var(--color-text)",
-                  }}
                 >
+                  <span className="text-[11px] opacity-90">⚡</span>
                   {isTimer ? `${formatDuration(durationMs)}+` : formatDuration(durationMs)}
                 </span>
               </div>

@@ -168,8 +168,8 @@ export default function IntentionItem({
       data-intention-id={intention.id}
       data-expanded={expanded ? "true" : undefined}
       data-editing={editing ? "true" : undefined}
-      className={`group ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
-        focused ? "rounded-xl bg-[var(--color-accent)]/8 ring-1 ring-[var(--color-accent)]/25 px-2 -mx-2" : ""
+      className={`group bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-xl px-3 transition-colors ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
+        focused ? "bg-purple-100/80 dark:bg-purple-900/40 ring-1 ring-purple-400" : ""
       }`}
     >
       {/* Row: checkbox + text + category chip + delete */}

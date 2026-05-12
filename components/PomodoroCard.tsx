@@ -196,7 +196,7 @@ export default function PomodoroCard({
 
     return (
       <div
-        className={`bg-[#15172A] text-white rounded-2xl p-4 flex flex-col gap-3 animate-fade-in ${className ?? ""}`}
+        className={`bg-[#15172A]/70 backdrop-blur-xl border border-white/10 shadow-2xl text-white rounded-2xl p-5 flex flex-col gap-3 animate-fade-in ${className ?? ""}`}
       >
         <div className="flex items-center gap-2">
           <span
@@ -218,9 +218,9 @@ export default function PomodoroCard({
             </p>
           )}
         </div>
-        <div className="h-1 rounded-full bg-white/15 overflow-hidden" aria-hidden="true">
+        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden" aria-hidden="true">
           <div
-            className="h-full bg-white transition-[width] duration-500 ease-linear"
+            className="h-full bg-gradient-to-r from-pink-400 to-purple-400 transition-[width] duration-500 ease-linear"
             style={{ width: `${progress * 100}%` }}
           />
         </div>
@@ -259,7 +259,7 @@ export default function PomodoroCard({
             </button>
             <button
               onClick={() => setConfirmCancel(true)}
-              className="h-10 rounded-lg bg-white/5 text-white/40 text-sm font-medium active:scale-[0.98] transition-transform"
+              className="h-10 rounded-lg border border-red-400/30 bg-red-400/10 text-red-400 text-sm font-medium active:scale-[0.98] transition-transform"
             >
               Cancel
             </button>

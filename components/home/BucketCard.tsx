@@ -68,7 +68,7 @@ export default function BucketCard({
   const count = items.length;
 
   const cardStyle: React.CSSProperties = {
-    backgroundColor: `color-mix(in srgb, ${color} 8%, var(--color-surface))`,
+    backgroundColor: `color-mix(in srgb, ${color} 4%, var(--glass-bg))`,
     borderColor: `color-mix(in srgb, ${color} 20%, var(--glass-border))`,
   };
 
@@ -80,7 +80,7 @@ export default function BucketCard({
   return (
     <div
       data-section-key={sectionKey}
-      className="rounded-3xl border p-4 shadow-sm flex flex-col gap-2 min-h-[7rem] transition-colors"
+      className="glass-panel rounded-3xl border p-4 shadow-sm flex flex-col gap-2 min-h-[7rem] transition-colors"
       style={cardStyle}
     >
       {/* Header: icon chip + name + count */}
@@ -110,7 +110,7 @@ export default function BucketCard({
           Nothing here yet.
         </p>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1.5">
           {items.map((intention) => (
             <div
               key={intention.id}
