@@ -11,6 +11,8 @@ import EntryEditSheet from "@/components/EntryEditSheet";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import EmptyHome from "@/components/EmptyHome";
 import ActiveTimerCard from "@/components/ActiveTimerCard";
+import PomodoroCard from "@/components/PomodoroCard";
+import PomodoroSheet from "@/components/PomodoroSheet";
 import HabitsCard from "@/components/HabitsCard";
 import HomeTabs, { type HomeTab } from "@/components/home/HomeTabs";
 import BucketGrid from "@/components/home/BucketGrid";
@@ -44,6 +46,7 @@ import { syncIntentionsNow } from "@/lib/intentionsSync";
 import { syncCategoriesNow } from "@/lib/categoriesSync";
 import { syncHabitsNow } from "@/lib/habitsSync";
 import { supabase } from "@/lib/supabase";
+import { getPomodoroState, POMODORO_EVENT } from "@/lib/pomodoro";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -69,6 +72,8 @@ export default function Home() {
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
   const [milestoneToShow, setMilestoneToShow] = useState<MilestoneInfo | null>(null);
   const [activeInput, setActiveInput] = useState<"none" | "log" | "plan">("none");
+  const [pomodoroSheetOpen, setPomodoroSheetOpen] = useState(false);
+  const [hasPomodoro, setHasPomodoro] = useState(false);
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [recentTaDaIds, setRecentTaDaIds] = useState<Set<string>>(new Set());
   const [homeTab, setHomeTab] = useState<HomeTab>("life");
@@ -126,6 +131,13 @@ export default function Home() {
     window.addEventListener("entry-updated", handleUpdate);
     return () => window.removeEventListener("entry-updated", handleUpdate);
   }, [loadData]);
+
+  useEffect(() => {
+    const sync = () => setHasPomodoro(getPomodoroState() != null);
+    sync();
+    window.addEventListener(POMODORO_EVENT, sync);
+    return () => window.removeEventListener(POMODORO_EVENT, sync);
+  }, []);
 
   const activeEntry = entries.find((e) => e.endTime === 0);
   const tadaEntries = entries.filter((e) => e.id !== activeEntry?.id);
@@ -348,14 +360,17 @@ export default function Home() {
           <HabitsCard />
 
           {/* Active timer is shown inline on mobile; on desktop it lives in the
-              sidebar so the centerpiece stays focused on the backlog. */}
-          {activeEntry && (
+              sidebar so the centerpiece stays focused on the backlog. When a
+              Pomodoro is running it takes over the slot with a countdown. */}
+          {hasPomodoro ? (
+            <PomodoroCard className="lg:hidden" />
+          ) : activeEntry ? (
             <ActiveTimerCard
               activeEntry={activeEntry}
               onFinish={handleFinishActive}
               className="lg:hidden"
             />
-          )}
+          ) : null}
 
           {tadaEntries.length > 0 && (
             <TaDaTimeline
@@ -382,6 +397,7 @@ export default function Home() {
             entries={entries}
             categories={categories}
             streak={streak}
+            hasPomodoro={hasPomodoro}
           />
           <div className="mt-3">
             <ReflectionPrompt entries={entries} />
@@ -489,6 +505,20 @@ export default function Home() {
                     <span className="absolute -top-1 right-0 text-[10px] text-indigo-500">&#x2728;</span>
                   </div>
                 </button>
+
+                <button
+                  onClick={() => setPomodoroSheetOpen(true)}
+                  aria-label="Start a focus session"
+                  className="flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--color-bg)]/80 hover:bg-[var(--color-bg)] border border-[var(--color-border)] shadow-sm active:scale-[0.98] transition-all group flex-shrink-0"
+                >
+                  <div className="w-9 h-9 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform dark:bg-rose-400/10 dark:text-rose-400 dark:border-rose-400/20">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="13" r="8" />
+                      <path d="M12 9v4l2 2" />
+                      <path d="M9 2h6" />
+                    </svg>
+                  </div>
+                </button>
               </div>
             )}
           </div>
@@ -503,6 +533,12 @@ export default function Home() {
         onClose={() => setSelectedEntry(null)}
         onSave={handleSave}
         onDelete={handleDelete}
+      />
+
+      <PomodoroSheet
+        open={pomodoroSheetOpen}
+        onClose={() => setPomodoroSheetOpen(false)}
+        hasActiveTimer={!!activeEntry && !hasPomodoro}
       />
 
       {toast && (

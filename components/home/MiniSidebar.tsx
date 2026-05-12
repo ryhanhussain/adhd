@@ -4,6 +4,7 @@ import type { Entry } from "@/lib/db";
 import type { Category } from "@/lib/categories";
 import type { StreakInfo } from "@/lib/streaks";
 import ActiveTimerCard from "@/components/ActiveTimerCard";
+import PomodoroCard from "@/components/PomodoroCard";
 import DailySummary from "@/components/DailySummary";
 import WeekTeaser from "@/components/WeekTeaser";
 import ReflectionTease from "@/components/ReflectionTease";
@@ -15,6 +16,8 @@ interface MiniSidebarProps {
   entries: Entry[];
   categories: Category[];
   streak: StreakInfo | null;
+  /** When true, the Pomodoro countdown card replaces the regular active-timer card. */
+  hasPomodoro?: boolean;
 }
 
 /**
@@ -27,12 +30,15 @@ export default function MiniSidebar({
   entries,
   categories,
   streak,
+  hasPomodoro = false,
 }: MiniSidebarProps) {
   return (
     <div className="flex flex-col gap-3 animate-fade-in">
-      {activeEntry && (
+      {hasPomodoro ? (
+        <PomodoroCard />
+      ) : activeEntry ? (
         <ActiveTimerCard activeEntry={activeEntry} onFinish={onFinishActive} />
-      )}
+      ) : null}
 
       {streak && (
         <div className="glass-panel rounded-2xl p-4 flex items-center justify-between gap-3">
