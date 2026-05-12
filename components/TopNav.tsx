@@ -92,7 +92,7 @@ export default function TopNav() {
 
       <nav
         aria-label="Primary"
-        className="flex items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 rounded-full bg-[var(--color-bg)]/40 border border-[var(--glass-border)]"
+        className="glass-control flex items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 rounded-full"
       >
         {tabs.map((tab) => {
           const active = pathname === tab.href;
@@ -104,7 +104,7 @@ export default function TopNav() {
               aria-current={active ? "page" : undefined}
               className={`hit-area flex items-center gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 rounded-full text-xs font-semibold transition-all active:scale-95 ${
                 active
-                  ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-sm"
+                  ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-[0_10px_24px_-14px_var(--color-accent)]"
                   : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
               }`}
             >
@@ -121,7 +121,7 @@ export default function TopNav() {
         </span>
         <span
           aria-hidden="true"
-          className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold flex-shrink-0"
+          className="glass-control w-8 h-8 rounded-full text-[var(--color-accent)] flex items-center justify-center text-xs font-bold flex-shrink-0"
           title={user?.email ?? undefined}
         >
           {initialOf(user?.email)}

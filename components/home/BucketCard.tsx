@@ -74,12 +74,12 @@ export default function BucketCard({
   const count = items.length;
 
   const cardStyle: React.CSSProperties = {
-    backgroundColor: `color-mix(in srgb, ${color} 4%, var(--glass-bg))`,
-    borderColor: `color-mix(in srgb, ${color} 20%, var(--glass-border))`,
+    backgroundColor: `color-mix(in srgb, ${color} 7%, var(--glass-bg))`,
+    borderColor: `color-mix(in srgb, ${color} 24%, var(--glass-border))`,
   };
 
   const chipStyle: React.CSSProperties = {
-    backgroundColor: `color-mix(in srgb, ${color} 18%, var(--color-surface))`,
+    backgroundColor: `color-mix(in srgb, ${color} 18%, var(--glass-bg))`,
     color: color,
   };
 

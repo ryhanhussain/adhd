@@ -68,8 +68,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f8f7f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#0B0C16" }, // updated dark bg
+    { media: "(prefers-color-scheme: light)", color: "#f3eaff" },
+    { media: "(prefers-color-scheme: dark)", color: "#171026" },
   ],
 };
 
@@ -85,9 +85,9 @@ export default function RootLayout({
           <KeyboardInsetProvider />
           <AuthProvider>
             <LoginGate />
-            <div className="fixed inset-0 z-[-1] pointer-events-none noise-bg" />
-            <div className="fixed inset-0 z-[-1] pointer-events-none gradient-mesh opacity-100 dark:opacity-80" />
-            <main className="max-w-lg lg:max-w-7xl mx-auto px-3 sm:px-5 pt-3 lg:pt-3 relative z-0">
+            <div className="fixed inset-0 z-0 pointer-events-none gradient-mesh opacity-100 dark:opacity-90" />
+            <div className="fixed inset-0 z-0 pointer-events-none noise-bg" />
+            <main className="max-w-lg lg:max-w-7xl mx-auto px-3 sm:px-5 pt-3 lg:pt-3 relative z-10">
               <TopNav />
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>

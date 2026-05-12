@@ -96,7 +96,7 @@ export default function HomeTabs({
       <div
         role="tablist"
         aria-label="Group intentions by"
-        className="inline-flex p-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm flex-shrink-0"
+        className="glass-control inline-flex p-1 rounded-full flex-shrink-0"
       >
         <TabButton active={value === "life"} onClick={() => set("life")}>
           Life areas
@@ -125,7 +125,7 @@ function TabButton({
       onClick={onClick}
       className={`h-8 px-3.5 rounded-full text-xs font-semibold transition-all active:scale-95 ${
         active
-          ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-sm"
+          ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-[0_10px_24px_-14px_var(--color-accent)]"
           : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
       }`}
     >

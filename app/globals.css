@@ -5,13 +5,19 @@
 }
 
 :root {
-  /* Day Theme: Gentle, warm, clean */
-  --color-bg: #F7F7F8;
-  --color-surface: #FFFFFF;
-  --color-surface-elevated: #FFFFFF;
+  /* Day Theme: iOS frosted glass over a pastel wash */
+  --color-bg: #F3EAFF;
+  --color-surface: rgba(255, 255, 255, 0.62);
+  --color-surface-elevated: rgba(255, 255, 255, 0.76);
   --color-text: #111113;
   --color-text-muted: #3E3E47;
-  --color-border: #E5E5E7;
+  --color-border: rgba(255, 255, 255, 0.58);
+  --app-base-gradient: linear-gradient(180deg, #f3eaff 0%, #e6f0ff 100%);
+  --app-mesh-gradient:
+    radial-gradient(at 12% 8%, rgb(255, 209, 224) 0%, rgba(255, 209, 224, 0) 42%),
+    radial-gradient(at 88% 14%, rgb(196, 217, 255) 0%, rgba(196, 217, 255, 0) 45%),
+    radial-gradient(at 70% 90%, rgb(255, 233, 179) 0%, rgba(255, 233, 179, 0) 40%),
+    radial-gradient(at 10% 95%, rgb(199, 240, 216) 0%, rgba(199, 240, 216, 0) 38%);
 
   /* Accent: Vibrant Indigo */
   --color-accent: #5e43f3;
@@ -21,11 +27,12 @@
   --color-danger: #ef4444;
   --color-success: #10b981;
 
-  /* Glassmorphism tokens — kept frosted but opaque enough that scrolling
-     content behind the panel is not legibly visible on mobile. */
-  --glass-bg: rgba(255, 255, 255, 0.94);
-  --glass-border: rgba(0, 0, 0, 0.06);
-  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
+  /* Glassmorphism tokens from the frosted reference. */
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shadow:
+    0 20px 60px -20px rgba(60, 40, 120, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
   /* Layout clearance for the floating input dock. The bottom navbar has been
      replaced by `TopNav`, so `--nav-clearance` is now just safe-area padding
@@ -40,13 +47,19 @@
 
 @media (prefers-color-scheme: dark) {
   html:not(.light) {
-    /* Night Theme: Deep Space Blue / OLED Midnight */
+    /* Night Theme: darker frosted glass with the same color geography */
     --color-bg: #0B0C16;
-    --color-surface: #141523;
-    --color-surface-elevated: #1D1E30;
+    --color-surface: rgba(20, 21, 35, 0.72);
+    --color-surface-elevated: rgba(29, 30, 48, 0.82);
     --color-text: #F3F4F6;
     --color-text-muted: #D8DCE8;
-    --color-border: #2D3045;
+    --color-border: rgba(255, 255, 255, 0.12);
+    --app-base-gradient: linear-gradient(180deg, #171026 0%, #071423 100%);
+    --app-mesh-gradient:
+      radial-gradient(at 12% 8%, rgba(168, 96, 144, 0.48) 0%, rgba(168, 96, 144, 0) 42%),
+      radial-gradient(at 88% 14%, rgba(112, 132, 210, 0.42) 0%, rgba(112, 132, 210, 0) 45%),
+      radial-gradient(at 70% 90%, rgba(160, 132, 96, 0.3) 0%, rgba(160, 132, 96, 0) 40%),
+      radial-gradient(at 10% 95%, rgba(82, 142, 110, 0.3) 0%, rgba(82, 142, 110, 0) 38%);
 
     /* Accent: Neon Violet */
     --color-accent: #8b5cf6;
@@ -56,19 +69,27 @@
     --color-danger: #fb7185;
     --color-success: #34d399;
 
-    --glass-bg: rgba(20, 21, 35, 0.9);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+    --glass-bg: rgba(20, 21, 35, 0.62);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-shadow:
+      0 22px 70px -24px rgba(0, 0, 0, 0.78),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 }
 
 html.dark {
   --color-bg: #0B0C16;
-  --color-surface: #141523;
-  --color-surface-elevated: #1D1E30;
+  --color-surface: rgba(20, 21, 35, 0.72);
+  --color-surface-elevated: rgba(29, 30, 48, 0.82);
   --color-text: #F3F4F6;
   --color-text-muted: #D8DCE8;
-  --color-border: #2D3045;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --app-base-gradient: linear-gradient(180deg, #171026 0%, #071423 100%);
+  --app-mesh-gradient:
+    radial-gradient(at 12% 8%, rgba(168, 96, 144, 0.48) 0%, rgba(168, 96, 144, 0) 42%),
+    radial-gradient(at 88% 14%, rgba(112, 132, 210, 0.42) 0%, rgba(112, 132, 210, 0) 45%),
+    radial-gradient(at 70% 90%, rgba(160, 132, 96, 0.3) 0%, rgba(160, 132, 96, 0) 40%),
+    radial-gradient(at 10% 95%, rgba(82, 142, 110, 0.3) 0%, rgba(82, 142, 110, 0) 38%);
 
   --color-accent: #8b5cf6;
   --color-accent-soft: rgba(139, 92, 246, 0.15);
@@ -77,9 +98,11 @@ html.dark {
   --color-danger: #fb7185;
   --color-success: #34d399;
 
-  --glass-bg: rgba(20, 21, 35, 0.9);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  --glass-bg: rgba(20, 21, 35, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-shadow:
+    0 22px 70px -24px rgba(0, 0, 0, 0.78),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 * {
@@ -89,6 +112,8 @@ html.dark {
 html, body {
   min-height: 100%;
   background-color: var(--color-bg);
+  background-image: var(--app-base-gradient);
+  background-attachment: fixed;
   color: var(--color-text);
 }
 
@@ -107,58 +132,54 @@ body {
 }
 
 .gradient-mesh {
-  /* Pastel watercolor wash for the dashboard: pink top-left, lavender
-     top-right, yellow bottom-right, lilac bottom-left. */
-  background:
-    radial-gradient(circle at 12% 14%, rgba(255, 196, 213, 0.55), transparent 42%),
-    radial-gradient(circle at 88% 18%, rgba(202, 196, 255, 0.55), transparent 45%),
-    radial-gradient(circle at 88% 86%, rgba(255, 232, 168, 0.55), transparent 48%),
-    radial-gradient(circle at 10% 90%, rgba(220, 196, 255, 0.55), transparent 45%);
-  filter: blur(40px) saturate(115%);
+  background: var(--app-mesh-gradient);
 }
 
 html.dark .gradient-mesh {
-  /* Muted plum/violet in the dark theme so the wash isn't garish. */
-  background:
-    radial-gradient(circle at 12% 14%, rgba(168, 96, 144, 0.32), transparent 42%),
-    radial-gradient(circle at 88% 18%, rgba(120, 96, 200, 0.32), transparent 45%),
-    radial-gradient(circle at 88% 86%, rgba(160, 132, 96, 0.22), transparent 48%),
-    radial-gradient(circle at 10% 90%, rgba(140, 96, 200, 0.30), transparent 45%);
-  filter: blur(40px) saturate(110%);
+  background: var(--app-mesh-gradient);
 }
 
 @media (prefers-color-scheme: dark) {
   html:not(.light) .gradient-mesh {
-    background:
-      radial-gradient(circle at 12% 14%, rgba(168, 96, 144, 0.32), transparent 42%),
-      radial-gradient(circle at 88% 18%, rgba(120, 96, 200, 0.32), transparent 45%),
-      radial-gradient(circle at 88% 86%, rgba(160, 132, 96, 0.22), transparent 48%),
-      radial-gradient(circle at 10% 90%, rgba(140, 96, 200, 0.30), transparent 45%);
-    filter: blur(40px) saturate(110%);
+    background: var(--app-mesh-gradient);
   }
 }
 
 .glass-panel {
   background: var(--glass-bg);
-  /* Reduced blur on mobile is much faster; 12px is still clearly glass */
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
+}
+
+.glass-control {
+  background: color-mix(in srgb, var(--glass-bg) 62%, transparent);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34);
 }
 
 /* On mobile browsers that support backdrop-filter, reduce it further for performance */
 @media (max-width: 768px) {
   .glass-panel {
-    backdrop-filter: blur(8px) saturate(130%);
-    -webkit-backdrop-filter: blur(8px) saturate(130%);
+    background: color-mix(in srgb, var(--glass-bg) 88%, var(--color-surface));
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
+
+  .glass-control {
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
   }
 }
 
 /* Safari on older iOS doesn't support backdrop-filter; fall back to a
    fully-opaque surface so content never bleeds through. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass-panel {
+  .glass-panel,
+  .glass-control {
     background: var(--color-surface);
   }
 }

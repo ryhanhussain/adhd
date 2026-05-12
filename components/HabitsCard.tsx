@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import HabitItem from "@/components/HabitItem";
 import { useHabits } from "@/lib/useHabits";
-import { deleteHabit, toggleHabitCompletion, toLocalDateStr } from "@/lib/db";
+import { deleteHabit, toggleHabitCompletion, toLocalDateStr, type Habit } from "@/lib/db";
 import { isTickedToday, shouldAutoRemove } from "@/lib/habits";
 
 /**
