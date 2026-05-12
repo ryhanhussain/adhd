@@ -116,7 +116,7 @@ export default function EnergyChipPicker({
             aria-hidden="true"
           />
           <div
-            className="fixed w-48 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
+            className="fixed w-48 bg-[var(--color-popover-surface)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
             style={{
               zIndex: popoverZ,
               top: pos.top,

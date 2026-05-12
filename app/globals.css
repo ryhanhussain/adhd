@@ -9,6 +9,7 @@
   --color-bg: #F3EAFF;
   --color-surface: rgba(255, 255, 255, 0.62);
   --color-surface-elevated: rgba(255, 255, 255, 0.76);
+  --color-popover-surface: rgba(255, 255, 255, 0.96);
   --color-text: #111113;
   --color-text-muted: #3E3E47;
   --color-border: rgba(255, 255, 255, 0.58);
@@ -51,6 +52,7 @@
     --color-bg: #0B0C16;
     --color-surface: rgba(20, 21, 35, 0.72);
     --color-surface-elevated: rgba(29, 30, 48, 0.82);
+    --color-popover-surface: rgba(29, 30, 48, 0.96);
     --color-text: #F3F4F6;
     --color-text-muted: #D8DCE8;
     --color-border: rgba(255, 255, 255, 0.12);
@@ -81,6 +83,7 @@ html.dark {
   --color-bg: #0B0C16;
   --color-surface: rgba(20, 21, 35, 0.72);
   --color-surface-elevated: rgba(29, 30, 48, 0.82);
+  --color-popover-surface: rgba(29, 30, 48, 0.96);
   --color-text: #F3F4F6;
   --color-text-muted: #D8DCE8;
   --color-border: rgba(255, 255, 255, 0.12);
