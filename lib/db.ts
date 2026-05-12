@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { BucketIconKey } from "./categories";
 
 /** Returns a YYYY-MM-DD string in the user's local timezone (not UTC). */
 export function toLocalDateStr(ts: number | Date): string {
@@ -89,7 +90,48 @@ export interface Settings {
   homeTab: string | null;
   /** Epoch ms of the last local write to `homeTab`; drives LWW push/pull. */
   homeTabSyncedAt: number;
+  // --- habits (v10) ---
+  /** Supabase user id whose habits are currently mirrored in this browser. */
+  habitSyncOwner: string | null;
+  /** High-water mark for remote habits `updated_at` already pulled into local. */
+  lastHabitPullAt: number;
 }
+
+/**
+ * Daily habit tracker entry. Each habit is a recurring behaviour the user
+ * wants to anchor every day; ticking it adds today's local-date string to
+ * `completions`. If the habit has no activity (creation or tick) for more
+ * than 10 days, it is silently soft-deleted by the home-page cleanup pass.
+ *
+ * `completions` is sorted descending (most-recent first), deduped, and
+ * capped at the most recent 60 entries — enough to compute a long streak
+ * without unbounded growth or sync payload bloat.
+ *
+ * `lastUntickAt` records the local-clock moment of the most recent untick,
+ * so an accidental untick on day 9 doesn't immediately wipe the habit on
+ * the next cleanup pass. Synced as a column so untick safety propagates
+ * across devices.
+ */
+export interface Habit {
+  id: string;
+  name: string;         // 1-30 chars
+  color: string;        // hex from COLOR_OPTIONS
+  icon?: BucketIconKey;
+  order: number;
+  /** Sorted-desc, deduped, capped at MAX_COMPLETIONS. Each entry is a local YYYY-MM-DD. */
+  completions: string[];
+  /** Epoch ms of the last untick action (or null). Used by the cleanup anchor only. */
+  lastUntickAt: number | null;
+  createdAt: number;
+  // --- sync metadata ---
+  updatedAt: number;
+  deleted?: boolean;
+  syncedAt?: number | null;
+}
+
+export const MAX_HABIT_COMPLETIONS = 60;
+export const HABIT_NAME_MAX = 30;
+export const HABIT_INACTIVITY_LIMIT_DAYS = 10;
 
 export interface Intention {
   id: string;
@@ -160,13 +202,17 @@ interface ADDitDB extends DBSchema {
     value: Intention;
     indexes: { "by-date": string };
   };
+  habits: {
+    key: string;
+    value: Habit;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<ADDitDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<ADDitDB>("addit-db", 9, {
+    dbPromise = openDB<ADDitDB>("addit-db", 10, {
       upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           const entryStore = db.createObjectStore("entries", { keyPath: "id" });
@@ -195,6 +241,12 @@ function getDB() {
         // v9: optional `energy` field on Intention; optional `icon` on
         //     IntentionCategory (lives inside customIntentionCategories JSON).
         //     No schema/index changes; backfill is implicit (undefined → null).
+        // v10: habits store (daily habit tracker). Fresh store, no backfill.
+        if (oldVersion < 10) {
+          if (!db.objectStoreNames.contains("habits")) {
+            db.createObjectStore("habits", { keyPath: "id" });
+          }
+        }
         //
         // Both backfills share a single async block so that any upgrade path
         // (e.g. fresh install → v7, or v3 → v7) runs whatever is needed in
@@ -466,6 +518,9 @@ export async function getSettings(): Promise<Settings> {
   const homeTab = (await db.get("settings", "homeTab")) || null;
   const homeTabSyncedAtRaw = (await db.get("settings", "homeTabSyncedAt")) || "0";
   const homeTabSyncedAt = Number.parseInt(homeTabSyncedAtRaw, 10) || 0;
+  const habitSyncOwner = (await db.get("settings", "habitSyncOwner")) || null;
+  const lastHabitPullAtRaw = (await db.get("settings", "lastHabitPullAt")) || "0";
+  const lastHabitPullAt = Number.parseInt(lastHabitPullAtRaw, 10) || 0;
   return {
     customCategories,
     theme,
@@ -483,6 +538,8 @@ export async function getSettings(): Promise<Settings> {
     lastCarryoverPromptDateSyncedAt,
     homeTab,
     homeTabSyncedAt,
+    habitSyncOwner,
+    lastHabitPullAt,
   };
 }
 
@@ -558,6 +615,12 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   }
   if (settings.homeTabSyncedAt !== undefined) {
     await db.put("settings", String(settings.homeTabSyncedAt ?? 0), "homeTabSyncedAt");
+  }
+  if (settings.habitSyncOwner !== undefined) {
+    await db.put("settings", settings.habitSyncOwner || "", "habitSyncOwner");
+  }
+  if (settings.lastHabitPullAt !== undefined) {
+    await db.put("settings", String(settings.lastHabitPullAt ?? 0), "lastHabitPullAt");
   }
 }
 
@@ -911,6 +974,226 @@ export async function markReflectionsSynced(dates: string[]): Promise<void> {
 export async function clearAllReflections(): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("reflections", "readwrite");
+  await tx.store.clear();
+  await tx.done;
+}
+
+// ---------------------------------------------------------------------------
+// Habits (v10)
+//
+// Same dirty-event + soft-delete pattern as intentions. The one twist is the
+// `completions` array: sync conflicts merge it as a union (in habitsSync's
+// mergeRemoteHabit), but every other field follows whole-row LWW.
+// ---------------------------------------------------------------------------
+
+function HABIT_DIRTY_EVENT() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("habit-dirty"));
+  }
+}
+
+/**
+ * Normalises a completions array: keeps only "YYYY-MM-DD" strings, dedupes,
+ * sorts descending, caps to MAX_HABIT_COMPLETIONS. Pure — safe to call on
+ * any input (including a remote payload).
+ */
+export function normaliseCompletions(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  for (const v of input) {
+    if (typeof v !== "string") continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
+    seen.add(v);
+  }
+  return Array.from(seen)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, MAX_HABIT_COMPLETIONS);
+}
+
+export async function addHabit(habit: Habit): Promise<void> {
+  const db = await getDB();
+  const now = Date.now();
+  await db.put("habits", {
+    ...habit,
+    completions: normaliseCompletions(habit.completions),
+    updatedAt: habit.updatedAt ?? now,
+    deleted: habit.deleted ?? false,
+    syncedAt: null,
+  });
+  HABIT_DIRTY_EVENT();
+}
+
+/** Active habits = not soft-deleted, sorted by `order` ascending, createdAt desc tiebreaker. */
+export async function getActiveHabits(): Promise<Habit[]> {
+  const db = await getDB();
+  const all = await db.getAll("habits");
+  return all
+    .filter((h) => !h.deleted)
+    .sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return b.createdAt - a.createdAt;
+    });
+}
+
+export async function getHabitById(id: string): Promise<Habit | undefined> {
+  const db = await getDB();
+  const h = await db.get("habits", id);
+  return h?.deleted ? undefined : h;
+}
+
+export async function updateHabit(
+  id: string,
+  updates: Partial<Omit<Habit, "id" | "createdAt">>
+): Promise<void> {
+  const db = await getDB();
+  const habit = await db.get("habits", id);
+  if (!habit) return;
+  const next: Habit = {
+    ...habit,
+    ...updates,
+    completions:
+      updates.completions !== undefined
+        ? normaliseCompletions(updates.completions)
+        : habit.completions,
+    updatedAt: updates.updatedAt ?? Date.now(),
+    syncedAt: null,
+  };
+  await db.put("habits", next);
+  HABIT_DIRTY_EVENT();
+}
+
+/**
+ * Toggles today's date in a habit's `completions` set. Returns the new
+ * "ticked today" state. Idempotent: ticking twice without an untick is a
+ * no-op. On untick, stamps `lastUntickAt` so the cleanup pass treats the
+ * untick as fresh activity (prevents accidental removal on day 9+).
+ */
+export async function toggleHabitCompletion(
+  id: string,
+  dateStr: string
+): Promise<{ ticked: boolean }> {
+  const db = await getDB();
+  const habit = await db.get("habits", id);
+  if (!habit) return { ticked: false };
+  const set = new Set(habit.completions);
+  let ticked: boolean;
+  let lastUntickAt = habit.lastUntickAt;
+  if (set.has(dateStr)) {
+    set.delete(dateStr);
+    ticked = false;
+    lastUntickAt = Date.now();
+  } else {
+    set.add(dateStr);
+    ticked = true;
+  }
+  await db.put("habits", {
+    ...habit,
+    completions: normaliseCompletions(Array.from(set)),
+    lastUntickAt,
+    updatedAt: Date.now(),
+    syncedAt: null,
+  });
+  HABIT_DIRTY_EVENT();
+  return { ticked };
+}
+
+/**
+ * Soft-delete: marks the row deleted so the tombstone propagates via sync.
+ * Local queries already filter `deleted === true`. Always route auto-cleanup
+ * through this — never `db.delete` directly, or other devices won't observe
+ * the removal.
+ */
+export async function deleteHabit(id: string): Promise<void> {
+  const db = await getDB();
+  const habit = await db.get("habits", id);
+  if (!habit) return;
+  await db.put("habits", {
+    ...habit,
+    deleted: true,
+    updatedAt: Date.now(),
+    syncedAt: null,
+  });
+  HABIT_DIRTY_EVENT();
+}
+
+// --- Sync-only helpers for habits. Do not use from UI code. ----------------
+
+export async function getAllHabitsForSync(): Promise<Habit[]> {
+  const db = await getDB();
+  return db.getAll("habits");
+}
+
+export async function getDirtyHabits(): Promise<Habit[]> {
+  const rows = await getAllHabitsForSync();
+  return rows.filter((h) => h.syncedAt == null || h.syncedAt < h.updatedAt);
+}
+
+/**
+ * Last-write-wins for every scalar field, but `completions` always merges
+ * as a UNION of local + remote dates. This is the only place habitsSync
+ * diverges from intentionsSync.
+ *
+ * If the union introduces dates the winning side didn't have, the row is
+ * also marked dirty (syncedAt = null) so the merger re-pushes the unioned
+ * set. Without this re-push, an offline tick observed only by one device
+ * would never reach the other device once the row stopped changing.
+ */
+export async function mergeRemoteHabit(remote: Habit): Promise<"applied" | "skipped"> {
+  const db = await getDB();
+  const tx = db.transaction("habits", "readwrite");
+  const local = await tx.store.get(remote.id);
+
+  const localSet = new Set(local?.completions ?? []);
+  const remoteSet = new Set(remote.completions ?? []);
+  const merged = normaliseCompletions([...localSet, ...remoteSet]);
+
+  // Preserve whichever lastUntickAt is more recent — never wipe the local
+  // safety stamp with a stale remote null.
+  const lastUntickAt = Math.max(local?.lastUntickAt ?? 0, remote.lastUntickAt ?? 0) || null;
+
+  if (local && local.updatedAt > remote.updatedAt) {
+    // Local newer. Apply remote's completions into local via union; if the
+    // union is strictly larger than local had, flag dirty so we re-push it.
+    const introducedNewDates = merged.length > localSet.size;
+    await tx.store.put({
+      ...local,
+      completions: merged,
+      lastUntickAt,
+      ...(introducedNewDates ? { syncedAt: null } : {}),
+    });
+    await tx.done;
+    return "skipped";
+  }
+
+  // Remote wins (or no local row). Apply remote, but union completions and
+  // re-push if local had dates the remote was missing.
+  const introducedNewDates = merged.length > remoteSet.size;
+  await tx.store.put({
+    ...remote,
+    completions: merged,
+    lastUntickAt,
+    syncedAt: introducedNewDates ? null : remote.updatedAt,
+  });
+  await tx.done;
+  return "applied";
+}
+
+export async function markHabitsSynced(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDB();
+  const tx = db.transaction("habits", "readwrite");
+  for (const id of ids) {
+    const row = await tx.store.get(id);
+    if (row) {
+      await tx.store.put({ ...row, syncedAt: row.updatedAt });
+    }
+  }
+  await tx.done;
+}
+
+export async function clearAllHabits(): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction("habits", "readwrite");
   await tx.store.clear();
   await tx.done;
 }

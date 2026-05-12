@@ -11,6 +11,7 @@ import EntryEditSheet from "@/components/EntryEditSheet";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import EmptyHome from "@/components/EmptyHome";
 import ActiveTimerCard from "@/components/ActiveTimerCard";
+import HabitsCard from "@/components/HabitsCard";
 import HomeTabs, { type HomeTab } from "@/components/home/HomeTabs";
 import BucketGrid from "@/components/home/BucketGrid";
 import EnergyView from "@/components/home/EnergyView";
@@ -41,6 +42,7 @@ import { getCategoryNames } from "@/lib/categories";
 import { getStreakInfo, getMilestone, type StreakInfo, type MilestoneInfo } from "@/lib/streaks";
 import { syncIntentionsNow } from "@/lib/intentionsSync";
 import { syncCategoriesNow } from "@/lib/categoriesSync";
+import { syncHabitsNow } from "@/lib/habitsSync";
 import { supabase } from "@/lib/supabase";
 
 function getGreeting(): string {
@@ -104,7 +106,7 @@ export default function Home() {
         initialSyncDoneRef.current = true;
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session?.user?.id) {
-          await Promise.all([syncIntentionsNow(), syncCategoriesNow()]);
+          await Promise.all([syncIntentionsNow(), syncCategoriesNow(), syncHabitsNow()]);
           const refreshed = await getActiveIntentions();
           setIntentions(refreshed);
         }
@@ -341,6 +343,9 @@ export default function Home() {
           ) : streak ? (
             <EmptyHome totalDays={streak.totalDays} currentStreak={streak.currentStreak} />
           ) : null}
+
+          {/* Daily habit tracker — always visible regardless of home tab. */}
+          <HabitsCard />
 
           {/* Active timer is shown inline on mobile; on desktop it lives in the
               sidebar so the centerpiece stays focused on the backlog. */}

@@ -29,6 +29,11 @@ import {
   startCategoriesSync,
   stopCategoriesSync,
 } from "@/lib/categoriesSync";
+import {
+  handleHabitsSignOut,
+  startHabitsSync,
+  stopHabitsSync,
+} from "@/lib/habitsSync";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextValue {
@@ -88,15 +93,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       startEntriesSync();
       startReflectionsSync();
       startCategoriesSync();
+      startHabitsSync();
     } else {
       stopIntentionsSync();
       stopEntriesSync();
       stopReflectionsSync();
       stopCategoriesSync();
+      stopHabitsSync();
       void handleIntentionsSignOut();
       void handleEntriesSignOut();
       void handleReflectionsSignOut();
       void handleCategoriesSignOut();
+      void handleHabitsSignOut();
     }
     syncedUserId.current = nextId;
   }, [user?.id]);
@@ -107,6 +115,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       stopEntriesSync();
       stopReflectionsSync();
       stopCategoriesSync();
+      stopHabitsSync();
     };
   }, []);
 

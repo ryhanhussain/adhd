@@ -12,16 +12,16 @@ ADHD-friendly journaling + time-tracking PWA. User types or speaks what they're 
 
 Next.js 15 (App Router) · React 19 · TypeScript 5 strict · Tailwind 4 (CSS vars for theming) · IndexedDB via `idb` v8 · Supabase (auth + quota tracking) · Google Gemini API (secure server-side key via Cloudflare Pages proxy) · Web Speech API · PWA via `public/manifest.json`.
 
-No Redux. State = React hooks + IndexedDB, synced across components via `window.dispatchEvent(new Event("entry-updated"))`. App is gated behind `LoginGate`. Entries, reflections, intentions, and both custom activity categories + intention buckets all sync to Supabase (cross-device, offline-first, LWW); sync modules: `lib/entriesSync.ts`, `lib/reflectionsSync.ts`, `lib/intentionsSync.ts`, `lib/categoriesSync.ts` (covers both category kinds in one round-trip).
+No Redux. State = React hooks + IndexedDB, synced across components via `window.dispatchEvent(new Event("entry-updated"))`. App is gated behind `LoginGate`. Entries, reflections, intentions, daily habits, and both custom activity categories + intention buckets all sync to Supabase (cross-device, offline-first, LWW); sync modules: `lib/entriesSync.ts`, `lib/reflectionsSync.ts`, `lib/intentionsSync.ts`, `lib/categoriesSync.ts` (covers both category kinds in one round-trip), `lib/habitsSync.ts`.
 
 ---
 
 ## Routes
 
-- `/` — Home: greeting, check-in garden, active-timer card, daily intentions, Ta-Da list, daily + weekly insights, end-of-day reflection. Pinned dock with "Log Activity" and "Plan Day" (brain dump). First-load-per-day `CarryoverPrompt` for yesterday's pending intentions; items older than a day auto-archive.
+- `/` — Home: greeting, check-in garden, active-timer card, daily intentions, daily habit tracker, Ta-Da list, daily + weekly insights, end-of-day reflection. Pinned dock with "Log Activity" and "Plan Day" (brain dump). First-load-per-day `CarryoverPrompt` for yesterday's pending intentions; items older than a day auto-archive.
 - `/timeline` — Hourly history with week-strip nav, date swipe, debounced search.
 - `/archive` — Past intentions you didn't carry forward; restore or discard.
-- `/settings` — Activity categories, Intention buckets (up to 3, user-described), theme, JSON + CSV export, sign-out.
+- `/settings` — Activity categories, Intention buckets (up to 3, user-described), Daily habits, theme, JSON + CSV export, sign-out.
 
 Bottom `NavBar` links Home, Timeline, Settings.
 
@@ -40,6 +40,8 @@ Settings           { customCategories, customIntentionCategories (JSON strings),
                      theme, lastSeenMilestone, ...syncedAt timestamps }
 Category           { name, color (hex) }
 IntentionCategory  { id, name, description, color }   // user-defined bucket, ≤3
+Habit              { id, name, color, icon?, order, completions: "YYYY-MM-DD"[],
+                     lastUntickAt, createdAt }         // daily tracker; ≤60 completions
 ```
 
 `endTime === 0` → timer running (sentinel, no separate active-timer record).
@@ -75,6 +77,7 @@ Completing an intention creates an `Entry` and links back via `entryId`.
 - Streak tracking (1-grace-day), computed at load time, not stored
 - `CheckInGarden`: plant grows as streak builds
 - Milestone celebrations (confetti + overlay) at 7, 14, 30, 60, 100, 200, 365 days; deduped via `lastSeenMilestone`
+- Daily habit tracker (Home section): per-habit 🔥 streak, tap to tick (idempotent), confetti on tick. Habits with no tick / creation / untick for more than 10 days are silently soft-deleted by `HabitsCard`'s cleanup pass — `lib/habits.ts` owns the pure helpers, `lib/habitsSync.ts` syncs via Supabase with whole-row LWW *except* `completions`, which merges as a union to protect offline-then-rejoin ticks.
 
 **Reflection**
 - End-of-day prompt (after 7 PM only, once per day): mood 1–5 + note + Gemini-generated accomplishment summary

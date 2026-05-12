@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getSettings, saveSettings, getAllEntries } from "@/lib/db";
+import {
+  getSettings,
+  saveSettings,
+  getAllEntries,
+  addHabit,
+  updateHabit,
+  deleteHabit,
+  HABIT_NAME_MAX,
+  type Habit,
+} from "@/lib/db";
+import { useHabits } from "@/lib/useHabits";
 import {
   DEFAULT_CATEGORIES,
   COLOR_OPTIONS,
@@ -34,6 +44,10 @@ export default function SettingsPage() {
   const [intentionOpenColorPicker, setIntentionOpenColorPicker] = useState<string | null>(null);
   const [intentionOpenIconPicker, setIntentionOpenIconPicker] = useState<string | null>(null);
   const [intentionPendingRemoveId, setIntentionPendingRemoveId] = useState<string | null>(null);
+  const habits = useHabits();
+  const [habitOpenColorPicker, setHabitOpenColorPicker] = useState<string | null>(null);
+  const [habitOpenIconPicker, setHabitOpenIconPicker] = useState<string | null>(null);
+  const [habitPendingRemoveId, setHabitPendingRemoveId] = useState<string | null>(null);
   const [quota, setQuota] = useState<QuotaSnapshot | null>(null);
 
   useEffect(() => {
@@ -187,6 +201,43 @@ export default function SettingsPage() {
     setIntentionPendingRemoveId(id);
     setTimeout(() => {
       setIntentionPendingRemoveId((cur) => (cur === id ? null : cur));
+    }, 3000);
+  };
+
+  const addDailyHabit = async () => {
+    const usedColors = new Set(habits.map((h) => h.color));
+    const available = COLOR_OPTIONS.find((co) => !usedColors.has(co.color)) || COLOR_OPTIONS[0];
+    const maxOrder = habits.reduce((acc, h) => Math.max(acc, h.order), -1);
+    const now = Date.now();
+    const habit: Habit = {
+      id: crypto.randomUUID(),
+      name: "New habit",
+      color: available.color,
+      icon: "sparkle",
+      order: maxOrder + 1,
+      completions: [],
+      lastUntickAt: null,
+      createdAt: now,
+      updatedAt: now,
+      deleted: false,
+      syncedAt: null,
+    };
+    await addHabit(habit);
+  };
+
+  const updateDailyHabit = async (id: string, patch: Partial<Habit>) => {
+    await updateHabit(id, patch);
+  };
+
+  const requestRemoveHabit = async (id: string) => {
+    if (habitPendingRemoveId === id) {
+      await deleteHabit(id);
+      setHabitPendingRemoveId(null);
+      return;
+    }
+    setHabitPendingRemoveId(id);
+    setTimeout(() => {
+      setHabitPendingRemoveId((cur) => (cur === id ? null : cur));
     }, 3000);
   };
 
@@ -542,6 +593,147 @@ export default function SettingsPage() {
             + Add Bucket
           </button>
         )}
+      </section>
+
+      {/* Daily habits */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider mb-2 text-[var(--color-text-muted)]">
+          Daily habits
+        </h2>
+        <p className="text-sm mb-4 text-[var(--color-text-muted)]">
+          Behaviours you want to anchor every day. Tick on Home to keep the streak alive. Habits with no activity for more than 10 days are removed automatically.
+        </p>
+
+        <div className="flex flex-col gap-2">
+          {habits.map((habit) => (
+            <div
+              key={habit.id}
+              className="flex items-center gap-3 px-3 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)]"
+            >
+              <div className="relative">
+                <button
+                  className="min-w-11 min-h-11 flex items-center justify-center flex-shrink-0"
+                  onClick={() => setHabitOpenColorPicker(habitOpenColorPicker === habit.id ? null : habit.id)}
+                  aria-label={`Change color for ${habit.name}`}
+                  aria-expanded={habitOpenColorPicker === habit.id}
+                >
+                  <span
+                    className="w-6 h-6 rounded-full border-2 border-[var(--color-bg)] shadow-sm flex items-center justify-center"
+                    style={{ backgroundColor: habit.color }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      <path d="M3 4.5L6 7.5L9 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+                {habitOpenColorPicker === habit.id && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setHabitOpenColorPicker(null)} />
+                    <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 flex gap-1.5 flex-wrap w-[220px] animate-slide-up">
+                      {COLOR_OPTIONS.map((co) => (
+                        <button
+                          key={co.color}
+                          onClick={() => {
+                            void updateDailyHabit(habit.id, { color: co.color });
+                            setHabitOpenColorPicker(null);
+                          }}
+                          className="min-w-11 min-h-11 flex items-center justify-center rounded-lg transition-transform active:scale-90"
+                          title={co.label}
+                          aria-label={co.label}
+                        >
+                          <span
+                            className="w-7 h-7 rounded-full border-2"
+                            style={{
+                              backgroundColor: co.color,
+                              borderColor: co.color === habit.color ? "var(--color-text)" : "transparent",
+                            }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="relative">
+                <button
+                  className="min-w-11 min-h-11 flex items-center justify-center flex-shrink-0 rounded-xl"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${habit.color} 14%, transparent)`,
+                    color: habit.color,
+                  }}
+                  onClick={() => setHabitOpenIconPicker(habitOpenIconPicker === habit.id ? null : habit.id)}
+                  aria-label={`Change icon for ${habit.name}`}
+                  aria-expanded={habitOpenIconPicker === habit.id}
+                >
+                  <BucketIcon name={habit.icon ?? "sparkle"} size={18} />
+                </button>
+                {habitOpenIconPicker === habit.id && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setHabitOpenIconPicker(null)} />
+                    <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 grid grid-cols-6 gap-1 w-[280px] animate-slide-up">
+                      {BUCKET_ICON_KEYS.map((key) => {
+                        const selected = (habit.icon ?? "sparkle") === key;
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => {
+                              void updateDailyHabit(habit.id, { icon: key as BucketIconKey });
+                              setHabitOpenIconPicker(null);
+                            }}
+                            className="min-h-11 flex items-center justify-center rounded-lg transition-transform active:scale-90"
+                            style={
+                              selected
+                                ? {
+                                    color: habit.color,
+                                    backgroundColor: `color-mix(in srgb, ${habit.color} 14%, transparent)`,
+                                    boxShadow: `inset 0 0 0 2px ${habit.color}`,
+                                  }
+                                : { color: "var(--color-text-muted)" }
+                            }
+                            title={key}
+                            aria-label={key}
+                          >
+                            <BucketIcon name={key} size={18} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <label htmlFor={`habit-name-${habit.id}`} className="sr-only">Habit name</label>
+              <input
+                id={`habit-name-${habit.id}`}
+                value={habit.name}
+                onChange={(e) => updateDailyHabit(habit.id, { name: e.target.value.slice(0, HABIT_NAME_MAX) })}
+                placeholder="Habit name"
+                maxLength={HABIT_NAME_MAX}
+                className="flex-1 text-sm font-medium bg-transparent border-b border-[var(--color-border)] focus:border-[var(--color-accent)] outline-none py-0.5"
+              />
+
+              <button
+                onClick={() => void requestRemoveHabit(habit.id)}
+                className={`min-w-11 min-h-11 flex items-center justify-center leading-none transition-colors ${
+                  habitPendingRemoveId === habit.id
+                    ? "text-[var(--color-danger)] text-xs font-semibold"
+                    : "text-[var(--color-text-muted)] text-xl hover:text-[var(--color-danger)]"
+                }`}
+                aria-label={habitPendingRemoveId === habit.id ? `Tap again to confirm removing ${habit.name}` : `Remove ${habit.name}`}
+              >
+                {habitPendingRemoveId === habit.id ? "Confirm?" : "×"}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={() => void addDailyHabit()}
+          className="mt-3 w-full h-11 rounded-xl border-2 border-dashed border-[var(--color-border)] text-sm font-medium text-[var(--color-text-muted)] transition-all active:scale-[0.98] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+        >
+          + Add Habit
+        </button>
       </section>
 
       {/* Export */}
