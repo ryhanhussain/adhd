@@ -1,8 +1,9 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { EnergyLevel } from "@/lib/db";
 import { ENERGY_LEVELS, getEnergyColor, getEnergyEmoji, getEnergyLabel } from "@/lib/energy";
+import { createPortal } from "react-dom";
 import { computePopoverAnchor, type PopoverAnchor } from "@/lib/popoverAnchor";
 
 interface EnergyChipPickerProps {
@@ -28,13 +29,32 @@ export default function EnergyChipPicker({
 }: EnergyChipPickerProps) {
   const showLabel = !compact || forceLabel;
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [anchor, setAnchor] = useState<PopoverAnchor>({ side: "right" });
+  const [pos, setPos] = useState<{ top: number; left: number; placeAbove: boolean } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    setAnchor(computePopoverAnchor(rect, POPOVER_WIDTH, window.innerWidth));
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const computedAnchor = computePopoverAnchor(rect, POPOVER_WIDTH, vw);
+    setAnchor(computedAnchor);
+
+    // Approximate height: ENERGY_LEVELS.length * ~36px + 48 for "No energy" and padding.
+    const estimatedHeight = Math.min(320, ENERGY_LEVELS.length * 36 + 48);
+    const spaceBelow = vh - rect.bottom;
+    const placeAbove = spaceBelow < estimatedHeight + 8 && rect.top > estimatedHeight;
+    
+    let left = computedAnchor.side === "left" ? rect.left : rect.right - POPOVER_WIDTH;
+    if (left < 8) left = 8;
+    if (left + POPOVER_WIDTH > vw - 8) left = vw - POPOVER_WIDTH - 8;
+    
+    const top = placeAbove ? rect.top - 4 : rect.bottom + 4;
+    setPos({ top, left, placeAbove });
   }, [open]);
 
   const pick = (next: EnergyLevel | null) => {
@@ -87,7 +107,7 @@ export default function EnergyChipPicker({
           </span>
         )}
       </button>
-      {open && (
+      {mounted && open && pos && createPortal(
         <>
           <div
             className="fixed inset-0"
@@ -96,11 +116,12 @@ export default function EnergyChipPicker({
             aria-hidden="true"
           />
           <div
-            className="absolute top-full mt-1 w-48 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
+            className="fixed w-48 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
             style={{
               zIndex: popoverZ,
-              ...(anchor.side === "left" ? { left: 0 } : { right: 0 }),
-              ...(anchor.maxWidth ? { maxWidth: anchor.maxWidth } : null),
+              top: pos.top,
+              left: pos.left,
+              transform: pos.placeAbove ? "translateY(-100%)" : undefined,
             }}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -153,7 +174,8 @@ export default function EnergyChipPicker({
               )}
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

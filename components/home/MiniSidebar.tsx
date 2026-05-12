@@ -11,6 +11,7 @@ import ReflectionTease from "@/components/ReflectionTease";
 import HabitsCard from "@/components/HabitsCard";
 import StreakMiniCard from "./StreakMiniCard";
 import TodaySparklineCard from "./TodaySparklineCard";
+import type { Habit } from "@/lib/db";
 
 interface MiniSidebarProps {
   activeEntry: Entry | null | undefined;
@@ -23,6 +24,7 @@ interface MiniSidebarProps {
   /** Currently running Pomodoro target — used to source bucket + energy for the dark IN-FOCUS card. */
   focusedIntention?: Intention | null;
   intentionCategories?: IntentionCategory[];
+  onHabitToggled?: (habit: Habit, ticked: boolean) => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export default function MiniSidebar({
   hasPomodoro = false,
   focusedIntention,
   intentionCategories,
+  onHabitToggled,
 }: MiniSidebarProps) {
   const focusedBucketName = focusedIntention
     ? intentionCategories?.find((b) => b.id === focusedIntention.categoryId)?.name ?? null
@@ -64,7 +67,7 @@ export default function MiniSidebar({
         <TodaySparklineCard entries={entries} />
       </div>
 
-      <HabitsCard />
+      <HabitsCard onHabitToggled={onHabitToggled} />
 
       {entries.length > 0 && (
         <DailySummary entries={entries} categories={categories} compact />

@@ -47,6 +47,8 @@ import { syncCategoriesNow } from "@/lib/categoriesSync";
 import { syncHabitsNow } from "@/lib/habitsSync";
 import { supabase } from "@/lib/supabase";
 import { getPomodoroState, POMODORO_EVENT } from "@/lib/pomodoro";
+import type { Habit } from "@/lib/db";
+import { toggleHabitCompletion } from "@/lib/db";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -249,6 +251,22 @@ export default function Home() {
     window.dispatchEvent(new Event("entry-updated"));
   };
 
+  const handleHabitToggled = (habit: Habit, ticked: boolean) => {
+    if (!ticked) return; // Only show toast when ticking, not unticking
+    
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    setToast({
+      message: `${habit.name} done`,
+      undo: async () => {
+        if (toastTimeout.current) clearTimeout(toastTimeout.current);
+        await toggleHabitCompletion(habit.id, today);
+        window.dispatchEvent(new Event("entry-updated"));
+        setToast(null);
+      },
+    });
+    toastTimeout.current = setTimeout(() => setToast(null), 5000);
+  };
+
   // Keyboard shortcuts: ⌘K log, ⌘⇧K plan, Esc collapse.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -391,7 +409,7 @@ export default function Home() {
 
           {/* Daily habit tracker — mobile only; desktop renders it in the sidebar. */}
           <div className="lg:hidden">
-            <HabitsCard />
+            <HabitsCard onHabitToggled={handleHabitToggled} />
           </div>
 
           {/* Active timer is shown inline on mobile; on desktop it lives in the
@@ -435,6 +453,7 @@ export default function Home() {
             hasPomodoro={hasPomodoro}
             focusedIntention={focusedIntention}
             intentionCategories={intentionCategories}
+            onHabitToggled={handleHabitToggled}
           />
           <div className="mt-3">
             <ReflectionPrompt entries={entries} />

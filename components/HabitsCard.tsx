@@ -18,7 +18,7 @@ import { isTickedToday, shouldAutoRemove } from "@/lib/habits";
  *   2. Midnight rollover: re-derive `today` at next local midnight (timeout)
  *      and on tab-visibility return so the "ticked today?" check stays fresh.
  */
-export default function HabitsCard() {
+export default function HabitsCard({ onHabitToggled }: { onHabitToggled?: (habit: Habit, ticked: boolean) => void }) {
   const habits = useHabits();
   const [today, setToday] = useState(() => toLocalDateStr(new Date()));
 
@@ -76,8 +76,12 @@ export default function HabitsCard() {
   }, [today]);
 
   const handleToggle = async (id: string) => {
-    await toggleHabitCompletion(id, today);
+    const { ticked } = await toggleHabitCompletion(id, today);
     window.dispatchEvent(new Event("entry-updated"));
+    if (onHabitToggled) {
+      const habit = habits.find((h) => h.id === id);
+      if (habit) onHabitToggled(habit, ticked);
+    }
   };
 
   if (habits.length === 0) {

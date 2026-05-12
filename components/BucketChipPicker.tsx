@@ -1,7 +1,8 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { IntentionCategory } from "@/lib/categories";
+import { createPortal } from "react-dom";
 import { computePopoverAnchor, type PopoverAnchor } from "@/lib/popoverAnchor";
 
 interface BucketChipPickerProps {
@@ -28,16 +29,35 @@ export default function BucketChipPicker({
   popoverZ = 50,
 }: BucketChipPickerProps) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [anchor, setAnchor] = useState<PopoverAnchor>({ side: "right" });
+  const [pos, setPos] = useState<{ top: number; left: number; placeAbove: boolean } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   const current = value ? buckets.find((b) => b.id === value) ?? null : null;
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    setAnchor(computePopoverAnchor(rect, POPOVER_WIDTH, window.innerWidth));
-  }, [open]);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const computedAnchor = computePopoverAnchor(rect, POPOVER_WIDTH, vw);
+    setAnchor(computedAnchor);
+
+    // Approximate height: N rows * ~36px + padding.
+    const estimatedHeight = Math.min(320, buckets.length * 36 + 48);
+    const spaceBelow = vh - rect.bottom;
+    const placeAbove = spaceBelow < estimatedHeight + 8 && rect.top > estimatedHeight;
+    
+    let left = computedAnchor.side === "left" ? rect.left : rect.right - POPOVER_WIDTH;
+    if (left < 8) left = 8;
+    if (left + POPOVER_WIDTH > vw - 8) left = vw - POPOVER_WIDTH - 8;
+    
+    const top = placeAbove ? rect.top - 4 : rect.bottom + 4;
+    setPos({ top, left, placeAbove });
+  }, [open, buckets.length]);
 
   const pick = (id: string | null) => {
     setOpen(false);
@@ -74,7 +94,7 @@ export default function BucketChipPicker({
           <span className="truncate max-w-[90px]">{current ? current.name : "Bucket"}</span>
         )}
       </button>
-      {open && (
+      {mounted && open && pos && createPortal(
         <>
           <div
             className="fixed inset-0"
@@ -83,11 +103,12 @@ export default function BucketChipPicker({
             aria-hidden="true"
           />
           <div
-            className="absolute top-full mt-1 w-56 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
+            className="fixed w-56 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
             style={{
               zIndex: popoverZ,
-              ...(anchor.side === "left" ? { left: 0 } : { right: 0 }),
-              ...(anchor.maxWidth ? { maxWidth: anchor.maxWidth } : null),
+              top: pos.top,
+              left: pos.left,
+              transform: pos.placeAbove ? "translateY(-100%)" : undefined,
             }}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -135,7 +156,8 @@ export default function BucketChipPicker({
               )}
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
