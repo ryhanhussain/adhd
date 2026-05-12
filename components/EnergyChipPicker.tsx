@@ -11,6 +11,8 @@ interface EnergyChipPickerProps {
   onChange: (next: EnergyLevel | null) => void;
   /** Compact rows hide the text label and show only the emoji + dot. */
   compact?: boolean;
+  /** Force the text label to show even in compact mode. */
+  forceLabel?: boolean;
   /** Z-index for the popover surface. Defaults to 50; pass 61 inside modals. */
   popoverZ?: number;
 }
@@ -21,8 +23,10 @@ export default function EnergyChipPicker({
   value,
   onChange,
   compact = false,
+  forceLabel = false,
   popoverZ = 50,
 }: EnergyChipPickerProps) {
+  const showLabel = !compact || forceLabel;
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<PopoverAnchor>({ side: "right" });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -52,7 +56,7 @@ export default function EnergyChipPicker({
         onDoubleClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.stopPropagation()}
         className={`h-7 rounded-full flex items-center gap-1 text-[11px] font-medium transition-all active:scale-95 ${
-          compact ? "px-1.5" : "px-2 gap-1.5"
+          showLabel ? "px-2 gap-1.5" : "px-1.5"
         } ${
           value
             ? "bg-[var(--color-bg)]/70 border border-[var(--color-border)] text-[var(--color-text)]"
@@ -77,9 +81,9 @@ export default function EnergyChipPicker({
             aria-hidden="true"
           />
         )}
-        {!compact && (
-          <span className="truncate max-w-[80px]">
-            {value ? getEnergyLabel(value) : "Energy"}
+        {showLabel && (
+          <span className="truncate max-w-[120px] uppercase tracking-wider text-[10px] font-bold">
+            {value ? `${getEnergyLabel(value)} energy` : "Energy"}
           </span>
         )}
       </button>

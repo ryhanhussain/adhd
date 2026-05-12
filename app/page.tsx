@@ -63,6 +63,15 @@ function formatTodayLabel(): string {
   });
 }
 
+function formatOverline(d: Date): string {
+  const weekday = d.toLocaleDateString(undefined, { weekday: "long" });
+  return `Today · ${weekday}`;
+}
+
+function formatHeadline(d: Date): string {
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+}
+
 export default function Home() {
   const categories = useCategories();
   const intentionCategories = useIntentionCategories();
@@ -74,6 +83,7 @@ export default function Home() {
   const [activeInput, setActiveInput] = useState<"none" | "log" | "plan">("none");
   const [pomodoroSheetOpen, setPomodoroSheetOpen] = useState(false);
   const [hasPomodoro, setHasPomodoro] = useState(false);
+  const [focusedIntentionId, setFocusedIntentionId] = useState<string | null>(null);
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [recentTaDaIds, setRecentTaDaIds] = useState<Set<string>>(new Set());
   const [homeTab, setHomeTab] = useState<HomeTab>("life");
@@ -133,7 +143,11 @@ export default function Home() {
   }, [loadData]);
 
   useEffect(() => {
-    const sync = () => setHasPomodoro(getPomodoroState() != null);
+    const sync = () => {
+      const state = getPomodoroState();
+      setHasPomodoro(state != null);
+      setFocusedIntentionId(state?.intentionId ?? null);
+    };
     sync();
     window.addEventListener(POMODORO_EVENT, sync);
     return () => window.removeEventListener(POMODORO_EVENT, sync);
@@ -317,6 +331,17 @@ export default function Home() {
   const hasInsights = entries.length > 0;
   const hasBacklog = intentions.length > 0;
 
+  const pendingCount = intentions.filter((i) => !i.completed).length;
+  const completedCount = tadaEntries.length;
+  const today_d = new Date();
+  const overline = formatOverline(today_d);
+  const headline = formatHeadline(today_d);
+  const greeting = getGreeting();
+  const subtitle = `${greeting} ${pendingCount} ahead, ${completedCount} already in the bag.`;
+  const focusedIntention = focusedIntentionId
+    ? intentions.find((i) => i.id === focusedIntentionId) ?? null
+    : null;
+
   return (
     <>
       {/* Two-column layout on desktop:
@@ -327,14 +352,22 @@ export default function Home() {
       <div className="flex flex-col gap-4 pb-dock lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-6 lg:items-start">
         {/* ── Centerpiece ── */}
         <div className="contents lg:flex lg:flex-col lg:gap-4">
-          <HomeTabs value={homeTab} onChange={setHomeTab} dateLabel={formatTodayLabel()} />
-          <p className="text-sm text-[var(--color-text-muted)] -mt-2">{getGreeting()}</p>
+          <HomeTabs
+            value={homeTab}
+            onChange={setHomeTab}
+            overline={overline}
+            headline={headline}
+            subtitle={subtitle}
+            dateLabel={formatTodayLabel()}
+          />
 
           {hasBacklog ? (
             homeTab === "life" ? (
               <BucketGrid
                 intentions={intentions}
                 intentionCategories={intentionCategories}
+                focusedIntentionId={focusedIntentionId}
+                showEnergyLabel
                 onComplete={handleIntentionComplete}
                 onDelete={handleIntentionDelete}
                 onCategoryChange={handleIntentionCategoryChange}
@@ -356,8 +389,10 @@ export default function Home() {
             <EmptyHome totalDays={streak.totalDays} currentStreak={streak.currentStreak} />
           ) : null}
 
-          {/* Daily habit tracker — always visible regardless of home tab. */}
-          <HabitsCard />
+          {/* Daily habit tracker — mobile only; desktop renders it in the sidebar. */}
+          <div className="lg:hidden">
+            <HabitsCard />
+          </div>
 
           {/* Active timer is shown inline on mobile; on desktop it lives in the
               sidebar so the centerpiece stays focused on the backlog. When a
@@ -398,6 +433,8 @@ export default function Home() {
             categories={categories}
             streak={streak}
             hasPomodoro={hasPomodoro}
+            focusedIntention={focusedIntention}
+            intentionCategories={intentionCategories}
           />
           <div className="mt-3">
             <ReflectionPrompt entries={entries} />
@@ -405,18 +442,20 @@ export default function Home() {
         </aside>
       </div>
 
-      {/* ── Pinned input dock (fixed above navbar, lifts above keyboard on mobile) ── */}
+      {/* ── Pinned input dock (fixed at the bottom, lifts above keyboard on mobile) ── */}
       <div
-        className="fixed left-0 right-0 z-40 pointer-events-none"
+        className="nav-dock fixed left-0 right-0 z-40 pointer-events-none"
         style={{
-          bottom: "max(calc(var(--nav-clearance) + 0.5rem), calc(var(--kb, 0px) + 0.5rem))",
+          bottom: "max(calc(env(safe-area-inset-bottom, 0px) + 0.75rem), calc(var(--kb, 0px) + 0.5rem))",
         }}
       >
-        <div className="max-w-lg mx-auto px-4 pointer-events-auto">
+        <div className={`${activeInput !== "none" ? "max-w-lg" : "max-w-2xl"} mx-auto px-4 pointer-events-auto`}>
           <div
-            className={`glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] overflow-hidden ${
-              activeInput !== "none" ? "p-4" : "p-1.5"
-            }`}
+            className={
+              activeInput !== "none"
+                ? "glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] overflow-hidden p-4"
+                : ""
+            }
           >
             {activeInput === "log" ? (
               <div className="animate-fade-in">
@@ -462,62 +501,42 @@ export default function Home() {
                 />
               </div>
             ) : (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setActiveInput("log")}
-                  className="flex-1 flex items-center gap-3 py-3 px-3 rounded-xl bg-[var(--color-bg)]/80 hover:bg-[var(--color-bg)] border border-[var(--color-border)] shadow-sm active:scale-[0.98] transition-all group"
-                >
-                  <div className="w-9 h-9 rounded-full bg-[var(--color-accent)] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[var(--color-accent)]/20 group-hover:scale-105 transition-transform">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-on-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <div className="flex items-center justify-center gap-2">
+                <div className="bg-[#1A1B2E] rounded-full p-1 flex items-center gap-1 shadow-2xl">
+                  <button
+                    onClick={() => setActiveInput("log")}
+                    className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-white text-[#1A1B2E] text-sm font-semibold active:scale-[0.97] transition-transform"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 5v14" />
                       <path d="M5 12h14" />
                     </svg>
-                  </div>
-                  <div className="flex flex-col text-left">
-                    <span className="text-sm font-bold text-[var(--color-text)] leading-tight">Log Activity</span>
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-medium mt-0.5">
-                      Doing or Done
-                      <span className="hidden lg:inline ml-1.5 opacity-70">⌘K</span>
-                    </span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setActiveInput("plan")}
-                  className="flex-1 flex items-center gap-3 py-3 px-3 rounded-xl bg-[var(--color-bg)]/80 hover:bg-[var(--color-bg)] border border-[var(--color-border)] shadow-sm active:scale-[0.98] transition-all group"
-                >
-                  <div className="w-9 h-9 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform dark:bg-indigo-400/10 dark:text-indigo-400 dark:border-indigo-400/20">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M8 6h13" />
-                      <path d="M8 12h13" />
-                      <path d="M8 18h13" />
-                      <path d="M3 6h.01" />
-                      <path d="M3 12h.01" />
-                      <path d="M3 18h.01" />
+                    Log activity
+                    <span className="hidden lg:inline text-[10px] opacity-60 ml-1">⌘K</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveInput("plan")}
+                    className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-transparent text-white/75 text-sm font-medium active:scale-[0.97] transition-all hover:text-white"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 6h16" />
+                      <path d="M4 12h16" />
+                      <path d="M4 18h10" />
                     </svg>
-                  </div>
-                  <div className="flex flex-col text-left relative pr-2">
-                    <span className="text-sm font-bold text-[var(--color-text)] leading-tight">Brain Dump</span>
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-medium mt-0.5">
-                      Add to backlog
-                      <span className="hidden lg:inline ml-1.5 opacity-70">⌘⇧K</span>
-                    </span>
-                    <span className="absolute -top-1 right-0 text-[10px] text-indigo-500">&#x2728;</span>
-                  </div>
-                </button>
-
+                    Brain dump
+                    <span className="hidden lg:inline text-[10px] opacity-60 ml-1">⌘⇧K</span>
+                  </button>
+                </div>
                 <button
                   onClick={() => setPomodoroSheetOpen(true)}
                   aria-label="Start a focus session"
-                  className="flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--color-bg)]/80 hover:bg-[var(--color-bg)] border border-[var(--color-border)] shadow-sm active:scale-[0.98] transition-all group flex-shrink-0"
+                  className="flex items-center justify-center w-12 h-12 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-2xl shadow-[var(--color-accent)]/30 active:scale-[0.95] transition-transform flex-shrink-0"
                 >
-                  <div className="w-9 h-9 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform dark:bg-rose-400/10 dark:text-rose-400 dark:border-rose-400/20">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="13" r="8" />
-                      <path d="M12 9v4l2 2" />
-                      <path d="M9 2h6" />
-                    </svg>
-                  </div>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="13" r="8" />
+                    <path d="M12 9v4l2 2" />
+                    <path d="M9 2h6" />
+                  </svg>
                 </button>
               </div>
             )}

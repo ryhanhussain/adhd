@@ -16,9 +16,25 @@ import {
 } from "@/lib/pomodoro";
 import { notifyPomodoroComplete } from "@/lib/notifications";
 import { confettiBurst } from "@/lib/confetti";
+import { getEnergyLabel } from "@/lib/energy";
+import type { EnergyLevel } from "@/lib/db";
 
 interface PomodoroCardProps {
   className?: string;
+  /**
+   * "soft" (default) — pastel accent surface used in mobile inline flow.
+   * "dark" — high-contrast IN-FOCUS card for the desktop right rail.
+   */
+  variant?: "soft" | "dark";
+  /** Bucket name to display in the dark variant subtitle. Optional. */
+  bucketName?: string | null;
+  /** Energy level for the running intention; rendered in the dark subtitle. */
+  energy?: EnergyLevel | null;
+}
+
+function formatStartedAt(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function formatElapsedReadable(ms: number): string {
@@ -30,7 +46,12 @@ function formatElapsedReadable(ms: number): string {
   return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
 }
 
-export default function PomodoroCard({ className }: PomodoroCardProps) {
+export default function PomodoroCard({
+  className,
+  variant = "soft",
+  bucketName,
+  energy,
+}: PomodoroCardProps) {
   const [state, setState] = useState<PomodoroState | null>(() =>
     typeof window === "undefined" ? null : getPomodoroState()
   );
@@ -163,6 +184,87 @@ export default function PomodoroCard({ className }: PomodoroCardProps) {
             Keep it open
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (variant === "dark") {
+    const energyLabel = energy ? `${getEnergyLabel(energy).toLowerCase()} energy` : null;
+    const subtitleBits = [bucketName, energyLabel, `started ${formatStartedAt(state.startedAt)}`].filter(
+      (v): v is string => !!v
+    );
+
+    return (
+      <div
+        className={`bg-[#15172A] text-white rounded-2xl p-4 flex flex-col gap-3 animate-fade-in ${className ?? ""}`}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full bg-white ${paused ? "opacity-40" : "animate-now-pulse"}`}
+            aria-hidden="true"
+          />
+          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">
+            {paused ? "Paused" : "In focus"}
+          </span>
+        </div>
+        <p className="text-5xl font-black tabular-nums tracking-tight text-center leading-none">
+          {formatCountdown(remaining)}
+        </p>
+        <div className="text-center">
+          <p className="text-sm font-medium leading-snug truncate">{state.intentionText}</p>
+          {subtitleBits.length > 0 && (
+            <p className="text-[11px] text-white/55 mt-0.5 truncate">
+              {subtitleBits.join(" · ")}
+            </p>
+          )}
+        </div>
+        <div className="h-1 rounded-full bg-white/15 overflow-hidden" aria-hidden="true">
+          <div
+            className="h-full bg-white transition-[width] duration-500 ease-linear"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        {confirmCancel ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-white/60 flex-1">Cancel this session?</span>
+            <button
+              onClick={handleCancel}
+              className="h-9 px-3 rounded-lg bg-red-500 text-white text-xs font-semibold active:scale-[0.98] transition-transform"
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => setConfirmCancel(false)}
+              className="h-9 px-3 rounded-lg bg-white/10 text-white/80 text-xs font-medium active:scale-[0.98] transition-transform"
+            >
+              Keep going
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={togglePause}
+              className="h-10 rounded-lg bg-white/10 text-white/80 text-sm font-medium active:scale-[0.98] transition-transform"
+            >
+              {paused ? "Resume" : "Pause"}
+            </button>
+            <button
+              onClick={handleFinishEarly}
+              className="h-10 rounded-lg bg-white text-black text-sm font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-1.5"
+            >
+              Finish
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setConfirmCancel(true)}
+              className="h-10 rounded-lg bg-white/5 text-white/40 text-sm font-medium active:scale-[0.98] transition-transform"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     );
   }

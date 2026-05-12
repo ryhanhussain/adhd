@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
-import NavBar from "@/components/NavBar";
+import TopNav from "@/components/TopNav";
 import ActiveTimerBar from "@/components/ActiveTimerBar";
 import ThemeProvider from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
@@ -86,12 +86,12 @@ export default function RootLayout({
           <AuthProvider>
             <LoginGate />
             <div className="fixed inset-0 z-[-1] pointer-events-none noise-bg" />
-            <div className="fixed inset-0 z-[-1] pointer-events-none gradient-mesh opacity-40 dark:opacity-20" />
-            <main className="max-w-lg lg:max-w-6xl mx-auto px-5 pt-6 relative z-0">
+            <div className="fixed inset-0 z-[-1] pointer-events-none gradient-mesh opacity-60 dark:opacity-25" />
+            <main className="max-w-lg lg:max-w-7xl mx-auto px-3 sm:px-5 pt-3 lg:pt-3 relative z-0">
+              <TopNav />
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>
             <ActiveTimerBar />
-            <NavBar />
           </AuthProvider>
         </ThemeProvider>
       </body>

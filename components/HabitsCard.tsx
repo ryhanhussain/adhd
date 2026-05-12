@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import HabitItem from "@/components/HabitItem";
 import { useHabits } from "@/lib/useHabits";
 import { deleteHabit, toggleHabitCompletion, toLocalDateStr } from "@/lib/db";
-import { shouldAutoRemove } from "@/lib/habits";
+import { isTickedToday, shouldAutoRemove } from "@/lib/habits";
 
 /**
  * Home-page daily habit tracker. Renders below the BucketGrid/EnergyView
@@ -94,11 +94,21 @@ export default function HabitsCard() {
     );
   }
 
+  const tickedCount = habits.reduce(
+    (acc, h) => acc + (isTickedToday(h, today) ? 1 : 0),
+    0
+  );
+
   return (
     <section>
-      <h2 className="text-xs font-semibold uppercase tracking-wider mb-2 text-[var(--color-text-muted)]">
-        Daily habits
-      </h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+          Daily habits
+        </h2>
+        <span className="px-2 py-0.5 rounded-full bg-[var(--color-bg)]/60 border border-[var(--color-border)] text-[10px] font-bold tabular-nums text-[var(--color-text-muted)]">
+          {tickedCount}/{habits.length}
+        </span>
+      </div>
       <div className="flex flex-col gap-2">
         {habits.map((h) => (
           <HabitItem key={h.id} habit={h} today={today} onToggle={handleToggle} />

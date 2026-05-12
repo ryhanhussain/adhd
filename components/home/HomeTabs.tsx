@@ -8,8 +8,14 @@ export type HomeTab = "life" | "energy";
 interface HomeTabsProps {
   value: HomeTab;
   onChange: (next: HomeTab) => void;
-  /** Date string for the small "Today" overline. */
-  dateLabel: string;
+  /** Small-caps overline above the headline, e.g. "TODAY · TUESDAY". */
+  overline?: string;
+  /** Display headline; e.g. "May 12". When omitted, falls back to dateLabel. */
+  headline?: string;
+  /** One-line subtitle under the headline (greeting + counts). */
+  subtitle?: string;
+  /** Legacy single-line date label used when overline/headline aren't passed. */
+  dateLabel?: string;
 }
 
 /**
@@ -17,7 +23,14 @@ interface HomeTabsProps {
  * IndexedDB Settings (synced via Supabase profiles row) so the choice
  * follows the user across devices.
  */
-export default function HomeTabs({ value, onChange, dateLabel }: HomeTabsProps) {
+export default function HomeTabs({
+  value,
+  onChange,
+  overline,
+  headline,
+  subtitle,
+  dateLabel,
+}: HomeTabsProps) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -62,18 +75,28 @@ export default function HomeTabs({ value, onChange, dateLabel }: HomeTabsProps) 
     void saveSettings({ homeTab: next });
   };
 
+  const resolvedOverline = overline ?? "Today";
+  const resolvedHeadline = headline ?? dateLabel ?? "";
+
   return (
     <div className="flex items-end justify-between gap-3 flex-wrap">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] mb-0.5">
-          Today
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-muted)] mb-0.5">
+          {resolvedOverline}
         </p>
-        <h1 className="text-2xl font-bold tracking-tight">{dateLabel}</h1>
+        <h1 className="text-4xl lg:text-6xl font-black tracking-tight leading-none">
+          {resolvedHeadline}
+        </h1>
+        {subtitle && (
+          <p className="mt-2 text-sm lg:text-base text-[var(--color-text-muted)] leading-snug">
+            {subtitle}
+          </p>
+        )}
       </div>
       <div
         role="tablist"
         aria-label="Group intentions by"
-        className="inline-flex p-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm"
+        className="inline-flex p-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm flex-shrink-0"
       >
         <TabButton active={value === "life"} onClick={() => set("life")}>
           Life areas

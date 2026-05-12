@@ -28,6 +28,10 @@ interface IntentionItemProps {
    * trims vertical padding so rows feel like a checklist line.
    */
   compact?: boolean;
+  /** When true, the row is the active Pomodoro target — show a FOCUSING pill + tint. */
+  focused?: boolean;
+  /** When true, the energy chip renders its text label even in compact mode. */
+  showEnergyLabel?: boolean;
 }
 
 function defaultStartTime(): string {
@@ -49,6 +53,8 @@ export default function IntentionItem({
   onEnergyChange,
   onTextChange,
   compact = false,
+  focused = false,
+  showEnergyLabel = false,
 }: IntentionItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState("");
@@ -162,10 +168,20 @@ export default function IntentionItem({
       data-intention-id={intention.id}
       data-expanded={expanded ? "true" : undefined}
       data-editing={editing ? "true" : undefined}
-      className={`group ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""}`}
+      className={`group ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
+        focused ? "rounded-xl bg-[var(--color-accent)]/8 ring-1 ring-[var(--color-accent)]/25 px-2 -mx-2" : ""
+      }`}
     >
       {/* Row: checkbox + text + category chip + delete */}
       <div className={`flex items-center gap-2 ${compact ? "py-1.5" : "py-2"}`}>
+        {focused && (
+          <span
+            className="px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] text-[9px] font-bold uppercase tracking-widest flex-shrink-0"
+            aria-label="Currently focusing"
+          >
+            Focusing
+          </span>
+        )}
         <button
           onClick={handleCheck}
           onPointerDown={(e) => e.stopPropagation()}
@@ -246,6 +262,7 @@ export default function IntentionItem({
             value={intention.energy ?? null}
             onChange={handlePickEnergy}
             compact={compact}
+            forceLabel={showEnergyLabel}
           />
         )}
 

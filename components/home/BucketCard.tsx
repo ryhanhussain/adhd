@@ -22,6 +22,10 @@ interface BucketCardProps {
   intentionCategories?: IntentionCategory[];
   /** Highlight the row currently being dragged. */
   draggingId?: string | null;
+  /** Intention currently running a Pomodoro; gets a FOCUSING pill + tint. */
+  focusedIntentionId?: string | null;
+  /** When true, IntentionItem renders the energy chip's text label. */
+  showEnergyLabel?: boolean;
 
   // Mutation handlers — wired straight into the home page.
   onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
@@ -53,6 +57,8 @@ export default function BucketCard({
   items,
   intentionCategories,
   draggingId,
+  focusedIntentionId,
+  showEnergyLabel,
   onComplete,
   onDelete,
   onCategoryChange,
@@ -123,6 +129,8 @@ export default function BucketCard({
                 onEnergyChange={onEnergyChange}
                 onTextChange={onTextChange}
                 compact
+                focused={focusedIntentionId === intention.id}
+                showEnergyLabel={showEnergyLabel}
               />
             </div>
           ))}

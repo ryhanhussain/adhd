@@ -14,6 +14,10 @@ const INBOX_COLOR = "#a1a1aa";
 interface BucketGridProps {
   intentions: Intention[];
   intentionCategories: IntentionCategory[];
+  /** Intention currently running a Pomodoro; threaded down to row tinting. */
+  focusedIntentionId?: string | null;
+  /** When true, intention rows show the energy chip's text label. */
+  showEnergyLabel?: boolean;
   onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onCategoryChange: (id: string, categoryId: string | null) => Promise<void>;
@@ -33,6 +37,8 @@ interface BucketGridProps {
 export default function BucketGrid({
   intentions,
   intentionCategories,
+  focusedIntentionId,
+  showEnergyLabel,
   onComplete,
   onDelete,
   onCategoryChange,
@@ -278,7 +284,7 @@ export default function BucketGrid({
 
   return (
     <div
-      className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3"
       onPointerDown={handlePointerDown}
     >
       {sections.map((section) => (
@@ -292,6 +298,8 @@ export default function BucketGrid({
           items={section.items}
           intentionCategories={intentionCategories}
           draggingId={dragActiveId}
+          focusedIntentionId={focusedIntentionId}
+          showEnergyLabel={showEnergyLabel}
           onComplete={onComplete}
           onDelete={onDelete}
           onCategoryChange={onCategoryChange}

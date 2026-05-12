@@ -27,11 +27,12 @@
   --glass-border: rgba(0, 0, 0, 0.06);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
 
-  /* Layout clearances used to keep fixed overlays from stacking on the
-     floating nav + input dock. Any new bottom-pinned UI should reference
-     these instead of hard-coding rem offsets. */
-  --nav-clearance: calc(6.5rem + env(safe-area-inset-bottom));
-  --dock-clearance: calc(13rem + env(safe-area-inset-bottom));
+  /* Layout clearance for the floating input dock. The bottom navbar has been
+     replaced by `TopNav`, so `--nav-clearance` is now just safe-area padding
+     and exists only so legacy `.pb-nav` / `.above-nav` utilities keep working
+     without overhang. */
+  --nav-clearance: env(safe-area-inset-bottom, 0px);
+  --dock-clearance: calc(6.5rem + env(safe-area-inset-bottom));
 
   --spring: cubic-bezier(0.25, 1, 0.5, 1);
   --spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -106,10 +107,35 @@ body {
 }
 
 .gradient-mesh {
-  background: radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.15), transparent 25%),
-              radial-gradient(circle at 85% 30%, rgba(94, 67, 243, 0.15), transparent 25%);
-  /* Reduced blur radius for mobile perf — still visually soft */
-  filter: blur(20px);
+  /* Pastel watercolor wash for the dashboard: pink top-left, lavender
+     top-right, yellow bottom-right, lilac bottom-left. */
+  background:
+    radial-gradient(circle at 12% 14%, rgba(255, 196, 213, 0.55), transparent 42%),
+    radial-gradient(circle at 88% 18%, rgba(202, 196, 255, 0.55), transparent 45%),
+    radial-gradient(circle at 88% 86%, rgba(255, 232, 168, 0.55), transparent 48%),
+    radial-gradient(circle at 10% 90%, rgba(220, 196, 255, 0.55), transparent 45%);
+  filter: blur(40px) saturate(115%);
+}
+
+html.dark .gradient-mesh {
+  /* Muted plum/violet in the dark theme so the wash isn't garish. */
+  background:
+    radial-gradient(circle at 12% 14%, rgba(168, 96, 144, 0.32), transparent 42%),
+    radial-gradient(circle at 88% 18%, rgba(120, 96, 200, 0.32), transparent 45%),
+    radial-gradient(circle at 88% 86%, rgba(160, 132, 96, 0.22), transparent 48%),
+    radial-gradient(circle at 10% 90%, rgba(140, 96, 200, 0.30), transparent 45%);
+  filter: blur(40px) saturate(110%);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light) .gradient-mesh {
+    background:
+      radial-gradient(circle at 12% 14%, rgba(168, 96, 144, 0.32), transparent 42%),
+      radial-gradient(circle at 88% 18%, rgba(120, 96, 200, 0.32), transparent 45%),
+      radial-gradient(circle at 88% 86%, rgba(160, 132, 96, 0.22), transparent 48%),
+      radial-gradient(circle at 10% 90%, rgba(140, 96, 200, 0.30), transparent 45%);
+    filter: blur(40px) saturate(110%);
+  }
 }
 
 .glass-panel {
