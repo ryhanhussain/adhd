@@ -32,6 +32,10 @@ interface IntentionItemProps {
   focused?: boolean;
   /** When true, the energy chip renders its text label even in compact mode. */
   showEnergyLabel?: boolean;
+  /** When true, hides the bucket chip picker entirely. */
+  hideBucketChip?: boolean;
+  /** When true, hides the energy chip picker entirely. */
+  hideEnergyChip?: boolean;
 }
 
 function defaultStartTime(): string {
@@ -55,6 +59,8 @@ export default function IntentionItem({
   compact = false,
   focused = false,
   showEnergyLabel = false,
+  hideBucketChip = false,
+  hideEnergyChip = false,
 }: IntentionItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState("");
@@ -247,7 +253,7 @@ export default function IntentionItem({
         {/* Category chip — only when user has buckets defined. In compact mode
             the parent BucketCard already implies the bucket, so we render an
             icon-only chip that still allows reassignment. */}
-        {hasBuckets && !editing && (
+        {hasBuckets && !editing && !hideBucketChip && (
           <BucketChipPicker
             buckets={intentionCategories}
             value={intention.categoryId ?? null}
@@ -257,7 +263,7 @@ export default function IntentionItem({
         )}
 
         {/* Energy chip — only when an onEnergyChange handler is wired. */}
-        {onEnergyChange && !editing && (
+        {onEnergyChange && !editing && !hideEnergyChip && (
           <EnergyChipPicker
             value={intention.energy ?? null}
             onChange={handlePickEnergy}

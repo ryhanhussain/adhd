@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { updateEntry, type Entry } from "@/lib/db";
 import { getCategoryStyle, type Category } from "@/lib/categories";
-import EnergyBadge from "./EnergyBadge";
+import { getEnergyEmoji } from "@/lib/energy";
 import CategoryPicker from "./CategoryPicker";
 
 interface TaDaTimelineProps {
@@ -175,7 +175,6 @@ export default function TaDaTimeline({ entries, categories, onTap, highlightIds 
                   <p className="text-sm truncate flex-1 group-hover:text-[var(--color-accent)] transition-colors">
                     {entry.summary || entry.text}
                   </p>
-                  {entry.energy && <EnergyBadge level={entry.energy} />}
                 </div>
 
                 {/* Duration badge */}
@@ -184,7 +183,7 @@ export default function TaDaTimeline({ entries, categories, onTap, highlightIds 
                     isTimer ? "animate-pulse-soft" : ""
                   }`}
                 >
-                  <span className="text-[11px] opacity-90">⚡</span>
+                  <span className="text-[11px] opacity-90">{entry.energy ? getEnergyEmoji(entry.energy) : "⚡"}</span>
                   {isTimer ? `${formatDuration(durationMs)}+` : formatDuration(durationMs)}
                 </span>
               </div>

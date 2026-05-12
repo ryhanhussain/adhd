@@ -268,6 +268,7 @@ export default function EnergyView({
           items={section.items}
           intentionCategories={intentionCategories}
           draggingId={dragActiveId}
+          hideEnergyChip={true}
           onComplete={onComplete}
           onDelete={onDelete}
           onCategoryChange={onCategoryChange}

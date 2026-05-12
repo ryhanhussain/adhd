@@ -26,6 +26,10 @@ interface BucketCardProps {
   focusedIntentionId?: string | null;
   /** When true, IntentionItem renders the energy chip's text label. */
   showEnergyLabel?: boolean;
+  /** When true, hides the bucket chip picker on all intention items. */
+  hideBucketChip?: boolean;
+  /** When true, hides the energy chip picker on all intention items. */
+  hideEnergyChip?: boolean;
 
   // Mutation handlers — wired straight into the home page.
   onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
@@ -59,6 +63,8 @@ export default function BucketCard({
   draggingId,
   focusedIntentionId,
   showEnergyLabel,
+  hideBucketChip,
+  hideEnergyChip,
   onComplete,
   onDelete,
   onCategoryChange,
@@ -131,6 +137,8 @@ export default function BucketCard({
                 compact
                 focused={focusedIntentionId === intention.id}
                 showEnergyLabel={showEnergyLabel}
+                hideBucketChip={hideBucketChip}
+                hideEnergyChip={hideEnergyChip}
               />
             </div>
           ))}

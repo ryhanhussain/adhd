@@ -83,7 +83,7 @@ export default function EnergyChipPicker({
         )}
         {showLabel && (
           <span className="truncate max-w-[120px] uppercase tracking-wider text-[10px] font-bold">
-            {value ? `${getEnergyLabel(value)} energy` : "Energy"}
+            {value ? getEnergyLabel(value) : "Energy"}
           </span>
         )}
       </button>

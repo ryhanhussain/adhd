@@ -300,6 +300,7 @@ export default function BucketGrid({
           draggingId={dragActiveId}
           focusedIntentionId={focusedIntentionId}
           showEnergyLabel={showEnergyLabel}
+          hideBucketChip={true}
           onComplete={onComplete}
           onDelete={onDelete}
           onCategoryChange={onCategoryChange}
