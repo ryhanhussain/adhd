@@ -44,7 +44,7 @@ export default function CategoryPicker({ categories, current, anchorRect, onPick
     <>
       <div className="fixed inset-0 z-[80]" onClick={onClose} aria-hidden="true" />
       <div
-        className="fixed z-[81] w-52 bg-[var(--color-surface-elevated)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up max-h-[60vh] overflow-y-auto"
+        className="fixed z-[81] w-52 popup-panel rounded-xl p-1.5 animate-slide-up max-h-[60vh] overflow-y-auto overscroll-contain"
         style={style}
         role="menu"
       >

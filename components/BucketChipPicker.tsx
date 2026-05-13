@@ -36,6 +36,18 @@ export default function BucketChipPicker({
 
   useEffect(() => setMounted(true), []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   const current = value ? buckets.find((b) => b.id === value) ?? null : null;
 
   useLayoutEffect(() => {
@@ -103,7 +115,7 @@ export default function BucketChipPicker({
             aria-hidden="true"
           />
           <div
-            className="fixed w-56 bg-[var(--color-popover-surface)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
+            className="fixed w-56 popup-panel rounded-xl p-1.5 animate-slide-up"
             style={{
               zIndex: popoverZ,
               top: pos.top,

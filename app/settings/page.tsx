@@ -51,6 +51,35 @@ export default function SettingsPage() {
   const [quota, setQuota] = useState<QuotaSnapshot | null>(null);
 
   useEffect(() => {
+    const hasOpenPicker =
+      openColorPicker !== null ||
+      intentionOpenColorPicker !== null ||
+      intentionOpenIconPicker !== null ||
+      habitOpenColorPicker !== null ||
+      habitOpenIconPicker !== null;
+    if (!hasOpenPicker) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpenColorPicker(null);
+      setIntentionOpenColorPicker(null);
+      setIntentionOpenIconPicker(null);
+      setHabitOpenColorPicker(null);
+      setHabitOpenIconPicker(null);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    openColorPicker,
+    intentionOpenColorPicker,
+    intentionOpenIconPicker,
+    habitOpenColorPicker,
+    habitOpenIconPicker,
+  ]);
+
+  useEffect(() => {
     let cancelled = false;
     let debounce: ReturnType<typeof setTimeout> | null = null;
     const load = async () => {
@@ -366,7 +395,7 @@ export default function SettingsPage() {
                 {openColorPicker === i && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setOpenColorPicker(null)} />
-                    <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 flex gap-1.5 flex-wrap w-[220px] animate-slide-up">
+                    <div className="absolute left-0 top-full mt-1 z-50 popup-panel rounded-xl p-2 flex gap-1.5 flex-wrap w-[220px] max-w-[calc(100vw-2rem)] animate-slide-up">
                       {COLOR_OPTIONS.map((co) => (
                         <button
                           key={co.color}
@@ -470,7 +499,7 @@ export default function SettingsPage() {
                   {intentionOpenColorPicker === bucket.id && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIntentionOpenColorPicker(null)} />
-                      <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 flex gap-1.5 flex-wrap w-[220px] animate-slide-up">
+                      <div className="absolute left-0 top-full mt-1 z-50 popup-panel rounded-xl p-2 flex gap-1.5 flex-wrap w-[220px] max-w-[calc(100vw-2rem)] animate-slide-up">
                         {COLOR_OPTIONS.map((co) => (
                           <button
                             key={co.color}
@@ -513,7 +542,7 @@ export default function SettingsPage() {
                   {intentionOpenIconPicker === bucket.id && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIntentionOpenIconPicker(null)} />
-                      <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 grid grid-cols-6 gap-1 w-[280px] animate-slide-up">
+                      <div className="absolute left-0 top-full mt-1 z-50 popup-panel rounded-xl p-2 grid grid-cols-5 sm:grid-cols-6 gap-1 w-[240px] sm:w-[280px] max-w-[calc(100vw-2rem)] animate-slide-up">
                         {BUCKET_ICON_KEYS.map((key) => {
                           const selected = (bucket.icon ?? "sparkle") === key;
                           return (
@@ -629,7 +658,7 @@ export default function SettingsPage() {
                 {habitOpenColorPicker === habit.id && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setHabitOpenColorPicker(null)} />
-                    <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 flex gap-1.5 flex-wrap w-[220px] animate-slide-up">
+                    <div className="absolute left-0 top-full mt-1 z-50 popup-panel rounded-xl p-2 flex gap-1.5 flex-wrap w-[220px] max-w-[calc(100vw-2rem)] animate-slide-up">
                       {COLOR_OPTIONS.map((co) => (
                         <button
                           key={co.color}
@@ -671,7 +700,7 @@ export default function SettingsPage() {
                 {habitOpenIconPicker === habit.id && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setHabitOpenIconPicker(null)} />
-                    <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] p-2 grid grid-cols-6 gap-1 w-[280px] animate-slide-up">
+                    <div className="absolute left-0 top-full mt-1 z-50 popup-panel rounded-xl p-2 grid grid-cols-5 sm:grid-cols-6 gap-1 w-[240px] sm:w-[280px] max-w-[calc(100vw-2rem)] animate-slide-up">
                       {BUCKET_ICON_KEYS.map((key) => {
                         const selected = (habit.icon ?? "sparkle") === key;
                         return (

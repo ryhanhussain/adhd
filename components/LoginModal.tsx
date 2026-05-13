@@ -94,7 +94,7 @@ export default function LoginModal() {
         role="dialog"
         aria-modal="true"
         aria-label="Sign in to ADDit"
-        className="relative glass-panel border border-[var(--glass-border)] rounded-2xl shadow-[var(--glass-shadow)] w-full max-w-sm p-8 animate-pop-in"
+        className="relative popup-panel rounded-2xl w-full max-w-sm p-8 animate-pop-in"
       >
         {/* Header */}
         <div className="text-center mb-8">

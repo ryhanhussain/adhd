@@ -36,6 +36,18 @@ export default function EnergyChipPicker({
 
   useEffect(() => setMounted(true), []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
@@ -116,7 +128,7 @@ export default function EnergyChipPicker({
             aria-hidden="true"
           />
           <div
-            className="fixed w-48 bg-[var(--color-popover-surface)] rounded-xl shadow-xl border border-[var(--color-border)] p-1.5 animate-slide-up"
+            className="fixed w-48 popup-panel rounded-xl p-1.5 animate-slide-up"
             style={{
               zIndex: popoverZ,
               top: pos.top,

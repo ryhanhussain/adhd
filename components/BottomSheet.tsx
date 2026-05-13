@@ -97,7 +97,7 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className="absolute left-0 right-0 w-full max-w-lg mx-auto glass-panel border border-[var(--glass-border)] border-b-0 rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] overflow-y-auto animate-sheet-up pb-nav"
+        className="absolute left-0 right-0 w-full max-w-lg mx-auto popup-panel popup-sheet border-b-0 rounded-t-[2rem] overflow-y-auto overscroll-contain animate-sheet-up pb-nav"
         style={{
           bottom: "var(--kb, 0px)",
           maxHeight: "min(85vh, calc(100vh - var(--kb, 0px) - 2rem))",
