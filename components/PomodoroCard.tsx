@@ -98,6 +98,7 @@ export default function PomodoroCard({
   const remaining = getRemainingMs(state, now);
   const paused = isPaused(state);
   const progress = Math.min(1, Math.max(0, 1 - remaining / state.targetMs));
+  const isBurst = state.mode === "burst";
 
   const reset = () => {
     notifiedRef.current = false;
@@ -116,11 +117,13 @@ export default function PomodoroCard({
       endTime: finishedAt,
       summary: state.intentionText,
     });
-    await updateIntention(state.intentionId, {
-      completed: true,
-      completedAt: finishedAt,
-      entryId: state.entryId,
-    });
+    if (!isBurst && state.intentionId) {
+      await updateIntention(state.intentionId, {
+        completed: true,
+        completedAt: finishedAt,
+        entryId: state.entryId,
+      });
+    }
 
     confettiBurst(x, y);
     reset();
@@ -162,7 +165,7 @@ export default function PomodoroCard({
         <div className="flex items-center gap-2 mb-1">
           <div className="w-2 h-2 rounded-full bg-[var(--color-accent)]" />
           <span className="text-xs font-semibold text-[var(--color-accent)]">
-            Pomodoro complete
+            {isBurst ? "Focus burst complete" : "Pomodoro complete"}
           </span>
         </div>
         <p className="text-sm font-medium mb-1">{state.intentionText}</p>
@@ -175,14 +178,23 @@ export default function PomodoroCard({
             onClick={handleTick}
             className="flex-1 h-11 rounded-lg bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold active:scale-[0.98] transition-transform"
           >
-            Tick it off
+            {isBurst ? "Save session" : "Tick it off"}
           </button>
-          <button
-            onClick={handleKeepOpen}
-            className="flex-1 h-11 rounded-lg bg-[var(--color-bg)]/80 border border-[var(--color-border)] text-sm font-medium active:scale-[0.98] transition-transform"
-          >
-            Keep it open
-          </button>
+          {isBurst ? (
+            <button
+              onClick={handleCancel}
+              className="flex-1 h-11 rounded-lg bg-[var(--color-bg)]/80 border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-muted)] active:scale-[0.98] transition-transform"
+            >
+              Discard
+            </button>
+          ) : (
+            <button
+              onClick={handleKeepOpen}
+              className="flex-1 h-11 rounded-lg bg-[var(--color-bg)]/80 border border-[var(--color-border)] text-sm font-medium active:scale-[0.98] transition-transform"
+            >
+              Keep it open
+            </button>
+          )}
         </div>
       </div>
     );
@@ -204,7 +216,7 @@ export default function PomodoroCard({
             aria-hidden="true"
           />
           <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">
-            {paused ? "Paused" : "In focus"}
+            {paused ? "Paused" : isBurst ? "Just started" : "In focus"}
           </span>
         </div>
         <p className="text-5xl font-black tabular-nums tracking-tight text-center leading-none">
@@ -284,7 +296,7 @@ export default function PomodoroCard({
             }`}
           />
           <span className="text-xs font-semibold text-[var(--color-accent)]">
-            {paused ? "Paused" : "Focus session"}
+            {paused ? "Paused" : isBurst ? "Just Start" : "Focus session"}
           </span>
         </div>
         <span className="text-2xl font-bold tabular-nums text-[var(--color-accent)]">

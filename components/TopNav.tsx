@@ -63,6 +63,81 @@ function initialOf(email: string | null | undefined): string {
   return first ? first.toUpperCase() : "·";
 }
 
+type SyncStatus = "saved" | "syncing" | "offline";
+
+function SyncIndicator() {
+  const [status, setStatus] = useState<SyncStatus>(() =>
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "saved"
+  );
+
+  useEffect(() => {
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const settle = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        setStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "saved");
+      }, 1800);
+    };
+
+    const markDirty = () => {
+      setStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "syncing");
+      settle();
+    };
+    const markOnline = () => {
+      setStatus("syncing");
+      settle();
+    };
+    const markOffline = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      setStatus("offline");
+    };
+
+    window.addEventListener("entry-dirty", markDirty);
+    window.addEventListener("reflection-dirty", markDirty);
+    window.addEventListener("intention-dirty", markDirty);
+    window.addEventListener("habit-dirty", markDirty);
+    window.addEventListener("categories-dirty", markDirty);
+    window.addEventListener("intention-categories-dirty", markDirty);
+    window.addEventListener("home-tab-dirty", markDirty);
+    window.addEventListener("online", markOnline);
+    window.addEventListener("offline", markOffline);
+
+    return () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      window.removeEventListener("entry-dirty", markDirty);
+      window.removeEventListener("reflection-dirty", markDirty);
+      window.removeEventListener("intention-dirty", markDirty);
+      window.removeEventListener("habit-dirty", markDirty);
+      window.removeEventListener("categories-dirty", markDirty);
+      window.removeEventListener("intention-categories-dirty", markDirty);
+      window.removeEventListener("home-tab-dirty", markDirty);
+      window.removeEventListener("online", markOnline);
+      window.removeEventListener("offline", markOffline);
+    };
+  }, []);
+
+  const label =
+    status === "offline" ? "Offline" : status === "syncing" ? "Syncing" : "Saved";
+  const color =
+    status === "offline"
+      ? "bg-amber-500"
+      : status === "syncing"
+        ? "bg-[var(--color-accent)] animate-pulse-soft"
+        : "bg-[var(--color-success)]";
+
+  return (
+    <span
+      className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)]"
+      title={label}
+      aria-label={`Sync status: ${label}`}
+    >
+      <span className={`w-2 h-2 rounded-full ${color}`} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
 /**
  * Responsive top navigation. Replaces the bottom NavBar on all sizes.
  * On `<sm` screens the wordmark collapses to its glyph and the tab labels
@@ -116,6 +191,7 @@ export default function TopNav() {
       </nav>
 
       <div className="flex items-center gap-2 sm:gap-3">
+        <SyncIndicator />
         <span className="hidden sm:inline text-xs font-medium tabular-nums text-[var(--color-text-muted)]">
           {now ? formatNow(now) : ""}
         </span>

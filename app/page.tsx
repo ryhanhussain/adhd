@@ -18,6 +18,7 @@ import HomeTabs, { type HomeTab } from "@/components/home/HomeTabs";
 import BucketGrid from "@/components/home/BucketGrid";
 import EnergyView from "@/components/home/EnergyView";
 import MiniSidebar from "@/components/home/MiniSidebar";
+import NowCoachCard from "@/components/home/NowCoachCard";
 import Toast from "@/components/Toast";
 import {
   getEntriesByDate,
@@ -30,6 +31,7 @@ import {
   addIntentions,
   updateIntention,
   deleteIntention,
+  archiveIntentions,
   toLocalDateStr,
   markEntryPendingDelete,
   unmarkEntryPendingDelete,
@@ -84,13 +86,17 @@ export default function Home() {
   const [milestoneToShow, setMilestoneToShow] = useState<MilestoneInfo | null>(null);
   const [activeInput, setActiveInput] = useState<"none" | "log" | "plan">("none");
   const [pomodoroSheetOpen, setPomodoroSheetOpen] = useState(false);
+  const [pomodoroInitialIntentionId, setPomodoroInitialIntentionId] = useState<string | null>(null);
   const [hasPomodoro, setHasPomodoro] = useState(false);
   const [focusedIntentionId, setFocusedIntentionId] = useState<string | null>(null);
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [recentTaDaIds, setRecentTaDaIds] = useState<Set<string>>(new Set());
   const [homeTab, setHomeTab] = useState<HomeTab>("life");
+  const [editingIntentionId, setEditingIntentionId] = useState<string | null>(null);
+  const [editSignal, setEditSignal] = useState(0);
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const deleteTimeout = useRef<NodeJS.Timeout>(undefined);
+  const reframingIds = useRef<Set<string>>(new Set());
   // First-mount sync gate so the backlog reflects converged remote state on
   // load (intentions added on another device show up immediately).
   const initialSyncDoneRef = useRef(false);
@@ -247,8 +253,52 @@ export default function Home() {
   };
 
   const handleIntentionTextChange = async (id: string, text: string) => {
-    await updateIntention(id, { text });
+    const isReframe = reframingIds.current.has(id);
+    if (isReframe) reframingIds.current.delete(id);
+    await updateIntention(id, {
+      text,
+      ...(isReframe ? { lastReframedAt: Date.now(), snoozedUntil: null } : {}),
+    });
     window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const tomorrowLocalDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return toLocalDateStr(d);
+  };
+
+  const handleCoachStartFocus = (intentionId?: string | null) => {
+    setPomodoroInitialIntentionId(intentionId ?? null);
+    setPomodoroSheetOpen(true);
+  };
+
+  const handleCoachSnooze = async (id: string) => {
+    await updateIntention(id, { snoozedUntil: tomorrowLocalDate() });
+    window.dispatchEvent(new Event("entry-updated"));
+    setToast({ message: "Snoozed until tomorrow" });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleCoachReframe = (id: string) => {
+    reframingIds.current.add(id);
+    setEditingIntentionId(id);
+    setEditSignal((n) => n + 1);
+  };
+
+  const handleCoachArchive = async (id: string) => {
+    await archiveIntentions([id]);
+    window.dispatchEvent(new Event("entry-updated"));
+    setToast({ message: "Archived" });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleCoachHabitToggle = async (habit: Habit) => {
+    const { ticked } = await toggleHabitCompletion(habit.id, today);
+    window.dispatchEvent(new Event("entry-updated"));
+    handleHabitToggled(habit, ticked);
   };
 
   const handleHabitToggled = (habit: Habit, ticked: boolean) => {
@@ -379,6 +429,22 @@ export default function Home() {
             dateLabel={formatTodayLabel()}
           />
 
+          <NowCoachCard
+            activeEntry={activeEntry}
+            hasPomodoro={hasPomodoro}
+            focusedIntention={focusedIntention}
+            intentions={intentions}
+            intentionCategories={intentionCategories}
+            today={today}
+            onFinishActive={handleFinishActive}
+            onOpenBrainDump={() => setActiveInput("plan")}
+            onStartFocus={handleCoachStartFocus}
+            onSnoozeIntention={handleCoachSnooze}
+            onReframeIntention={handleCoachReframe}
+            onArchiveIntention={handleCoachArchive}
+            onToggleHabit={handleCoachHabitToggle}
+          />
+
           {hasBacklog ? (
             homeTab === "life" ? (
               <BucketGrid
@@ -386,6 +452,8 @@ export default function Home() {
                 intentionCategories={intentionCategories}
                 focusedIntentionId={focusedIntentionId}
                 showEnergyLabel
+                editingIntentionId={editingIntentionId}
+                editSignal={editSignal}
                 onComplete={handleIntentionComplete}
                 onDelete={handleIntentionDelete}
                 onCategoryChange={handleIntentionCategoryChange}
@@ -401,6 +469,8 @@ export default function Home() {
                 onCategoryChange={handleIntentionCategoryChange}
                 onTextChange={handleIntentionTextChange}
                 onEnergyChange={handleIntentionEnergyChange}
+                editingIntentionId={editingIntentionId}
+                editSignal={editSignal}
               />
             )
           ) : streak ? (
@@ -575,8 +645,12 @@ export default function Home() {
 
       <PomodoroSheet
         open={pomodoroSheetOpen}
-        onClose={() => setPomodoroSheetOpen(false)}
-        hasActiveTimer={!!activeEntry && !hasPomodoro}
+        onClose={() => {
+          setPomodoroSheetOpen(false);
+          setPomodoroInitialIntentionId(null);
+        }}
+        hasActiveTimer={!!activeEntry}
+        initialIntentionId={pomodoroInitialIntentionId}
       />
 
       {toast && (

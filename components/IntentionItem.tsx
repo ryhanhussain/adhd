@@ -36,6 +36,8 @@ interface IntentionItemProps {
   hideBucketChip?: boolean;
   /** When true, hides the energy chip picker entirely. */
   hideEnergyChip?: boolean;
+  /** Incremented by a parent to open this row's inline editor. */
+  editSignal?: number;
 }
 
 function defaultStartTime(): string {
@@ -61,6 +63,7 @@ export default function IntentionItem({
   showEnergyLabel = false,
   hideBucketChip = false,
   hideEnergyChip = false,
+  editSignal = 0,
 }: IntentionItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState("");
@@ -168,6 +171,14 @@ export default function IntentionItem({
       editRef.current.select();
     }
   }, [editing]);
+
+  useEffect(() => {
+    if (!editSignal || !canEdit) return;
+    startEdit();
+    // `canEdit` and `startEdit` intentionally stay out: this effect is keyed
+    // to the parent's explicit signal, not every local editing state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editSignal]);
 
   return (
     <div

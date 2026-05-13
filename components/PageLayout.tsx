@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 
 interface PageLayoutProps {
   children: ReactNode;
-  /** Add bottom padding to clear the fixed navbar. Defaults to true. */
+  /** Add bottom safe-area padding for fixed chrome. Defaults to true. */
   padNav?: boolean;
   /** Vertical gap between direct children. Defaults to "5" (1.25rem). */
   gap?: "3" | "4" | "5" | "6" | "8";
@@ -10,7 +10,7 @@ interface PageLayoutProps {
 }
 
 /**
- * Single-column page shell: centered, mobile-first max width, optional navbar clearance.
+ * Single-column page shell: centered, mobile-first max width, optional fixed-chrome clearance.
  * Home uses a wider 2-column grid and keeps its own wrapper.
  */
 export default function PageLayout({

@@ -24,7 +24,7 @@ No streaks broken, no red indicators, no modal wall. Scan happens client-side fr
 
 **Problem.** The biggest wall is the blank-page moment before logging begins. "What am I doing?" is itself a distraction.
 
-**Idea.** Long-press the mic in the home dock → immediately starts a 5-minute `Entry` with placeholder text like "Focus burst" and `endTime === 0` (existing ongoing sentinel). No transcript required. At the 5-minute mark, show a quiet toast: "Still going? Tap to add a note." Timer auto-ends at 25 min if no interaction; user can extend.
+**Idea.** Long-press the mic in the home dock → immediately starts a 25-minute `Entry` with placeholder text like "Focus burst" and `endTime === 0` (existing ongoing sentinel). No transcript required. At the 25-minute mark, show a quiet prompt to save, continue, or discard.
 
 No new schema. Leverages the existing ongoing-timer machinery.
 

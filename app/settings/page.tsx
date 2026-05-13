@@ -5,6 +5,10 @@ import {
   getSettings,
   saveSettings,
   getAllEntries,
+  getAllEntriesForSync,
+  getAllIntentionsForSync,
+  getAllReflectionsForSync,
+  getAllHabitsForSync,
   addHabit,
   updateHabit,
   deleteHabit,
@@ -318,6 +322,42 @@ export default function SettingsPage() {
     URL.revokeObjectURL(url);
     setExportStatus(`Exported ${entries.length} entries`);
     setTimeout(() => setExportStatus(null), 2500);
+  };
+
+  const handleFullBackupExport = async () => {
+    const [settings, entries, intentions, reflections, allHabits] = await Promise.all([
+      getSettings(),
+      getAllEntriesForSync(),
+      getAllIntentionsForSync(),
+      getAllReflectionsForSync(),
+      getAllHabitsForSync(),
+    ]);
+
+    const backup = {
+      schema: "addit-full-backup-v1",
+      exportedAt: new Date().toISOString(),
+      settings,
+      categories,
+      intentionCategories,
+      entries,
+      intentions,
+      reflections,
+      habits: allHabits,
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `addit-full-backup-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportStatus(
+      `Exported full backup: ${entries.length} entries, ${intentions.length} intentions`
+    );
+    setTimeout(() => setExportStatus(null), 3000);
   };
 
   if (!loaded) return null;
@@ -784,6 +824,12 @@ export default function SettingsPage() {
             Export CSV
           </button>
         </div>
+        <button
+          onClick={handleFullBackupExport}
+          className="mt-2 w-full h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold transition-all active:scale-[0.98]"
+        >
+          Export Full Backup
+        </button>
         {exportStatus && (
           <p className="text-sm text-center mt-2 text-[var(--color-accent)] animate-fade-in">
             {exportStatus}

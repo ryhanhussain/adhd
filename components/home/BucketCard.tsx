@@ -30,6 +30,9 @@ interface BucketCardProps {
   hideBucketChip?: boolean;
   /** When true, hides the energy chip picker on all intention items. */
   hideEnergyChip?: boolean;
+  /** Parent-driven inline edit target, used by the Home coach reframe action. */
+  editingIntentionId?: string | null;
+  editSignal?: number;
 
   // Mutation handlers — wired straight into the home page.
   onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
@@ -65,6 +68,8 @@ export default function BucketCard({
   showEnergyLabel,
   hideBucketChip,
   hideEnergyChip,
+  editingIntentionId,
+  editSignal = 0,
   onComplete,
   onDelete,
   onCategoryChange,
@@ -139,6 +144,7 @@ export default function BucketCard({
                 showEnergyLabel={showEnergyLabel}
                 hideBucketChip={hideBucketChip}
                 hideEnergyChip={hideEnergyChip}
+                editSignal={editingIntentionId === intention.id ? editSignal : 0}
               />
             </div>
           ))}

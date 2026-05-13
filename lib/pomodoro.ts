@@ -9,7 +9,8 @@ export type PomodoroPresetMinutes = (typeof POMODORO_PRESETS)[number];
 
 export interface PomodoroState {
   entryId: string;
-  intentionId: string;
+  mode: "intention" | "burst";
+  intentionId: string | null;
   intentionText: string;
   targetMs: number;
   startedAt: number;
@@ -34,14 +35,28 @@ export function getPomodoroState(): PomodoroState | null {
     const parsed = JSON.parse(raw) as PomodoroState;
     if (
       typeof parsed.entryId !== "string" ||
-      typeof parsed.intentionId !== "string" ||
       typeof parsed.intentionText !== "string" ||
       typeof parsed.targetMs !== "number" ||
       typeof parsed.startedAt !== "number"
     ) {
       return null;
     }
-    return parsed;
+    const mode = parsed.mode === "burst" ? "burst" : "intention";
+    const intentionId =
+      mode === "burst"
+        ? null
+        : typeof parsed.intentionId === "string"
+          ? parsed.intentionId
+          : null;
+    if (mode === "intention" && !intentionId) return null;
+    return {
+      ...parsed,
+      mode,
+      intentionId,
+      pausedAt: typeof parsed.pausedAt === "number" ? parsed.pausedAt : null,
+      accumulatedPausedMs:
+        typeof parsed.accumulatedPausedMs === "number" ? parsed.accumulatedPausedMs : 0,
+    };
   } catch {
     return null;
   }

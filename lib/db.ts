@@ -153,7 +153,7 @@ export interface Intention {
   createdAt: number;
   archived?: boolean; // true = user manually archived; hidden from the backlog
   // --- intention categories (v8) ---
-  /** id of an IntentionCategory; null = uncategorized; unknown id falls back to Inbox. */
+  /** id of an IntentionCategory; null = uncategorized and shown in the unsorted bucket. */
   categoryId?: string | null;
   /**
    * @deprecated Carry-over chains are no longer created by the home flow
@@ -167,6 +167,13 @@ export interface Intention {
    * when the intention is completed; user can still override.
    */
   energy?: EnergyLevel | null;
+  /**
+   * Local YYYY-MM-DD. When set in the future, the intention is hidden from the
+   * active Home backlog until that date arrives.
+   */
+  snoozedUntil?: string | null;
+  /** Epoch ms of the last "make smaller" / reframe edit. */
+  lastReframedAt?: number | null;
   // --- sync metadata (v6) ---
   updatedAt: number;         // epoch ms of the last local or remote write; drives last-write-wins merge
   deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
@@ -720,8 +727,10 @@ export async function getReflectionsForDateRange(startDate: string, endDate: str
 export async function getActiveIntentions(): Promise<Intention[]> {
   const db = await getDB();
   const all = await db.getAll("intentions");
+  const today = toLocalDateStr(new Date());
   return all
     .filter((i) => !i.completed && !i.archived && !i.deleted)
+    .filter((i) => !i.snoozedUntil || i.snoozedUntil <= today)
     .sort((a, b) => {
       if (a.order !== b.order) return a.order - b.order;
       return b.createdAt - a.createdAt;

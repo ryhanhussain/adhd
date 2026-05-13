@@ -21,6 +21,8 @@ interface EnergyViewProps {
   onTextChange: (id: string, text: string) => Promise<void>;
   /** Reassigns an intention to a different energy level (or null). */
   onEnergyChange: (id: string, energy: EnergyLevel | null) => Promise<void>;
+  editingIntentionId?: string | null;
+  editSignal?: number;
 }
 
 const ENERGY_ICONS: Record<EnergyLevel, BucketIconKey> = {
@@ -39,6 +41,8 @@ export default function EnergyView({
   onCategoryChange,
   onTextChange,
   onEnergyChange,
+  editingIntentionId,
+  editSignal = 0,
 }: EnergyViewProps) {
   const sectionKeyFor = useCallback(
     (intention: Intention): string => intention.energy ?? NO_ENERGY_KEY,
@@ -269,6 +273,8 @@ export default function EnergyView({
           intentionCategories={intentionCategories}
           draggingId={dragActiveId}
           hideEnergyChip={true}
+          editingIntentionId={editingIntentionId}
+          editSignal={editSignal}
           onComplete={onComplete}
           onDelete={onDelete}
           onCategoryChange={onCategoryChange}

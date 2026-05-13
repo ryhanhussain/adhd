@@ -43,6 +43,8 @@ interface RemoteIntentionRow {
   carried_from_id: string | null;
   /** v9: optional energy hint, set at brain-dump time. */
   energy: Intention["energy"] | null;
+  snoozed_until: string | null;
+  last_reframed_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -63,6 +65,8 @@ function toRemote(intention: Intention, userId: string): RemoteIntentionRow {
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     carried_from_id: intention.carriedFromId ?? null,
     energy: intention.energy ?? null,
+    snoozed_until: intention.snoozedUntil ?? null,
+    last_reframed_at: intention.lastReframedAt ?? null,
     created_at: intention.createdAt,
     updated_at: intention.updatedAt,
   };
@@ -83,6 +87,8 @@ function fromRemote(row: RemoteIntentionRow): Intention {
     categoryId: row.category_id ?? null,
     carriedFromId: row.carried_from_id ?? null,
     energy: row.energy ?? null,
+    snoozedUntil: row.snoozed_until ?? null,
+    lastReframedAt: row.last_reframed_at ?? null,
     updatedAt: row.updated_at,
     syncedAt: row.updated_at,
   };

@@ -5,7 +5,7 @@ import { type ReactNode } from "react";
 interface ToastProps {
   message: ReactNode;
   action?: { label: string; onClick: () => void };
-  /** Where to pin vertically. `nav` sits above the bottom nav; `dock` sits above the input dock (Home). */
+  /** Where to pin vertically. `nav` uses safe-area clearance; `dock` sits above the Home input dock. */
   position?: "nav" | "dock";
 }
 

@@ -6,10 +6,10 @@ import { reorderIntentions } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
 import BucketCard from "./BucketCard";
 
-const INBOX_KEY = "__inbox__";
+const UNSORTED_KEY = "__unsorted__";
 const LONG_PRESS_MS = 400;
 const MOVE_CANCEL_PX = 5;
-const INBOX_COLOR = "#a1a1aa";
+const UNSORTED_COLOR = "#a1a1aa";
 
 interface BucketGridProps {
   intentions: Intention[];
@@ -18,6 +18,8 @@ interface BucketGridProps {
   focusedIntentionId?: string | null;
   /** When true, intention rows show the energy chip's text label. */
   showEnergyLabel?: boolean;
+  editingIntentionId?: string | null;
+  editSignal?: number;
   onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onCategoryChange: (id: string, categoryId: string | null) => Promise<void>;
@@ -27,7 +29,7 @@ interface BucketGridProps {
 
 /**
  * Home centerpiece: persistent backlog grouped by life-area buckets. Always
- * shows one card per user-defined bucket, plus an "Inbox" card whenever any
+ * shows one card per user-defined bucket, plus an unsorted card whenever any
  * active intention is uncategorized so those items don't disappear.
  *
  * Long-press a row, then drag onto another card → reassigns the intention's
@@ -39,6 +41,8 @@ export default function BucketGrid({
   intentionCategories,
   focusedIntentionId,
   showEnergyLabel,
+  editingIntentionId,
+  editSignal = 0,
   onComplete,
   onDelete,
   onCategoryChange,
@@ -50,7 +54,7 @@ export default function BucketGrid({
   const sectionKeyFor = useCallback(
     (intention: Intention): string => {
       if (intention.categoryId && validIds.has(intention.categoryId)) return intention.categoryId;
-      return INBOX_KEY;
+      return UNSORTED_KEY;
     },
     [validIds],
   );
@@ -120,15 +124,15 @@ export default function BucketGrid({
         items: sortWithOverride(b.id, items),
       });
     }
-    const inbox = grouped.get(INBOX_KEY) ?? [];
-    if (inbox.length > 0 || intentionCategories.length === 0) {
+    const unsorted = grouped.get(UNSORTED_KEY) ?? [];
+    if (unsorted.length > 0 || intentionCategories.length === 0) {
       out.push({
-        key: INBOX_KEY,
-        name: "Inbox",
+        key: UNSORTED_KEY,
+        name: "Unsorted",
         description: null,
-        color: INBOX_COLOR,
+        color: UNSORTED_COLOR,
         icon: "sparkle",
-        items: sortWithOverride(INBOX_KEY, inbox),
+        items: sortWithOverride(UNSORTED_KEY, unsorted),
       });
     }
 
@@ -232,7 +236,7 @@ export default function BucketGrid({
       if (moveTarget) {
         // Cross-card drop → reassign categoryId. Don't persist the reorder
         // override; the row is leaving its current section anyway.
-        const nextCategoryId = moveTarget === INBOX_KEY ? null : moveTarget;
+        const nextCategoryId = moveTarget === UNSORTED_KEY ? null : moveTarget;
         void onCategoryChange(draggedId, nextCategoryId);
         setOrderOverride(null);
         return;
@@ -301,6 +305,8 @@ export default function BucketGrid({
           focusedIntentionId={focusedIntentionId}
           showEnergyLabel={showEnergyLabel}
           hideBucketChip={true}
+          editingIntentionId={editingIntentionId}
+          editSignal={editSignal}
           onComplete={onComplete}
           onDelete={onDelete}
           onCategoryChange={onCategoryChange}

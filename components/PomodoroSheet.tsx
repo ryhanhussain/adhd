@@ -15,14 +15,24 @@ import {
 } from "@/lib/pomodoro";
 import { ensureNotificationPermission } from "@/lib/notifications";
 
+const JUST_START_MINUTES = 25;
+const JUST_START_LABEL = "Focus burst";
+
 interface PomodoroSheetProps {
   open: boolean;
   onClose: () => void;
   /** When a timer is already running, the sheet blocks start with this message. */
   hasActiveTimer: boolean;
+  /** Optional task to preselect when launched from a recommendation. */
+  initialIntentionId?: string | null;
 }
 
-export default function PomodoroSheet({ open, onClose, hasActiveTimer }: PomodoroSheetProps) {
+export default function PomodoroSheet({
+  open,
+  onClose,
+  hasActiveTimer,
+  initialIntentionId,
+}: PomodoroSheetProps) {
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -33,12 +43,17 @@ export default function PomodoroSheet({ open, onClose, hasActiveTimer }: Pomodor
     getActiveIntentions().then((rows) => {
       if (cancelled) return;
       setIntentions(rows);
-      setSelectedId((prev) => (prev && rows.some((r) => r.id === prev) ? prev : null));
+      setSelectedId((prev) => {
+        if (initialIntentionId && rows.some((r) => r.id === initialIntentionId)) {
+          return initialIntentionId;
+        }
+        return prev && rows.some((r) => r.id === prev) ? prev : null;
+      });
     });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, initialIntentionId]);
 
   useEffect(() => {
     if (!open) {
@@ -73,9 +88,46 @@ export default function PomodoroSheet({ open, onClose, hasActiveTimer }: Pomodor
 
     setPomodoroState({
       entryId,
+      mode: "intention",
       intentionId: intention.id,
       intentionText: intention.text,
       targetMs: minutes * 60 * 1000,
+      startedAt: now,
+      pausedAt: null,
+      accumulatedPausedMs: 0,
+    });
+
+    window.dispatchEvent(new Event("entry-updated"));
+    onClose();
+  };
+
+  const handleJustStart = async () => {
+    if (starting || hasActiveTimer) return;
+    setStarting(true);
+    void ensureNotificationPermission();
+
+    const now = Date.now();
+    const entryId = crypto.randomUUID();
+    await addEntry({
+      id: entryId,
+      text: JUST_START_LABEL,
+      timestamp: now,
+      startTime: now,
+      endTime: 0,
+      date: toLocalDateStr(now),
+      location: null,
+      tags: [],
+      energy: null,
+      summary: JUST_START_LABEL,
+      createdAt: now,
+    });
+
+    setPomodoroState({
+      entryId,
+      mode: "burst",
+      intentionId: null,
+      intentionText: JUST_START_LABEL,
+      targetMs: JUST_START_MINUTES * 60 * 1000,
       startedAt: now,
       pausedAt: null,
       accumulatedPausedMs: 0,
@@ -104,14 +156,29 @@ export default function PomodoroSheet({ open, onClose, hasActiveTimer }: Pomodor
 
         {hasActiveTimer ? (
           <div className="rounded-xl p-4 bg-[var(--color-accent-soft)] border border-[var(--color-accent)]/30 text-sm">
-            A timer is already running. Finish it first, then start a Pomodoro.
-          </div>
-        ) : intentions.length === 0 ? (
-          <div className="rounded-xl p-4 bg-[var(--color-bg)]/60 border border-[var(--color-border)] text-sm text-[var(--color-text-muted)]">
-            No intentions yet — add one via Brain Dump first.
+            A timer is already running. Finish it first, then start a focus session.
           </div>
         ) : (
           <>
+            <button
+              onClick={handleJustStart}
+              disabled={starting}
+              className="w-full rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-4 py-3 text-left active:scale-[0.99] transition-all disabled:opacity-50 mb-4"
+            >
+              <span className="block text-sm font-bold text-[var(--color-accent)]">
+                Just Start · {JUST_START_MINUTES} min
+              </span>
+              <span className="block text-xs text-[var(--color-text-muted)] mt-0.5">
+                Start a focus burst without choosing a task.
+              </span>
+            </button>
+
+            {intentions.length === 0 ? (
+              <div className="rounded-xl p-4 bg-[var(--color-bg)]/60 border border-[var(--color-border)] text-sm text-[var(--color-text-muted)]">
+                No intentions yet — use Just Start, or add one via Brain Dump later.
+              </div>
+            ) : (
+              <>
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
               Pick a task
             </p>
@@ -149,6 +216,8 @@ export default function PomodoroSheet({ open, onClose, hasActiveTimer }: Pomodor
                 </button>
               ))}
             </div>
+              </>
+            )}
           </>
         )}
       </div>
