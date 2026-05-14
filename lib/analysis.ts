@@ -1,18 +1,30 @@
 import {
+  getActiveHabits,
   getEntriesSince,
   getIntentionsForDateRange,
   getReflectionsForDateRange,
   toLocalDateStr,
   type Entry,
   type EnergyLevel,
+  type Habit,
   type Intention,
 } from "./db";
 import { getCategoryStyle, type Category } from "./categories";
+import { getHabitStreak } from "./habits";
 import { openDB } from "idb";
 
 export type PeriodWindow = 7 | 30 | 90 | 400;
+export type AnalysisHighlightKind = "win" | "rhythm" | "adjustment";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const ENERGY_KEYS: EnergyLevel[] = ["high", "medium", "low", "scattered"];
+
+export interface AnalysisHighlight {
+  kind: AnalysisHighlightKind;
+  title: string;
+  body: string;
+  metric?: string;
+}
 
 export interface CategoryBreakdownRow {
   name: string;
@@ -43,6 +55,16 @@ export interface MoodStats {
   }[];
 }
 
+export interface HabitStats {
+  active: number;
+  completed: number;
+  opportunities: number;
+  completionRate: number | null;
+  completedToday: number;
+  bestStreak: number;
+  bestStreakHabitName: string | null;
+}
+
 export interface PeriodMetrics {
   windowDays: PeriodWindow;
   startDate: string;
@@ -55,13 +77,17 @@ export interface PeriodMetrics {
   growers: { name: string; deltaPct: number }[];
   shrinkers: { name: string; deltaPct: number }[];
   energyCounts: { high: number; medium: number; low: number; scattered: number };
+  energyMinutes: { high: number; medium: number; low: number; scattered: number };
+  habitStats: HabitStats;
   intentionStats: IntentionStats;
   moodStats: MoodStats;
+  dailyBreakdown: { date: string; label: string; minutes: number; entries: number; isToday: boolean }[];
   byDayOfWeek: { day: string; minutes: number; entries: number }[];
   byHourOfDay: { hour: number; minutes: number }[];
   mostProductiveDayOfWeek: string | null;
   mostProductiveHourWindow: string | null;
   topActivities: { summary: string; minutes: number; count: number }[];
+  progressHighlights: AnalysisHighlight[];
   /** 7×24 matrix: byDayAndHour[dayOfWeek 0=Sun..6=Sat][hour 0–23] → total minutes */
   byDayAndHour: number[][];
 }
@@ -86,6 +112,35 @@ function daysBetween(a: string, b: string): number {
   const da = new Date(a + "T12:00:00");
   const db = new Date(b + "T12:00:00");
   return Math.round((db.getTime() - da.getTime()) / 86400000);
+}
+
+function dateFromStr(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+function shiftDateStr(dateStr: string, deltaDays: number): string {
+  const d = dateFromStr(dateStr);
+  d.setDate(d.getDate() + deltaDays);
+  return toLocalDateStr(d);
+}
+
+function eachDateInRange(startDate: string, endDate: string): string[] {
+  const days = Math.max(0, daysBetween(startDate, endDate));
+  return Array.from({ length: days + 1 }, (_, i) => shiftDateStr(startDate, i));
+}
+
+function formatMinutes(minutes: number): string {
+  if (minutes <= 0) return "0h";
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatPct(value: number): string {
+  return `${Math.round(value * 100)}%`;
 }
 
 function calcLongestStreak(sortedDates: string[]): number {
@@ -120,6 +175,244 @@ function getTopCategoryName(entries: Entry[]): string | null {
   return best;
 }
 
+function getHabitStats(habits: Habit[], startDate: string, endDate: string): HabitStats {
+  let completed = 0;
+  let opportunities = 0;
+  let completedToday = 0;
+  let bestStreak = 0;
+  let bestStreakHabitName: string | null = null;
+
+  for (const habit of habits) {
+    const createdDate = toLocalDateStr(habit.createdAt);
+    const opportunityStart = createdDate > startDate ? createdDate : startDate;
+    if (opportunityStart <= endDate) {
+      opportunities += daysBetween(opportunityStart, endDate) + 1;
+      completed += habit.completions.filter(
+        (date) => date >= opportunityStart && date <= endDate
+      ).length;
+    }
+    if (habit.completions.includes(endDate)) completedToday++;
+
+    const streak = getHabitStreak(habit, endDate);
+    if (streak > bestStreak) {
+      bestStreak = streak;
+      bestStreakHabitName = habit.name;
+    }
+  }
+
+  return {
+    active: habits.length,
+    completed,
+    opportunities,
+    completionRate: opportunities > 0 ? completed / opportunities : null,
+    completedToday,
+    bestStreak,
+    bestStreakHabitName,
+  };
+}
+
+function buildProgressHighlights(metrics: {
+  windowDays: PeriodWindow;
+  totalMinutes: number;
+  prevPeriodMinutes: number;
+  daysLogged: number;
+  longestStreakInWindow: number;
+  categoryBreakdown: CategoryBreakdownRow[];
+  energyCounts: PeriodMetrics["energyCounts"];
+  energyMinutes: PeriodMetrics["energyMinutes"];
+  habitStats: HabitStats;
+  intentionStats: IntentionStats;
+  moodStats: MoodStats;
+  mostProductiveDayOfWeek: string | null;
+  mostProductiveHourWindow: string | null;
+}): AnalysisHighlight[] {
+  const wins: AnalysisHighlight[] = [];
+  const rhythms: AnalysisHighlight[] = [];
+  const adjustments: AnalysisHighlight[] = [];
+  const {
+    windowDays,
+    totalMinutes,
+    prevPeriodMinutes,
+    daysLogged,
+    longestStreakInWindow,
+    categoryBreakdown,
+    energyCounts,
+    energyMinutes,
+    habitStats,
+    intentionStats,
+    moodStats,
+    mostProductiveDayOfWeek,
+    mostProductiveHourWindow,
+  } = metrics;
+
+  const totalDeltaPct =
+    prevPeriodMinutes > 0 ? (totalMinutes - prevPeriodMinutes) / prevPeriodMinutes : null;
+  const periodLabel = windowDays === 400 ? "saved history" : `${windowDays} days`;
+  const priorLabel = windowDays === 400 ? "the prior saved-history window" : `the prior ${windowDays} days`;
+  if (totalDeltaPct != null && totalDeltaPct >= 0.1) {
+    wins.push({
+      kind: "win",
+      title: "More showed up this time",
+      body: `You tracked ${formatMinutes(totalMinutes)}, up ${formatPct(totalDeltaPct)} from ${priorLabel}. That is real evidence of momentum.`,
+      metric: `+${formatPct(totalDeltaPct)}`,
+    });
+  }
+
+  if (habitStats.completionRate != null && habitStats.opportunities >= 4 && habitStats.completionRate >= 0.5) {
+    wins.push({
+      kind: "win",
+      title: "Your habits are getting roots",
+      body: `You checked off ${habitStats.completed} of ${habitStats.opportunities} habit chances in this window. Quiet repetition counts.`,
+      metric: formatPct(habitStats.completionRate),
+    });
+  }
+
+  if (intentionStats.created > 0 && intentionStats.completionRate >= 0.6) {
+    wins.push({
+      kind: "win",
+      title: "Plans became finished things",
+      body: `${intentionStats.completed} of ${intentionStats.created} intentions made it across the line. Your planning is turning into follow-through.`,
+      metric: formatPct(intentionStats.completionRate),
+    });
+  }
+
+  if (daysLogged > 0) {
+    wins.push({
+      kind: "win",
+      title: "You kept a thread through the window",
+      body: windowDays === 400
+        ? `You logged on ${daysLogged} days across your saved history${longestStreakInWindow > 1 ? `, including a ${longestStreakInWindow}-day run` : ""}. That is enough signal to learn from.`
+        : `You logged on ${daysLogged} of ${periodLabel}${longestStreakInWindow > 1 ? `, including a ${longestStreakInWindow}-day run` : ""}. That is enough signal to learn from.`,
+      metric: windowDays === 400 ? `${daysLogged} days` : `${daysLogged}/${windowDays}`,
+    });
+  }
+
+  const topCategory = categoryBreakdown[0] ?? null;
+  if (topCategory && totalMinutes > 0) {
+    const topShare = topCategory.minutes / totalMinutes;
+    if (topShare >= 0.3) {
+      rhythms.push({
+        kind: "rhythm",
+        title: `${topCategory.name} led the shape of this period`,
+        body: `${topCategory.name} took ${formatMinutes(topCategory.minutes)}, so this window has a clear center of gravity.`,
+        metric: formatPct(topShare),
+      });
+    }
+  }
+
+  if (mostProductiveHourWindow) {
+    rhythms.push({
+      kind: "rhythm",
+      title: "There is a time your work gathers",
+      body: `${mostProductiveHourWindow} is where your tracked time clustered most. That can be a good place to protect the demanding stuff.`,
+      metric: mostProductiveHourWindow,
+    });
+  } else if (mostProductiveDayOfWeek) {
+    rhythms.push({
+      kind: "rhythm",
+      title: "One day carried more of the load",
+      body: `${mostProductiveDayOfWeek} had the strongest signal in this window. Worth noticing when you plan the next one.`,
+      metric: mostProductiveDayOfWeek,
+    });
+  }
+
+  if (moodStats.avgMood != null && moodStats.count >= 3) {
+    rhythms.push({
+      kind: "rhythm",
+      title: "Your reflections are adding context",
+      body: `Across ${moodStats.count} reflections, your average mood landed at ${moodStats.avgMood.toFixed(1)}/5. That gives the numbers a bit more humanity.`,
+      metric: `${moodStats.avgMood.toFixed(1)}/5`,
+    });
+  }
+
+  const energyTotal = ENERGY_KEYS.reduce((sum, key) => sum + energyCounts[key], 0);
+  const lowAndScattered = energyCounts.low + energyCounts.scattered;
+  if (energyTotal >= 4 && lowAndScattered / energyTotal >= 0.5) {
+    adjustments.push({
+      kind: "adjustment",
+      title: "Match the day before asking more of it",
+      body: `${lowAndScattered} of ${energyTotal} energy-tagged entries were low or scattered. Try giving those blocks smaller, easier-to-enter tasks.`,
+      metric: formatPct(lowAndScattered / energyTotal),
+    });
+  }
+
+  const highMinutes = energyMinutes.high + energyMinutes.medium;
+  const lowMinutes = energyMinutes.low + energyMinutes.scattered;
+  if (highMinutes > 0 && lowMinutes > highMinutes * 1.4) {
+    adjustments.push({
+      kind: "adjustment",
+      title: "Keep a lighter lane ready",
+      body: `Lower-energy time outweighed high/medium time here. A short fallback list can stop those hours becoming all-or-nothing.`,
+      metric: formatMinutes(lowMinutes),
+    });
+  }
+
+  if (intentionStats.created >= 4 && intentionStats.completionRate < 0.5) {
+    adjustments.push({
+      kind: "adjustment",
+      title: "Make tomorrow's list smaller on purpose",
+      body: `${intentionStats.completed} of ${intentionStats.created} intentions finished. That looks like a planning-load problem, not a character problem.`,
+      metric: formatPct(intentionStats.completionRate),
+    });
+  }
+
+  if (habitStats.active > 0 && habitStats.completionRate != null && habitStats.completionRate < 0.4) {
+    adjustments.push({
+      kind: "adjustment",
+      title: "Lower the habit friction",
+      body: `Your habits landed ${habitStats.completed} of ${habitStats.opportunities} chances. One tiny version of the habit may be easier to keep alive.`,
+      metric: formatPct(habitStats.completionRate),
+    });
+  }
+
+  if (daysLogged <= Math.max(2, Math.floor(windowDays * 0.25))) {
+    adjustments.push({
+      kind: "adjustment",
+      title: "More dots will make the picture kinder",
+      body: "A few more quick logs will make these patterns sharper. Even messy one-line entries count.",
+      metric: `${daysLogged} days`,
+    });
+  }
+
+  const selected: AnalysisHighlight[] = [];
+  const add = (items: AnalysisHighlight[], fallbackIndex = 0) => {
+    const next = items.find((item) => !selected.some((s) => s.title === item.title)) ?? items[fallbackIndex];
+    if (next && !selected.some((s) => s.title === next.title)) selected.push(next);
+  };
+
+  add(wins);
+  add(rhythms);
+  add(adjustments);
+
+  const fallback: AnalysisHighlight[] = [
+    {
+      kind: "win",
+      title: "There is progress here",
+      body: `You have ${formatMinutes(totalMinutes)} of tracked life in this window. It does not need to be perfect to be useful.`,
+      metric: formatMinutes(totalMinutes),
+    },
+    {
+      kind: "rhythm",
+      title: "The pattern is still forming",
+      body: "Keep logging small moments and the useful rhythms will start to separate from the noise.",
+      metric: `${daysLogged} days`,
+    },
+    {
+      kind: "adjustment",
+      title: "Keep the next step small",
+      body: "The best next experiment is a tiny one: pick one thing to make easier tomorrow.",
+      metric: "1 thing",
+    },
+  ];
+
+  for (const item of fallback) {
+    if (selected.length >= 3) break;
+    add([item]);
+  }
+
+  return selected.slice(0, 3);
+}
+
 export async function getPeriodMetrics(
   windowDays: PeriodWindow,
   categories: Category[]
@@ -131,10 +424,11 @@ export async function getPeriodMetrics(
   const prevStart = daysAgoStr(windowDays * 2 - 1);
   const prevEnd = daysAgoStr(windowDays);
 
-  const [allEntries, intentions, reflections] = await Promise.all([
+  const [allEntries, intentions, reflections, habits] = await Promise.all([
     getEntriesSince(prevStart),
     getIntentionsForDateRange(prevStart, endDate),
     getReflectionsForDateRange(prevStart, endDate),
+    getActiveHabits(),
   ]);
 
   const current: Entry[] = [];
@@ -199,9 +493,16 @@ export async function getPeriodMetrics(
 
   // Energy counts
   const energyCounts = { high: 0, medium: 0, low: 0, scattered: 0 };
+  const energyMinutes = { high: 0, medium: 0, low: 0, scattered: 0 };
   for (const e of current) {
-    if (e.energy) energyCounts[e.energy as EnergyLevel]++;
+    if (e.energy) {
+      const level = e.energy as EnergyLevel;
+      energyCounts[level]++;
+      energyMinutes[level] += getEntryDuration(e);
+    }
   }
+
+  const habitStats = getHabitStats(habits, startDate, endDate);
 
   // Intentions (current period only) — collapsed by carry-over lineage so a
   // task carried Mon→Tue→Wed counts as one user-perceived intention, not three.
@@ -312,6 +613,7 @@ export async function getPeriodMetrics(
   };
 
   // By day-of-week + hour-of-day + combined heatmap
+  const minutesByDate = new Map<string, { minutes: number; entries: number }>();
   const dayOfWeekMins: number[] = [0, 0, 0, 0, 0, 0, 0];
   const dayOfWeekEntries: number[] = [0, 0, 0, 0, 0, 0, 0];
   const hourOfDayMins: number[] = new Array(24).fill(0);
@@ -319,6 +621,10 @@ export async function getPeriodMetrics(
   for (const e of current) {
     const mins = getEntryDuration(e);
     if (mins <= 0) continue;
+    const dayBucket = minutesByDate.get(e.date) ?? { minutes: 0, entries: 0 };
+    dayBucket.minutes += mins;
+    dayBucket.entries++;
+    minutesByDate.set(e.date, dayBucket);
     const ts = e.startTime || e.timestamp;
     const d = new Date(ts);
     const dow = d.getDay();
@@ -334,6 +640,17 @@ export async function getPeriodMetrics(
     entries: dayOfWeekEntries[i],
   }));
   const byHourOfDay = hourOfDayMins.map((minutes, hour) => ({ hour, minutes }));
+  const dailyBreakdown = eachDateInRange(startDate, endDate).map((date) => {
+    const d = dateFromStr(date);
+    const bucket = minutesByDate.get(date) ?? { minutes: 0, entries: 0 };
+    return {
+      date,
+      label: DAY_NAMES[d.getDay()],
+      minutes: bucket.minutes,
+      entries: bucket.entries,
+      isToday: date === endDate,
+    };
+  });
 
   let mostProductiveDayOfWeek: string | null = null;
   let maxDowMins = 0;
@@ -382,6 +699,22 @@ export async function getPeriodMetrics(
     .sort((a, b) => b.minutes - a.minutes)
     .slice(0, 10);
 
+  const progressHighlights = buildProgressHighlights({
+    windowDays,
+    totalMinutes,
+    prevPeriodMinutes,
+    daysLogged,
+    longestStreakInWindow,
+    categoryBreakdown,
+    energyCounts,
+    energyMinutes,
+    habitStats,
+    intentionStats,
+    moodStats,
+    mostProductiveDayOfWeek,
+    mostProductiveHourWindow,
+  });
+
   return {
     windowDays,
     startDate,
@@ -394,14 +727,18 @@ export async function getPeriodMetrics(
     growers,
     shrinkers,
     energyCounts,
+    energyMinutes,
+    habitStats,
     intentionStats,
     moodStats,
+    dailyBreakdown,
     byDayOfWeek,
     byHourOfDay,
     byDayAndHour,
     mostProductiveDayOfWeek,
     mostProductiveHourWindow,
     topActivities,
+    progressHighlights,
   };
 }
 

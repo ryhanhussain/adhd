@@ -31,7 +31,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   analysis_cap: "You've hit today's analysis limit — resets tomorrow.",
   cap: "Daily AI limit reached — resets tomorrow.",
   burst: "Slow down a sec — try again in a moment.",
-  auth: "Sign in again to use AI analysis.",
+  auth: "Sign in again to use the AI read.",
   network: "Network hiccup — check your connection and retry.",
   server: "Something went wrong — tap Generate to retry.",
   quota_error: "Something went wrong — tap Generate to retry.",
@@ -127,10 +127,10 @@ export default function AIPeriodSummary({ metrics, windowDays }: AIPeriodSummary
     return (
       <div className="glass-panel rounded-2xl p-5 flex flex-col gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-          AI analysis
+          Deeper AI read
         </h3>
         <p className="text-sm text-[var(--color-text-muted)]">
-          Use ADDit for at least {MIN_DAYS_TO_UNLOCK} days to unlock AI analysis — patterns sharpen with more data.
+          Use ADDit for at least {MIN_DAYS_TO_UNLOCK} days to unlock the optional AI read — patterns sharpen with more data.
         </p>
         <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
           {totalDaysLogged}/{MIN_DAYS_TO_UNLOCK} days logged so far.
@@ -145,10 +145,10 @@ export default function AIPeriodSummary({ metrics, windowDays }: AIPeriodSummary
       <div className="glass-panel rounded-2xl p-5 flex flex-col gap-3">
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            AI analysis
+            Deeper AI read
           </h3>
           <p className="text-sm text-[var(--color-text-muted)] mt-1">
-            A short read on your patterns over this period — pattern, surprise, suggestion.
+            Optional: a short read on your patterns over this period — pattern, surprise, suggestion.
           </p>
         </div>
         <button
@@ -170,7 +170,7 @@ export default function AIPeriodSummary({ metrics, windowDays }: AIPeriodSummary
     <div className="glass-panel rounded-2xl p-5 flex flex-col gap-3 animate-fade-in">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-          AI analysis
+          Deeper AI read
         </h3>
         <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">
           {timeAgo(cached.generatedAt)}
