@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { Category } from "@/lib/categories";
-import { computePopoverAnchor } from "@/lib/popoverAnchor";
+import { computeFixedPopoverPosition } from "@/lib/popoverAnchor";
 
 interface CategoryPickerProps {
   categories: Category[];
@@ -15,20 +15,32 @@ interface CategoryPickerProps {
 const POPOVER_WIDTH = 208; // w-52
 
 export default function CategoryPicker({ categories, current, anchorRect, onPick, onClose }: CategoryPickerProps) {
-  const [style, setStyle] = useState<{ top: number; left: number; maxWidth?: number } | null>(null);
+  const [style, setStyle] = useState<{ top: number; left: number; placeAbove: boolean; maxWidth?: number } | null>(null);
 
   useLayoutEffect(() => {
-    const anchor = computePopoverAnchor(anchorRect, POPOVER_WIDTH, window.innerWidth);
-    // Prefer opening below the row; if there's no room, open above.
-    const spaceBelow = window.innerHeight - anchorRect.bottom - 8;
-    const above = spaceBelow < 180;
-    const top = above ? Math.max(8, anchorRect.top - 8 - 180) : anchorRect.bottom + 4;
-    const left =
-      anchor.side === "left"
-        ? Math.min(window.innerWidth - (anchor.maxWidth ?? POPOVER_WIDTH) - 8, anchorRect.left)
-        : Math.max(8, anchorRect.right - POPOVER_WIDTH);
-    setStyle({ top, left, maxWidth: anchor.maxWidth });
-  }, [anchorRect]);
+    const estimatedHeight = Math.min(360, categories.length * 40 + 12);
+    const updatePosition = () => {
+      const pos = computeFixedPopoverPosition(anchorRect, POPOVER_WIDTH, estimatedHeight);
+      setStyle({
+        top: pos.top,
+        left: pos.left,
+        placeAbove: pos.placeAbove,
+        maxWidth: pos.maxWidth,
+      });
+    };
+    updatePosition();
+
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", updatePosition);
+    vv?.addEventListener("scroll", updatePosition);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      vv?.removeEventListener("resize", updatePosition);
+      vv?.removeEventListener("scroll", updatePosition);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [anchorRect, categories.length]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,7 +57,11 @@ export default function CategoryPicker({ categories, current, anchorRect, onPick
       <div className="fixed inset-0 z-[80]" onClick={onClose} aria-hidden="true" />
       <div
         className="fixed z-[81] w-52 popup-panel rounded-xl p-1.5 animate-slide-up max-h-[60vh] overflow-y-auto overscroll-contain"
-        style={style}
+        style={{
+          top: style.top,
+          left: style.left,
+          maxWidth: style.maxWidth,
+        }}
         role="menu"
       >
         {categories.map((cat) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import EntryInput from "@/components/EntryInput";
 import TaDaTimeline from "@/components/TaDaTimeline";
 import DailySummary from "@/components/DailySummary";
@@ -273,6 +274,14 @@ export default function Home() {
     setPomodoroSheetOpen(true);
   };
 
+  const openCapture = useCallback((mode: "log" | "plan") => {
+    flushSync(() => setActiveInput(mode));
+    requestAnimationFrame(() => {
+      const targetId = mode === "log" ? "entry-input" : "brain-dump-textarea";
+      document.getElementById(targetId)?.focus({ preventScroll: true });
+    });
+  }, []);
+
   const handleCoachSnooze = async (id: string) => {
     await updateIntention(id, { snoozedUntil: tomorrowLocalDate() });
     window.dispatchEvent(new Event("entry-updated"));
@@ -326,7 +335,7 @@ export default function Home() {
       const cmdOrCtrl = e.metaKey || e.ctrlKey;
       if (cmdOrCtrl && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setActiveInput(e.shiftKey ? "plan" : "log");
+        openCapture(e.shiftKey ? "plan" : "log");
         return;
       }
       if (e.key === "Escape" && activeInput !== "none") {
@@ -336,7 +345,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeInput, selectedEntry, milestoneToShow]);
+  }, [activeInput, selectedEntry, milestoneToShow, openCapture]);
 
   const handleIntentionComplete = async (
     id: string,
@@ -437,7 +446,7 @@ export default function Home() {
             intentionCategories={intentionCategories}
             today={today}
             onFinishActive={handleFinishActive}
-            onOpenBrainDump={() => setActiveInput("plan")}
+            onOpenBrainDump={() => openCapture("plan")}
             onStartFocus={handleCoachStartFocus}
             onSnoozeIntention={handleCoachSnooze}
             onReframeIntention={handleCoachReframe}
@@ -533,16 +542,15 @@ export default function Home() {
 
       {/* ── Pinned input dock (fixed at the bottom, lifts above keyboard on mobile) ── */}
       <div
-        className="nav-dock fixed left-0 right-0 z-40 pointer-events-none"
-        style={{
-          bottom: "max(calc(env(safe-area-inset-bottom, 0px) + 0.75rem), calc(var(--kb, 0px) + 0.5rem))",
-        }}
+        className={`capture-dock fixed left-0 right-0 z-40 pointer-events-none ${
+          activeInput === "none" ? "keyboard-hide-on-keyboard" : ""
+        }`}
       >
         <div className={`${activeInput !== "none" ? "max-w-lg" : "max-w-2xl"} mx-auto px-4 pointer-events-auto`}>
           <div
             className={
               activeInput !== "none"
-                ? "glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] overflow-hidden p-4"
+                ? "capture-panel glass-panel rounded-2xl shadow-2xl border border-[var(--glass-border)] overflow-y-auto overscroll-contain p-4"
                 : ""
             }
           >
@@ -593,7 +601,7 @@ export default function Home() {
               <div className="flex items-center justify-center gap-2">
                 <div className="bg-[#1A1B2E] rounded-full p-1 flex items-center gap-1 shadow-2xl">
                   <button
-                    onClick={() => setActiveInput("log")}
+                    onClick={() => openCapture("log")}
                     className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-white text-[#1A1B2E] text-sm font-semibold active:scale-[0.97] transition-transform"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -604,7 +612,7 @@ export default function Home() {
                     <span className="hidden lg:inline text-[10px] opacity-60 ml-1">⌘K</span>
                   </button>
                   <button
-                    onClick={() => setActiveInput("plan")}
+                    onClick={() => openCapture("plan")}
                     className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-transparent text-white/75 text-sm font-medium active:scale-[0.97] transition-all hover:text-white"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

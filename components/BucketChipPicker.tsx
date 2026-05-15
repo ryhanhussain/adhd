@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { IntentionCategory } from "@/lib/categories";
 import { createPortal } from "react-dom";
-import { computePopoverAnchor, type PopoverAnchor } from "@/lib/popoverAnchor";
+import { computeFixedPopoverPosition } from "@/lib/popoverAnchor";
 
 interface BucketChipPickerProps {
   buckets: IntentionCategory[];
@@ -30,8 +30,7 @@ export default function BucketChipPicker({
 }: BucketChipPickerProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [anchor, setAnchor] = useState<PopoverAnchor>({ side: "right" });
-  const [pos, setPos] = useState<{ top: number; left: number; placeAbove: boolean } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; placeAbove: boolean; maxWidth?: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => setMounted(true), []);
@@ -52,23 +51,29 @@ export default function BucketChipPicker({
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const computedAnchor = computePopoverAnchor(rect, POPOVER_WIDTH, vw);
-    setAnchor(computedAnchor);
-
-    // Approximate height: N rows * ~36px + padding.
     const estimatedHeight = Math.min(320, buckets.length * 36 + 48);
-    const spaceBelow = vh - rect.bottom;
-    const placeAbove = spaceBelow < estimatedHeight + 8 && rect.top > estimatedHeight;
-    
-    let left = computedAnchor.side === "left" ? rect.left : rect.right - POPOVER_WIDTH;
-    if (left < 8) left = 8;
-    if (left + POPOVER_WIDTH > vw - 8) left = vw - POPOVER_WIDTH - 8;
-    
-    const top = placeAbove ? rect.top - 4 : rect.bottom + 4;
-    setPos({ top, left, placeAbove });
+    const updatePosition = () => {
+      if (!triggerRef.current) return;
+      setPos(
+        computeFixedPopoverPosition(
+          triggerRef.current.getBoundingClientRect(),
+          POPOVER_WIDTH,
+          estimatedHeight,
+        )
+      );
+    };
+    updatePosition();
+
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", updatePosition);
+    vv?.addEventListener("scroll", updatePosition);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      vv?.removeEventListener("resize", updatePosition);
+      vv?.removeEventListener("scroll", updatePosition);
+      window.removeEventListener("resize", updatePosition);
+    };
   }, [open, buckets.length]);
 
   const pick = (id: string | null) => {
@@ -120,7 +125,7 @@ export default function BucketChipPicker({
               zIndex: popoverZ,
               top: pos.top,
               left: pos.left,
-              transform: pos.placeAbove ? "translateY(-100%)" : undefined,
+              maxWidth: pos.maxWidth,
             }}
             onPointerDown={(e) => e.stopPropagation()}
           >

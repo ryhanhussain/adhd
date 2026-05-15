@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { addEntry, toLocalDateStr, timeStringToTimestampOnDate, clampToLocalDate, type EnergyLevel } from "@/lib/db";
 import { categorizeEntry } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
@@ -20,13 +20,18 @@ const PLACEHOLDERS = [
   "Taking a break to...",
 ];
 
+const TEXTAREA_MIN_HEIGHT = 80;
+const TEXTAREA_MAX_HEIGHT = 160;
+
 interface EntryInputProps {
   onEntryAdded?: () => void;
   /** YYYY-MM-DD target date for the logged entry. Defaults to today. */
   initialDate?: string;
+  /** Focus the text area as soon as the input mounts. Defaults to true. */
+  autoFocus?: boolean;
 }
 
-export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProps) {
+export default function EntryInput({ onEntryAdded, initialDate, autoFocus = true }: EntryInputProps) {
   const categories = useCategories();
   const [text, setText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,24 +43,27 @@ export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProp
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => textareaRef.current?.focus(), 250);
-    return () => clearTimeout(t);
-  }, []);
+  function resizeTextarea(ta = textareaRef.current) {
+    if (!ta) return;
+    ta.style.height = "auto";
+    const nextHeight = Math.min(TEXTAREA_MAX_HEIGHT, Math.max(TEXTAREA_MIN_HEIGHT, ta.scrollHeight));
+    ta.style.height = `${nextHeight}px`;
+    ta.style.overflowY = ta.scrollHeight > TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
+  }
+
+  useLayoutEffect(() => {
+    if (!autoFocus) return;
+    textareaRef.current?.focus({ preventScroll: true });
+  }, [autoFocus]);
+
+  useLayoutEffect(() => {
+    resizeTextarea();
+  }, [text]);
 
   const showToast = (msg: string) => {
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
     setToast(msg);
     toastTimeout.current = setTimeout(() => setToast(null), 3000);
-  };
-
-  const autoResize = () => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    requestAnimationFrame(() => {
-      ta.style.height = "auto";
-      ta.style.height = Math.max(80, ta.scrollHeight) + "px";
-    });
   };
 
   const handleSubmit = async () => {
@@ -106,7 +114,10 @@ export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProp
 
       setText("");
       setSelectedEnergy(null);
-      if (textareaRef.current) textareaRef.current.style.height = "80px";
+      if (textareaRef.current) {
+        textareaRef.current.style.height = `${TEXTAREA_MIN_HEIGHT}px`;
+        textareaRef.current.style.overflowY = "hidden";
+      }
       setShowSuccess(isOngoing ? "timer" : "logged");
       setTimeout(() => setShowSuccess(false), 2000);
       onEntryAdded?.();
@@ -134,11 +145,11 @@ export default function EntryInput({ onEntryAdded, initialDate }: EntryInputProp
           value={text}
           onChange={(e) => {
             setText(e.target.value);
-            autoResize();
+            resizeTextarea(e.currentTarget);
           }}
           placeholder={placeholder}
-          className="w-full rounded-xl glass-panel px-4 py-3 text-sm resize-none focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_20px_var(--color-accent-soft)] transition-all duration-300 placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
-          style={{ minHeight: 80 }}
+          className="capture-textarea w-full rounded-xl glass-panel px-4 py-3 text-sm resize-none focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_20px_var(--color-accent-soft)] transition-colors duration-150 placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
+          style={{ minHeight: TEXTAREA_MIN_HEIGHT, maxHeight: TEXTAREA_MAX_HEIGHT, overflowY: "hidden" }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();

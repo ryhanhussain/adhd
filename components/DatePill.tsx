@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toLocalDateStr } from "@/lib/db";
+import { computeFixedPopoverPosition } from "@/lib/popoverAnchor";
 
 interface DatePillProps {
   /** YYYY-MM-DD */
@@ -54,7 +55,7 @@ export default function DatePill({
   compact = false,
 }: DatePillProps) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number; placeAbove: boolean } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; placeAbove: boolean; maxWidth?: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -80,17 +81,29 @@ export default function DatePill({
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const spaceBelow = vh - rect.bottom;
-    const placeAbove = spaceBelow < estimatedPopoverHeight + POPOVER_MARGIN && rect.top > estimatedPopoverHeight;
-    let left = rect.left;
-    if (left + POPOVER_WIDTH > vw - POPOVER_MARGIN) {
-      left = Math.max(POPOVER_MARGIN, vw - POPOVER_WIDTH - POPOVER_MARGIN);
-    }
-    const top = placeAbove ? rect.top - POPOVER_MARGIN : rect.bottom + 4;
-    setPos({ top, left, placeAbove });
+    const updatePosition = () => {
+      if (!triggerRef.current) return;
+      setPos(
+        computeFixedPopoverPosition(
+          triggerRef.current.getBoundingClientRect(),
+          POPOVER_WIDTH,
+          estimatedPopoverHeight,
+          POPOVER_MARGIN,
+        )
+      );
+    };
+    updatePosition();
+
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", updatePosition);
+    vv?.addEventListener("scroll", updatePosition);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      vv?.removeEventListener("resize", updatePosition);
+      vv?.removeEventListener("scroll", updatePosition);
+      window.removeEventListener("resize", updatePosition);
+    };
   }, [open, estimatedPopoverHeight]);
 
   const options: { value: string; label: string }[] = [];
@@ -153,7 +166,7 @@ export default function DatePill({
               zIndex: popoverZ,
               top: pos.top,
               left: pos.left,
-              transform: pos.placeAbove ? "translateY(-100%)" : undefined,
+              maxWidth: pos.maxWidth,
             }}
             onPointerDown={(e) => e.stopPropagation()}
           >

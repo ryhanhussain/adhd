@@ -42,6 +42,11 @@
      without overhang. */
   --nav-clearance: env(safe-area-inset-bottom, 0px);
   --dock-clearance: calc(6.5rem + env(safe-area-inset-bottom));
+  --kb: 0px;
+  --vvw: 100vw;
+  --vvh: 100vh;
+  --vv-offset-top: 0px;
+  --vv-offset-left: 0px;
 
   --spring: cubic-bezier(0.25, 1, 0.5, 1);
   --spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -176,27 +181,56 @@ html.dark .gradient-mesh {
 }
 
 .popup-sheet {
+  --sheet-drag-y: 0px;
+  transform: translate3d(0, calc(var(--sheet-drag-y, 0px) - var(--kb, 0px)), 0);
   box-shadow:
     0 -10px 40px rgba(0, 0, 0, 0.2),
     var(--glass-shadow);
 }
 
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
 /* On mobile browsers that support backdrop-filter, reduce it further for performance */
 @media (max-width: 768px) {
+  html, body {
+    background-attachment: scroll;
+  }
+
   .glass-panel {
-    background: color-mix(in srgb, var(--glass-bg) 88%, var(--color-surface));
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    background: color-mix(in srgb, var(--color-popup-solid) 88%, var(--glass-bg));
+    backdrop-filter: blur(8px) saturate(135%);
+    -webkit-backdrop-filter: blur(8px) saturate(135%);
   }
 
   .glass-control {
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    background: color-mix(in srgb, var(--color-popup-solid) 82%, transparent);
+    backdrop-filter: blur(6px) saturate(130%);
+    -webkit-backdrop-filter: blur(6px) saturate(130%);
   }
 
   .popup-panel {
-    backdrop-filter: blur(10px) saturate(135%);
-    -webkit-backdrop-filter: blur(10px) saturate(135%);
+    background: color-mix(in srgb, var(--color-popup-solid) 94%, transparent);
+    backdrop-filter: blur(6px) saturate(120%);
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+  }
+
+  .capture-panel,
+  .capture-textarea {
+    background: color-mix(in srgb, var(--color-popup-solid) 94%, transparent);
+    backdrop-filter: blur(4px) saturate(115%);
+    -webkit-backdrop-filter: blur(4px) saturate(115%);
+  }
+
+  .capture-textarea {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+
+  .modal-backdrop {
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
   }
 }
 
@@ -216,14 +250,24 @@ html.dark .gradient-mesh {
 /* Clearance utilities for bottom-pinned overlays. Always prefer these over
    raw `bottom-20` / `pb-28` so changes to navbar height propagate centrally. */
 .above-nav { bottom: var(--nav-clearance); }
-.above-dock { bottom: var(--dock-clearance); }
+.above-dock { bottom: calc(var(--dock-clearance) + var(--kb, 0px)); }
 .pb-nav { padding-bottom: var(--nav-clearance); }
 .pb-dock { padding-bottom: var(--dock-clearance); }
 
+.capture-dock {
+  bottom: max(calc(env(safe-area-inset-bottom, 0px) + 0.75rem), 0.5rem);
+  transform: translate3d(0, calc(0px - var(--kb, 0px)), 0);
+  will-change: transform;
+}
+
+.capture-panel {
+  max-height: calc(var(--vvh, 100vh) - env(safe-area-inset-bottom, 0px) - 1.5rem);
+}
+
 /* When the on-screen keyboard is open (tracked by KeyboardInsetProvider),
-   hide bottom-pinned chrome so it doesn't sit behind the keyboard. The
-   input dock itself lifts above the keyboard via --kb in its bottom calc. */
-html[data-keyboard="open"] .nav-dock {
+   hide passive bottom-pinned chrome. Active capture surfaces remain visible
+   and lift above the keyboard through transform-based --kb movement. */
+html[data-keyboard="open"] .keyboard-hide-on-keyboard {
   opacity: 0;
   pointer-events: none;
 }
@@ -319,11 +363,11 @@ h1, h2, h3 {
 }
 
 @keyframes sheetUp {
-  from { transform: translate3d(0, 100%, 0); }
-  to { transform: translate3d(0, 0, 0); }
+  from { transform: translate3d(0, calc(100% + var(--sheet-drag-y, 0px) - var(--kb, 0px)), 0); }
+  to { transform: translate3d(0, calc(var(--sheet-drag-y, 0px) - var(--kb, 0px)), 0); }
 }
 .animate-sheet-up {
-  animation: sheetUp 0.35s var(--spring) forwards;
+  animation: sheetUp 0.35s var(--spring);
   will-change: transform;
 }
 

@@ -84,7 +84,7 @@ export default function LoginModal() {
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-sheet-fade"
+        className="absolute inset-0 bg-black/50 modal-backdrop animate-sheet-fade"
         aria-hidden="true"
       />
 

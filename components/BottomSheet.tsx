@@ -51,19 +51,19 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
 
     document.addEventListener("keydown", onKeyDown);
 
-    const t = setTimeout(() => {
+    const raf = requestAnimationFrame(() => {
       if (!sheetRef.current) return;
       const first = sheetRef.current.querySelector<HTMLElement>(
         'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
-      first?.focus();
-    }, 50);
+      first?.focus({ preventScroll: true });
+    });
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = "";
-      clearTimeout(t);
-      previouslyFocused.current?.focus?.();
+      cancelAnimationFrame(raf);
+      previouslyFocused.current?.focus?.({ preventScroll: true });
     };
   }, [open, onClose]);
 
@@ -85,10 +85,16 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
     touchStartY.current = null;
   };
 
+  const sheetStyle = {
+    "--sheet-drag-y": `${dragY}px`,
+    maxHeight: "min(85dvh, calc(var(--vvh, 100vh) - 2rem))",
+    ...(dragY > 0 ? { transition: "none" } : {}),
+  } as React.CSSProperties & { "--sheet-drag-y": string };
+
   return createPortal(
     <div className="fixed inset-0 z-[60]">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-sheet-fade"
+        className="absolute inset-0 bg-black/50 modal-backdrop animate-sheet-fade"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -97,14 +103,8 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className="absolute left-0 right-0 w-full max-w-lg mx-auto popup-panel popup-sheet border-b-0 rounded-t-[2rem] overflow-y-auto overscroll-contain animate-sheet-up pb-nav"
-        style={{
-          bottom: "var(--kb, 0px)",
-          maxHeight: "min(85vh, calc(100vh - var(--kb, 0px) - 2rem))",
-          ...(dragY > 0
-            ? { transform: `translate3d(0, ${dragY}px, 0)`, transition: "none" }
-            : { transition: "transform 0.5s var(--spring-bouncy), bottom 0.2s ease, max-height 0.2s ease" }),
-        }}
+        className="absolute left-0 right-0 bottom-0 w-full max-w-lg mx-auto popup-panel popup-sheet border-b-0 rounded-t-[2rem] overflow-y-auto overscroll-contain animate-sheet-up pb-nav"
+        style={sheetStyle}
       >
         <div
           className="flex justify-center pt-4 pb-3 cursor-grab touch-none relative"

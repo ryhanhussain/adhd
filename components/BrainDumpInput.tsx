@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import type { ParsedIntention, GeminiEnergyLevel } from "@/lib/gemini";
 import type { IntentionCategory } from "@/lib/categories";
 import BucketChipPicker from "./BucketChipPicker";
@@ -13,6 +13,8 @@ interface BrainDumpInputProps {
   onClose: () => void;
   /** Current intention buckets; forwarded to the Gemini prompt for dynamic classification. */
   intentionCategories?: IntentionCategory[];
+  /** Focus the text area as soon as the input mounts. Defaults to true. */
+  autoFocus?: boolean;
 }
 
 interface DraftItem {
@@ -21,10 +23,14 @@ interface DraftItem {
   energy: GeminiEnergyLevel | null;
 }
 
+const TEXTAREA_MIN_HEIGHT = 80;
+const TEXTAREA_MAX_HEIGHT = 176;
+
 export default function BrainDumpInput({
   onIntentionsParsed,
   onClose,
   intentionCategories,
+  autoFocus = true,
 }: BrainDumpInputProps) {
   const [transcript, setTranscript] = useState("");
   const [isParsing, setIsParsing] = useState(false);
@@ -32,23 +38,26 @@ export default function BrainDumpInput({
   const [drafts, setDrafts] = useState<DraftItem[] | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => textareaRef.current?.focus(), 250);
-    return () => clearTimeout(t);
-  }, []);
+  const resizeTextarea = (ta = textareaRef.current) => {
+    if (!ta) return;
+    ta.style.height = "auto";
+    const nextHeight = Math.min(TEXTAREA_MAX_HEIGHT, Math.max(TEXTAREA_MIN_HEIGHT, ta.scrollHeight));
+    ta.style.height = `${nextHeight}px`;
+    ta.style.overflowY = ta.scrollHeight > TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
+  };
+
+  useLayoutEffect(() => {
+    if (!autoFocus || drafts) return;
+    textareaRef.current?.focus({ preventScroll: true });
+  }, [autoFocus, drafts]);
+
+  useLayoutEffect(() => {
+    if (!drafts) resizeTextarea();
+  }, [transcript, drafts]);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
-  };
-
-  const autoResize = () => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    requestAnimationFrame(() => {
-      ta.style.height = "auto";
-      ta.style.height = Math.max(80, ta.scrollHeight) + "px";
-    });
   };
 
   const handleParse = async () => {
@@ -192,11 +201,11 @@ export default function BrainDumpInput({
           value={transcript}
           onChange={(e) => {
             setTranscript(e.target.value);
-            autoResize();
+            resizeTextarea(e.currentTarget);
           }}
           placeholder="Type or speak your brain dump — anything you want to track..."
-          className="w-full rounded-xl glass-panel px-4 py-3 text-sm resize-none focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_12px_var(--color-accent-soft)] transition-all duration-200 placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
-          style={{ minHeight: 80, transition: "height 0.15s ease" }}
+          className="capture-textarea w-full rounded-xl glass-panel px-4 py-3 text-sm resize-none focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_12px_var(--color-accent-soft)] transition-colors duration-150 placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30"
+          style={{ minHeight: TEXTAREA_MIN_HEIGHT, maxHeight: TEXTAREA_MAX_HEIGHT, overflowY: "hidden" }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();

@@ -10,33 +10,51 @@ import { useEffect } from "react";
  */
 export default function KeyboardInsetProvider() {
   useEffect(() => {
-    const vv = window.visualViewport;
     const root = document.documentElement;
-    if (!vv) {
-      root.style.setProperty("--kb", "0px");
-      return;
-    }
+    const vv = window.visualViewport;
 
     let raf = 0;
+    const readViewport = () => {
+      const currentVv = window.visualViewport;
+      const width = Math.round(currentVv?.width ?? window.innerWidth);
+      const height = Math.round(currentVv?.height ?? window.innerHeight);
+      const offsetTop = Math.round(currentVv?.offsetTop ?? 0);
+      const offsetLeft = Math.round(currentVv?.offsetLeft ?? 0);
+      const rawInset = currentVv
+        ? window.innerHeight - currentVv.height - currentVv.offsetTop
+        : 0;
+      const inset = Math.max(0, Math.round(rawInset));
+      const keyboardInset = inset > 20 ? inset : 0;
+
+      root.style.setProperty("--kb", `${keyboardInset}px`);
+      root.style.setProperty("--vvw", `${width}px`);
+      root.style.setProperty("--vvh", `${height}px`);
+      root.style.setProperty("--vv-offset-top", `${offsetTop}px`);
+      root.style.setProperty("--vv-offset-left", `${offsetLeft}px`);
+      root.dataset.keyboard = keyboardInset > 40 ? "open" : "closed";
+    };
+
     const update = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-        root.style.setProperty("--kb", `${inset}px`);
-        root.dataset.keyboard = inset > 40 ? "open" : "closed";
-      });
+      raf = requestAnimationFrame(readViewport);
     };
 
     update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
+    vv?.addEventListener("resize", update);
+    vv?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
     window.addEventListener("orientationchange", update);
+    window.addEventListener("focusin", update);
+    window.addEventListener("focusout", update);
 
     return () => {
       cancelAnimationFrame(raf);
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
+      vv?.removeEventListener("resize", update);
+      vv?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
       window.removeEventListener("orientationchange", update);
+      window.removeEventListener("focusin", update);
+      window.removeEventListener("focusout", update);
     };
   }, []);
 
