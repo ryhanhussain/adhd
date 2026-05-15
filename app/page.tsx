@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
+import { useRouter } from "next/navigation";
 import EntryInput from "@/components/EntryInput";
 import TaDaTimeline from "@/components/TaDaTimeline";
 import DailySummary from "@/components/DailySummary";
@@ -13,7 +14,6 @@ import BrainDumpInput from "@/components/BrainDumpInput";
 import EmptyHome from "@/components/EmptyHome";
 import ActiveTimerCard from "@/components/ActiveTimerCard";
 import PomodoroCard from "@/components/PomodoroCard";
-import PomodoroSheet from "@/components/PomodoroSheet";
 import HabitsCard from "@/components/HabitsCard";
 import HomeTabs, { type HomeTab } from "@/components/home/HomeTabs";
 import BucketGrid from "@/components/home/BucketGrid";
@@ -78,6 +78,7 @@ function formatHeadline(d: Date): string {
 }
 
 export default function Home() {
+  const router = useRouter();
   const categories = useCategories();
   const intentionCategories = useIntentionCategories();
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -86,8 +87,6 @@ export default function Home() {
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
   const [milestoneToShow, setMilestoneToShow] = useState<MilestoneInfo | null>(null);
   const [activeInput, setActiveInput] = useState<"none" | "log" | "plan">("none");
-  const [pomodoroSheetOpen, setPomodoroSheetOpen] = useState(false);
-  const [pomodoroInitialIntentionId, setPomodoroInitialIntentionId] = useState<string | null>(null);
   const [hasPomodoro, setHasPomodoro] = useState(false);
   const [focusedIntentionId, setFocusedIntentionId] = useState<string | null>(null);
   const [intentions, setIntentions] = useState<Intention[]>([]);
@@ -270,8 +269,7 @@ export default function Home() {
   };
 
   const handleCoachStartFocus = (intentionId?: string | null) => {
-    setPomodoroInitialIntentionId(intentionId ?? null);
-    setPomodoroSheetOpen(true);
+    router.push(intentionId ? `/focus?task=${encodeURIComponent(intentionId)}` : "/focus?start=burst");
   };
 
   const openCapture = useCallback((mode: "log" | "plan") => {
@@ -625,9 +623,9 @@ export default function Home() {
                   </button>
                 </div>
                 <button
-                  onClick={() => setPomodoroSheetOpen(true)}
+                  onClick={() => router.push("/focus")}
                   aria-label="Start a focus session"
-                  className="flex items-center justify-center w-12 h-12 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-2xl shadow-[var(--color-accent)]/30 active:scale-[0.95] transition-transform flex-shrink-0"
+                  className="flex items-center justify-center w-12 h-12 rounded-full bg-[image:var(--color-accent-gradient)] text-[var(--color-on-accent)] shadow-2xl shadow-[var(--color-accent)]/25 active:scale-[0.95] transition-transform flex-shrink-0"
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <circle cx="12" cy="13" r="8" />
@@ -650,17 +648,6 @@ export default function Home() {
         onSave={handleSave}
         onDelete={handleDelete}
       />
-
-      <PomodoroSheet
-        open={pomodoroSheetOpen}
-        onClose={() => {
-          setPomodoroSheetOpen(false);
-          setPomodoroInitialIntentionId(null);
-        }}
-        hasActiveTimer={!!activeEntry}
-        initialIntentionId={pomodoroInitialIntentionId}
-      />
-
       {toast && (
         <Toast
           message={toast.message}

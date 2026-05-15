@@ -4,8 +4,8 @@
   "description": "A frictionless second brain for brain dumps, interstitial journaling, and quiet time tracking.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B0C16",
-  "theme_color": "#5e43f3",
+  "background_color": "#FDE7E1",
+  "theme_color": "#F472B6",
   "orientation": "portrait",
   "icons": [
     {

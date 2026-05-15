@@ -1,20 +1,27 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deleteEntry, updateEntry, updateIntention } from "@/lib/db";
 import {
-  clearPomodoroState,
   formatCountdown,
   getElapsedMs,
   getPomodoroState,
   getRemainingMs,
   isPaused,
+  markPomodoroNotified,
   pausePomodoro,
   POMODORO_EVENT,
   resumePomodoro,
   type PomodoroState,
 } from "@/lib/pomodoro";
-import { notifyPomodoroComplete } from "@/lib/notifications";
+import {
+  notifyPomodoroComplete,
+  playPomodoroSound,
+} from "@/lib/notifications";
+import {
+  cancelPomodoroSession,
+  finishPomodoroSession,
+  savePomodoroWithoutCompleting,
+} from "@/lib/pomodoroActions";
 import { confettiBurst } from "@/lib/confetti";
 import { getEnergyLabel } from "@/lib/energy";
 import type { EnergyLevel } from "@/lib/db";
@@ -58,7 +65,6 @@ export default function PomodoroCard({
   const [now, setNow] = useState(Date.now());
   const [done, setDone] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const notifiedRef = useRef(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -79,8 +85,9 @@ export default function PomodoroCard({
     if (!state || done) return;
     const remaining = getRemainingMs(state, now);
     if (remaining <= 0 && state.pausedAt == null) {
-      if (!notifiedRef.current) {
-        notifiedRef.current = true;
+      if (!state.notifiedAt) {
+        markPomodoroNotified(state);
+        playPomodoroSound("complete");
         notifyPomodoroComplete(state.intentionText);
       }
       setDone(true);
@@ -100,59 +107,46 @@ export default function PomodoroCard({
   const progress = Math.min(1, Math.max(0, 1 - remaining / state.targetMs));
   const isBurst = state.mode === "burst";
 
-  const reset = () => {
-    notifiedRef.current = false;
-    setDone(false);
-    setConfirmCancel(false);
-    clearPomodoroState();
-  };
-
   const handleTick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
 
-    const finishedAt = Date.now();
-    await updateEntry(state.entryId, {
-      endTime: finishedAt,
-      summary: state.intentionText,
-    });
-    if (!isBurst && state.intentionId) {
-      await updateIntention(state.intentionId, {
-        completed: true,
-        completedAt: finishedAt,
-        entryId: state.entryId,
-      });
-    }
-
     confettiBurst(x, y);
-    reset();
-    window.dispatchEvent(new Event("entry-updated"));
+    await finishPomodoroSession(state);
+    setDone(false);
+    setConfirmCancel(false);
   };
 
   const handleKeepOpen = async () => {
-    await updateEntry(state.entryId, { endTime: Date.now() });
-    reset();
-    window.dispatchEvent(new Event("entry-updated"));
+    await savePomodoroWithoutCompleting(state);
+    setDone(false);
+    setConfirmCancel(false);
   };
 
   const handleCancel = async () => {
-    await deleteEntry(state.entryId);
-    reset();
-    window.dispatchEvent(new Event("entry-updated"));
+    await cancelPomodoroSession(state);
+    setDone(false);
+    setConfirmCancel(false);
   };
 
   const handleFinishEarly = () => {
-    if (!notifiedRef.current) {
-      notifiedRef.current = true;
+    if (!state.notifiedAt) {
+      markPomodoroNotified(state);
+      playPomodoroSound("complete");
       notifyPomodoroComplete(state.intentionText);
     }
     setDone(true);
   };
 
   const togglePause = () => {
-    if (paused) resumePomodoro();
-    else pausePomodoro();
+    if (paused) {
+      resumePomodoro();
+      playPomodoroSound("resume");
+    } else {
+      pausePomodoro();
+      playPomodoroSound("pause");
+    }
   };
 
   if (done) {
@@ -208,7 +202,7 @@ export default function PomodoroCard({
 
     return (
       <div
-        className={`bg-[#15172A]/70 backdrop-blur-xl border border-white/10 shadow-2xl text-white rounded-2xl p-5 flex flex-col gap-3 animate-fade-in ${className ?? ""}`}
+        className={`bg-[#1A1640]/75 backdrop-blur-xl border border-white/15 shadow-2xl text-white rounded-2xl p-5 flex flex-col gap-3 animate-fade-in ${className ?? ""}`}
       >
         <div className="flex items-center gap-2">
           <span
@@ -219,7 +213,7 @@ export default function PomodoroCard({
             {paused ? "Paused" : isBurst ? "Just started" : "In focus"}
           </span>
         </div>
-        <p className="text-5xl font-black tabular-nums tracking-tight text-center leading-none">
+        <p className="text-5xl font-black tabular-nums text-center leading-none">
           {formatCountdown(remaining)}
         </p>
         <div className="text-center">
@@ -232,7 +226,7 @@ export default function PomodoroCard({
         </div>
         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden" aria-hidden="true">
           <div
-            className="h-full bg-gradient-to-r from-pink-400 to-purple-400 transition-[width] duration-500 ease-linear"
+            className="h-full bg-[image:var(--color-accent-gradient)] transition-[width] duration-500 ease-linear"
             style={{ width: `${progress * 100}%` }}
           />
         </div>

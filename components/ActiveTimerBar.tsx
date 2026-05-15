@@ -54,7 +54,7 @@ export default function ActiveTimerBar() {
   };
 
   // Hide on home page (it has its own active card) or if no timer
-  if (pathname === "/" || !activeEntry) return null;
+  if (pathname === "/" || pathname.startsWith("/focus") || !activeEntry) return null;
 
   const elapsed = now - activeEntry.startTime;
   const displayText = activeEntry.summary || activeEntry.text;

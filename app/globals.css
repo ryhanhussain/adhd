@@ -5,35 +5,35 @@
 }
 
 :root {
-  /* Day Theme: iOS frosted glass over a pastel wash */
-  --color-bg: #F3EAFF;
-  --color-surface: rgba(255, 255, 255, 0.62);
-  --color-surface-elevated: rgba(255, 255, 255, 0.76);
-  --color-popover-surface: rgba(255, 255, 255, 0.985);
+  /* Day Theme: warm frosted glass from the focus-room reference */
+  --color-bg: #FDE7E1;
+  --color-surface: rgba(255, 255, 255, 0.45);
+  --color-surface-elevated: rgba(255, 255, 255, 0.62);
+  --color-popover-surface: rgba(255, 255, 255, 0.97);
   --color-popup-solid: #ffffff;
-  --color-text: #111113;
-  --color-text-muted: #3E3E47;
-  --color-border: rgba(255, 255, 255, 0.58);
-  --app-base-gradient: linear-gradient(180deg, #f3eaff 0%, #e6f0ff 100%);
+  --color-text: #1A1640;
+  --color-text-muted: rgba(26, 22, 64, 0.55);
+  --color-border: rgba(255, 255, 255, 0.6);
+  --app-base-gradient: linear-gradient(180deg, #fde7e1 0%, #fdf4d8 100%);
   --app-mesh-gradient:
-    radial-gradient(at 12% 8%, rgb(255, 209, 224) 0%, rgba(255, 209, 224, 0) 42%),
-    radial-gradient(at 88% 14%, rgb(196, 217, 255) 0%, rgba(196, 217, 255, 0) 45%),
-    radial-gradient(at 70% 90%, rgb(255, 233, 179) 0%, rgba(255, 233, 179, 0) 40%),
-    radial-gradient(at 10% 95%, rgb(199, 240, 216) 0%, rgba(199, 240, 216, 0) 38%);
+    radial-gradient(60% 50% at 50% 32%, rgb(255, 224, 184) 0%, rgba(255, 224, 184, 0) 60%),
+    radial-gradient(50% 40% at 18% 78%, rgb(253, 200, 231) 0%, rgba(253, 200, 231, 0) 65%),
+    radial-gradient(55% 45% at 85% 80%, rgb(197, 219, 253) 0%, rgba(197, 219, 253, 0) 65%),
+    radial-gradient(70% 55% at 50% 100%, rgb(253, 244, 216) 0%, rgba(253, 244, 216, 0) 65%);
 
-  /* Accent: Vibrant Indigo */
-  --color-accent: #5e43f3;
-  --color-accent-soft: rgba(94, 67, 243, 0.12);
+  --color-accent: #7C3AED;
+  --color-accent-gradient: linear-gradient(135deg, #F472B6, #FBBF24);
+  --color-accent-soft: rgba(124, 58, 237, 0.15);
   --color-on-accent: #FFFFFF;
 
-  --color-danger: #ef4444;
+  --color-danger: #e11d48;
   --color-success: #10b981;
 
   /* Glassmorphism tokens from the frosted reference. */
-  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg: rgba(255, 255, 255, 0.45);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow:
-    0 20px 60px -20px rgba(60, 40, 120, 0.25),
+    0 24px 70px -24px rgba(40, 20, 80, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
   /* Layout clearance for the floating input dock. The bottom navbar has been
@@ -54,32 +54,32 @@
 
 @media (prefers-color-scheme: dark) {
   html:not(.light) {
-    /* Night Theme: darker frosted glass with the same color geography */
-    --color-bg: #0B0C16;
-    --color-surface: rgba(20, 21, 35, 0.72);
-    --color-surface-elevated: rgba(29, 30, 48, 0.82);
-    --color-popover-surface: rgba(29, 30, 48, 0.985);
-    --color-popup-solid: #1d1e30;
-    --color-text: #F3F4F6;
-    --color-text-muted: #D8DCE8;
-    --color-border: rgba(255, 255, 255, 0.12);
-    --app-base-gradient: linear-gradient(180deg, #171026 0%, #071423 100%);
+    /* Night Theme: warm dim version of the same focus-room palette */
+    --color-bg: #171026;
+    --color-surface: rgba(38, 27, 48, 0.72);
+    --color-surface-elevated: rgba(48, 34, 60, 0.84);
+    --color-popover-surface: rgba(48, 34, 60, 0.985);
+    --color-popup-solid: #30223c;
+    --color-text: #FFF7F2;
+    --color-text-muted: rgba(255, 247, 242, 0.68);
+    --color-border: rgba(255, 255, 255, 0.14);
+    --app-base-gradient: linear-gradient(180deg, #171026 0%, #2b1830 100%);
     --app-mesh-gradient:
-      radial-gradient(at 12% 8%, rgba(168, 96, 144, 0.48) 0%, rgba(168, 96, 144, 0) 42%),
-      radial-gradient(at 88% 14%, rgba(112, 132, 210, 0.42) 0%, rgba(112, 132, 210, 0) 45%),
-      radial-gradient(at 70% 90%, rgba(160, 132, 96, 0.3) 0%, rgba(160, 132, 96, 0) 40%),
-      radial-gradient(at 10% 95%, rgba(82, 142, 110, 0.3) 0%, rgba(82, 142, 110, 0) 38%);
+      radial-gradient(60% 50% at 50% 32%, rgba(255, 224, 184, 0.2) 0%, rgba(255, 224, 184, 0) 60%),
+      radial-gradient(50% 40% at 18% 78%, rgba(244, 114, 182, 0.32) 0%, rgba(244, 114, 182, 0) 65%),
+      radial-gradient(55% 45% at 85% 80%, rgba(197, 219, 253, 0.2) 0%, rgba(197, 219, 253, 0) 65%),
+      radial-gradient(70% 55% at 50% 100%, rgba(251, 191, 36, 0.16) 0%, rgba(251, 191, 36, 0) 65%);
 
-    /* Accent: Neon Violet */
-    --color-accent: #8b5cf6;
-    --color-accent-soft: rgba(139, 92, 246, 0.15);
+    --color-accent: #F472B6;
+    --color-accent-gradient: linear-gradient(135deg, #F472B6, #FBBF24);
+    --color-accent-soft: rgba(244, 114, 182, 0.18);
     --color-on-accent: #FFFFFF;
 
     --color-danger: #fb7185;
     --color-success: #34d399;
 
-    --glass-bg: rgba(20, 21, 35, 0.62);
-    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-bg: rgba(38, 27, 48, 0.62);
+    --glass-border: rgba(255, 255, 255, 0.14);
     --glass-shadow:
       0 22px 70px -24px rgba(0, 0, 0, 0.78),
       inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -87,30 +87,31 @@
 }
 
 html.dark {
-  --color-bg: #0B0C16;
-  --color-surface: rgba(20, 21, 35, 0.72);
-  --color-surface-elevated: rgba(29, 30, 48, 0.82);
-  --color-popover-surface: rgba(29, 30, 48, 0.985);
-  --color-popup-solid: #1d1e30;
-  --color-text: #F3F4F6;
-  --color-text-muted: #D8DCE8;
-  --color-border: rgba(255, 255, 255, 0.12);
-  --app-base-gradient: linear-gradient(180deg, #171026 0%, #071423 100%);
+  --color-bg: #171026;
+  --color-surface: rgba(38, 27, 48, 0.72);
+  --color-surface-elevated: rgba(48, 34, 60, 0.84);
+  --color-popover-surface: rgba(48, 34, 60, 0.985);
+  --color-popup-solid: #30223c;
+  --color-text: #FFF7F2;
+  --color-text-muted: rgba(255, 247, 242, 0.68);
+  --color-border: rgba(255, 255, 255, 0.14);
+  --app-base-gradient: linear-gradient(180deg, #171026 0%, #2b1830 100%);
   --app-mesh-gradient:
-    radial-gradient(at 12% 8%, rgba(168, 96, 144, 0.48) 0%, rgba(168, 96, 144, 0) 42%),
-    radial-gradient(at 88% 14%, rgba(112, 132, 210, 0.42) 0%, rgba(112, 132, 210, 0) 45%),
-    radial-gradient(at 70% 90%, rgba(160, 132, 96, 0.3) 0%, rgba(160, 132, 96, 0) 40%),
-    radial-gradient(at 10% 95%, rgba(82, 142, 110, 0.3) 0%, rgba(82, 142, 110, 0) 38%);
+    radial-gradient(60% 50% at 50% 32%, rgba(255, 224, 184, 0.2) 0%, rgba(255, 224, 184, 0) 60%),
+    radial-gradient(50% 40% at 18% 78%, rgba(244, 114, 182, 0.32) 0%, rgba(244, 114, 182, 0) 65%),
+    radial-gradient(55% 45% at 85% 80%, rgba(197, 219, 253, 0.2) 0%, rgba(197, 219, 253, 0) 65%),
+    radial-gradient(70% 55% at 50% 100%, rgba(251, 191, 36, 0.16) 0%, rgba(251, 191, 36, 0) 65%);
 
-  --color-accent: #8b5cf6;
-  --color-accent-soft: rgba(139, 92, 246, 0.15);
+  --color-accent: #F472B6;
+  --color-accent-gradient: linear-gradient(135deg, #F472B6, #FBBF24);
+  --color-accent-soft: rgba(244, 114, 182, 0.18);
   --color-on-accent: #FFFFFF;
 
   --color-danger: #fb7185;
   --color-success: #34d399;
 
-  --glass-bg: rgba(20, 21, 35, 0.62);
-  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-bg: rgba(38, 27, 48, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.14);
   --glass-shadow:
     0 22px 70px -24px rgba(0, 0, 0, 0.78),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -304,6 +305,45 @@ html[data-keyboard="open"] .keyboard-hide-on-keyboard {
   font-variant-numeric: tabular-nums;
 }
 
+.focus-orb-wrap {
+  --focus-progress: 0deg;
+  width: min(78vw, 22rem);
+  aspect-ratio: 1;
+  padding: 0.45rem;
+  border-radius: 9999px;
+  background:
+    conic-gradient(from -90deg, #F472B6 0deg, #FBBF24 var(--focus-progress), rgba(255, 255, 255, 0.55) var(--focus-progress), rgba(255, 255, 255, 0.55) 360deg);
+  box-shadow:
+    0 28px 90px -36px rgba(40, 20, 80, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.focus-orb {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.2) 52%, rgba(255, 255, 255, 0.08) 72%),
+    linear-gradient(135deg, #F472B6, #FBBF24);
+  box-shadow:
+    inset 0 0 42px rgba(255, 255, 255, 0.42),
+    0 24px 70px -22px rgba(244, 114, 182, 0.6);
+}
+
+.focus-orb-wrap.is-running .focus-orb {
+  animation: focusOrbBreathe 5s ease-in-out infinite;
+}
+
+@keyframes focusOrbBreathe {
+  0%, 100% { transform: scale(0.985); }
+  50% { transform: scale(1.035); }
+}
+
 /* ──────────────────────────────────────────────────────────────────
    Design-system scales. Prefer these over ad-hoc Tailwind sizes.
 
@@ -333,7 +373,7 @@ html[data-keyboard="open"] .keyboard-hide-on-keyboard {
 .btn-lg { height: 3rem; }
 
 h1, h2, h3 {
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
 }
 
 /* Advanced Animations */
@@ -564,7 +604,8 @@ h1, h2, h3 {
   .animate-streak-bounce,
   .animate-bucket-flash,
   .animate-success-flash,
-  .animate-check-draw {
+  .animate-check-draw,
+  .focus-orb-wrap.is-running .focus-orb {
     animation: none !important;
   }
 
