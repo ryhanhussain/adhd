@@ -52,8 +52,8 @@ interface BucketCardProps {
  *   │  ◯ task three
  *   └─────────────────────────┘
  *
- * Tinted background uses `color-mix` so the wash is consistent across all
- * eight palette colors and adapts to light/dark via `var(--color-surface)`.
+ * Tinted background uses `color-mix` so each bucket reads as a soft pastel
+ * container while the task rows remain solid white pills for contrast.
  */
 export default function BucketCard({
   sectionKey,
@@ -79,19 +79,21 @@ export default function BucketCard({
   const count = items.length;
 
   const cardStyle: React.CSSProperties = {
-    backgroundColor: `color-mix(in srgb, ${color} 7%, var(--glass-bg))`,
-    borderColor: `color-mix(in srgb, ${color} 24%, var(--glass-border))`,
+    background: `linear-gradient(180deg, color-mix(in srgb, ${color} 16%, #ffffff) 0%, color-mix(in srgb, ${color} 9%, #ffffff) 100%)`,
+    borderColor: `color-mix(in srgb, ${color} 22%, #ffffff)`,
+    color: "#1A1640",
   };
 
   const chipStyle: React.CSSProperties = {
-    backgroundColor: `color-mix(in srgb, ${color} 18%, var(--glass-bg))`,
+    backgroundColor: "rgba(255, 255, 255, 0.78)",
+    boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.9)",
     color: color,
   };
 
   return (
     <div
       data-section-key={sectionKey}
-      className="glass-panel rounded-3xl border p-4 shadow-sm flex flex-col gap-2 min-h-[7rem] transition-colors"
+      className="rounded-3xl border p-4 shadow-[0_22px_50px_-36px_rgba(26,22,64,0.35)] flex flex-col gap-2.5 min-h-[7rem] transition-colors"
       style={cardStyle}
     >
       {/* Header: icon chip + name + count */}
@@ -104,20 +106,20 @@ export default function BucketCard({
           <BucketIcon name={icon} size={18} />
         </span>
         <h3 className="flex-1 text-sm font-bold tracking-tight truncate">{name}</h3>
-        <span className="text-xs font-semibold tabular-nums text-[var(--color-text-muted)]">
+        <span className="text-xs font-semibold tabular-nums text-[#1A1640]/60">
           {count}
         </span>
       </div>
 
       {description && (
-        <p className="text-[11px] text-[var(--color-text-muted)] leading-snug -mt-1 ml-[2.625rem]">
+        <p className="text-[11px] text-[#1A1640]/60 leading-snug -mt-1 ml-[2.625rem]">
           {description}
         </p>
       )}
 
       {/* Items list — slim row variant of IntentionItem */}
       {count === 0 ? (
-        <p className="text-xs text-[var(--color-text-muted)]/70 italic ml-[2.625rem] py-1">
+        <p className="text-xs text-[#1A1640]/50 italic ml-[2.625rem] py-1">
           Nothing here yet.
         </p>
       ) : (
@@ -127,7 +129,7 @@ export default function BucketCard({
               key={intention.id}
               className={`transition-transform ${
                 draggingId === intention.id
-                  ? "scale-[1.02] shadow-lg shadow-black/10 rounded-xl bg-[var(--color-bg)]/60"
+                  ? "scale-[1.02] shadow-lg shadow-black/10 rounded-2xl bg-white/70"
                   : ""
               }`}
             >

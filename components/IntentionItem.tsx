@@ -180,14 +180,40 @@ export default function IntentionItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editSignal]);
 
+  const containerClass = compact
+    ? `group bg-white ${expanded ? "rounded-2xl" : "rounded-full"} px-3 text-[#1A1640] shadow-[0_10px_24px_-20px_rgba(26,22,64,0.7)] ring-1 ring-black/[0.04] transition-colors ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
+        focused ? "ring-2 ring-[var(--color-accent)]" : ""
+      }`
+    : `group bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-xl px-3 transition-colors ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
+        focused ? "bg-purple-100/80 dark:bg-purple-900/40 ring-1 ring-purple-400" : ""
+      }`;
+
+  const textClass = compact
+    ? `flex-1 min-w-0 truncate text-sm font-medium transition-all duration-300 ${
+        checked ? "text-[#1A1640]/45" : "text-[#1A1640]"
+      } ${canEdit ? "cursor-text select-none" : ""}`
+    : `flex-1 min-w-0 text-sm transition-all duration-300 ${
+        checked ? "text-[var(--color-text-muted)]" : "text-[var(--color-text)]"
+      } ${canEdit ? "cursor-text select-none" : ""}`;
+
+  const editInputClass = compact
+    ? "flex-1 min-w-0 text-sm bg-transparent border-b border-[#1A1640]/30 outline-none py-0.5 text-[#1A1640]"
+    : "flex-1 min-w-0 text-sm bg-transparent border-b border-[var(--color-accent)] outline-none py-0.5 text-[var(--color-text)]";
+
+  const actionButtonClass = compact
+    ? "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[#1A1640]/45 hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+    : "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0";
+
+  const deleteButtonClass = compact
+    ? "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[#1A1640]/45 hover:text-red-500 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+    : "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0";
+
   return (
     <div
       data-intention-id={intention.id}
       data-expanded={expanded ? "true" : undefined}
       data-editing={editing ? "true" : undefined}
-      className={`group bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-xl px-3 transition-colors ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
-        focused ? "bg-purple-100/80 dark:bg-purple-900/40 ring-1 ring-purple-400" : ""
-      }`}
+      className={containerClass}
     >
       {/* Row: checkbox + text + category chip + delete */}
       <div className={`flex items-center gap-2 ${compact ? "py-1.5" : "py-2"}`}>
@@ -196,7 +222,7 @@ export default function IntentionItem({
             className="px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] text-[9px] font-bold uppercase tracking-widest flex-shrink-0"
             aria-label="Currently focusing"
           >
-            Focusing
+            {compact ? "Focus" : "Focusing"}
           </span>
         )}
         <button
@@ -243,7 +269,7 @@ export default function IntentionItem({
               }
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="flex-1 min-w-0 text-sm bg-transparent border-b border-[var(--color-accent)] outline-none py-0.5 text-[var(--color-text)]"
+            className={editInputClass}
           />
         ) : (
           <span
@@ -252,9 +278,7 @@ export default function IntentionItem({
               e.stopPropagation();
               startEdit();
             }}
-            className={`flex-1 min-w-0 text-sm transition-all duration-300 ${
-              checked ? "text-[var(--color-text-muted)]" : "text-[var(--color-text)]"
-            } ${canEdit ? "cursor-text select-none" : ""}`}
+            className={textClass}
             title={canEdit ? "Double-click to edit" : undefined}
           >
             {intention.text}
@@ -291,9 +315,7 @@ export default function IntentionItem({
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
-            className={`hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0 ${
-              compact ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""
-            }`}
+            className={actionButtonClass}
             aria-label="Edit intention"
             title="Edit"
           >
@@ -308,9 +330,7 @@ export default function IntentionItem({
           onClick={() => onDelete(intention.id)}
           onPointerDown={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
-          className={`hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0 ${
-            compact ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""
-          }`}
+          className={deleteButtonClass}
           aria-label="Delete intention"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
