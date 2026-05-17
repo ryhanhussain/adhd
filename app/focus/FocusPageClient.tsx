@@ -425,7 +425,7 @@ export default function FocusPageClient() {
     return buckets;
   }, [intentionCategories, intentions]);
 
-  const dockBuckets = useMemo(() => taskBuckets.slice(0, 4), [taskBuckets]);
+  const dockBuckets = taskBuckets;
   const activePickerBucket = openBucketId
     ? dockBuckets.find((bucket) => bucket.id === openBucketId) ?? null
     : null;
@@ -512,6 +512,8 @@ export default function FocusPageClient() {
       setBusy(true);
       try {
         await switchPomodoroSession(state, task);
+        setHabitPickerOpen(false);
+        setTaskPickerOpen(false);
       } finally {
         setBusy(false);
       }
@@ -610,6 +612,7 @@ export default function FocusPageClient() {
       }
       setReadyNextId(null);
       setCompletionMode(false);
+      closeFloatingPanels();
       await refreshData();
     } finally {
       setBusy(false);
@@ -761,12 +764,15 @@ export default function FocusPageClient() {
   };
 
   const handleIntentionsParsed = async (parsed: ParsedIntention[]) => {
+    const actionable = parsed.filter((item) => item.text.trim().length > 0);
+    if (actionable.length === 0) return;
+
     const createdAt = Date.now();
     const date = toLocalDateStr(createdAt);
     const maxOrder = intentions.reduce((acc, intention) => Math.max(acc, intention.order), -1);
-    const newIntentions: Intention[] = parsed.map((item, index) => ({
+    const newIntentions: Intention[] = actionable.map((item, index) => ({
       id: crypto.randomUUID(),
-      text: item.text,
+      text: item.text.trim(),
       date,
       completed: false,
       completedAt: null,
@@ -781,6 +787,9 @@ export default function FocusPageClient() {
     }));
 
     await addIntentions(newIntentions);
+    const firstNewIntention = newIntentions[0];
+    setSelectedId(firstNewIntention.id);
+    setTaskGroupId(firstNewIntention.categoryId ?? TASK_GROUP_ALL);
     window.dispatchEvent(new Event("entry-updated"));
     await refreshData();
   };
@@ -1012,7 +1021,7 @@ export default function FocusPageClient() {
         </div>
 
         {/* Up Next Pill below orb */}
-        <div className="mt-4 sm:mt-8 w-full max-w-[21rem] sm:max-w-full">
+        <div className="mt-4 sm:mt-8 w-full max-w-[21rem] sm:max-w-[30rem]">
           <div className="glass-panel h-10 rounded-full flex items-center px-1.5 shadow-sm border border-white/60 max-w-full overflow-hidden">
             <div className="h-7 px-2.5 sm:px-3 rounded-full bg-white/50 flex items-center text-[9px] font-semibold tracking-widest text-[#7C3AED] uppercase mr-2 sm:mr-3 ml-1 flex-shrink-0">
               Up Next
@@ -1068,7 +1077,7 @@ export default function FocusPageClient() {
           <section
             role="dialog"
             aria-label="Tasks"
-            className="glass-panel pointer-events-auto flex max-h-[min(72dvh,34rem)] w-full max-w-lg flex-col rounded-[1.75rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-3"
+            className="focus-popup-panel pointer-events-auto flex max-h-[min(72dvh,34rem)] w-full max-w-lg flex-col rounded-[1.75rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1279,7 +1288,7 @@ export default function FocusPageClient() {
           <section
             role="dialog"
             aria-label={`${activePickerBucket.label} tasks`}
-            className="glass-panel pointer-events-auto w-full max-w-xl rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4 sm:p-5"
+            className="focus-popup-panel pointer-events-auto w-full max-w-xl rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4 sm:p-5"
           >
             <div className="flex items-start gap-3">
               <div
@@ -1387,7 +1396,7 @@ export default function FocusPageClient() {
           <section
             role="dialog"
             aria-label="Timer length"
-            className="glass-panel pointer-events-auto w-full max-w-sm rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4"
+            className="focus-popup-panel pointer-events-auto w-full max-w-sm rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1469,7 +1478,7 @@ export default function FocusPageClient() {
           <section
             role="dialog"
             aria-label="Habits"
-            className="glass-panel pointer-events-auto w-full max-w-xl rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4 sm:p-5"
+            className="focus-popup-panel pointer-events-auto w-full max-w-xl rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4 sm:p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1552,7 +1561,7 @@ export default function FocusPageClient() {
           <section
             role="dialog"
             aria-label="Focus queue"
-            className="glass-panel pointer-events-auto w-full max-w-xl rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4 sm:p-5"
+            className="focus-popup-panel pointer-events-auto w-full max-w-xl rounded-[2rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-4 sm:p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1746,7 +1755,7 @@ export default function FocusPageClient() {
           </button>
         </div>
 
-        <div className="glass-panel hidden min-h-14 rounded-full items-center p-1.5 border border-white/60 shadow-sm gap-1.5 overflow-x-auto scrollbar-hide max-w-[min(100%,46rem)] sm:flex">
+        <div className="glass-panel hidden min-h-14 rounded-full items-center p-1.5 border border-white/60 shadow-sm gap-1.5 overflow-x-auto scrollbar-hide max-w-[calc(100vw-2rem)] xl:max-w-[60rem] sm:flex">
           {dockBuckets.map((bucket) => {
             const isSelected = bucket.intentions.some((intention) => intention.id === selectedId);
             const isOpen = openBucketId === bucket.id;
@@ -1757,7 +1766,7 @@ export default function FocusPageClient() {
                 onClick={() => handleOpenBucket(bucket.id)}
                 disabled={bucket.intentions.length === 0}
                 aria-expanded={isOpen}
-                className={`h-10 px-4 rounded-full border transition-colors flex items-center gap-2 min-w-max max-w-none flex-shrink-0 disabled:opacity-45 disabled:cursor-not-allowed ${
+                className={`h-10 max-w-[10rem] px-4 rounded-full border transition-colors flex items-center gap-2 min-w-0 flex-shrink-0 disabled:opacity-45 disabled:cursor-not-allowed ${
                   isOpen || isSelected
                     ? "bg-[#1A1640] border-[#1A1640]/80 text-white shadow-sm"
                     : "bg-white/70 border-white/85 text-[#1A1640] hover:bg-white/90"

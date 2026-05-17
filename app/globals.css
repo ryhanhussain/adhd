@@ -181,6 +181,17 @@ html.dark .gradient-mesh {
   box-shadow: var(--glass-shadow);
 }
 
+.focus-popup-panel {
+  background: #fffaf8;
+  background: color-mix(in srgb, #ffffff 95%, var(--color-bg));
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 28px 90px -34px rgba(40, 20, 80, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
 .popup-sheet {
   --sheet-drag-y: 0px;
   transform: translate3d(0, calc(var(--sheet-drag-y, 0px) - var(--kb, 0px)), 0);
@@ -218,6 +229,12 @@ html.dark .gradient-mesh {
     -webkit-backdrop-filter: blur(6px) saturate(120%);
   }
 
+  .focus-popup-panel {
+    background: color-mix(in srgb, #ffffff 97%, var(--color-bg));
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+  }
+
   .capture-panel,
   .capture-textarea {
     background: color-mix(in srgb, var(--color-popup-solid) 94%, transparent);
@@ -245,6 +262,10 @@ html.dark .gradient-mesh {
 
   .popup-panel {
     background: var(--color-popup-solid);
+  }
+
+  .focus-popup-panel {
+    background: #ffffff;
   }
 }
 
@@ -380,8 +401,16 @@ html[data-keyboard="open"] .keyboard-hide-on-keyboard {
 }
 
 @keyframes focusOrbBreathe {
-  0%, 100% { transform: scale(0.985); }
-  50% { transform: scale(1.035); }
+  0%, 100% {
+    box-shadow:
+      inset 0 0 60px rgba(255, 255, 255, 0.8),
+      0 12px 40px -10px rgba(244, 114, 182, 0.2);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 76px rgba(255, 255, 255, 0.94),
+      0 18px 56px -14px rgba(244, 114, 182, 0.34);
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────
