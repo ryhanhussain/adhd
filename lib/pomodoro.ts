@@ -4,13 +4,14 @@
  * derived from Date.now() so backgrounded tabs stay accurate when refocused.
  */
 
-export const POMODORO_PRESETS = [25, 45, 60] as const;
+export const POMODORO_PRESETS = [25, 40, 60] as const;
 export type PomodoroPresetMinutes = (typeof POMODORO_PRESETS)[number];
 
 export interface PomodoroState {
   entryId: string;
   mode: "intention" | "burst";
   intentionId: string | null;
+  habitId?: string | null;
   intentionText: string;
   targetMs: number;
   startedAt: number;
@@ -22,6 +23,7 @@ export interface PomodoroState {
 export interface PomodoroQueueItem {
   id: string;
   intentionId: string | null;
+  habitId?: string | null;
   intentionText: string;
   targetMs: number;
   queuedAt: number;
@@ -65,11 +67,16 @@ export function getPomodoroState(): PomodoroState | null {
         : typeof parsed.intentionId === "string"
           ? parsed.intentionId
           : null;
+    const habitId =
+      typeof (parsed as Partial<PomodoroState>).habitId === "string"
+        ? (parsed as Partial<PomodoroState>).habitId
+        : null;
     if (mode === "intention" && !intentionId) return null;
     return {
       ...parsed,
       mode,
       intentionId,
+      habitId,
       pausedAt: typeof parsed.pausedAt === "number" ? parsed.pausedAt : null,
       accumulatedPausedMs:
         typeof parsed.accumulatedPausedMs === "number" ? parsed.accumulatedPausedMs : 0,
@@ -114,6 +121,7 @@ function sanitizeQueueItem(raw: unknown): PomodoroQueueItem | null {
   return {
     id: item.id,
     intentionId: typeof item.intentionId === "string" ? item.intentionId : null,
+    habitId: typeof item.habitId === "string" ? item.habitId : null,
     intentionText: item.intentionText,
     targetMs: item.targetMs,
     queuedAt: item.queuedAt,
@@ -146,9 +154,13 @@ export function enqueuePomodoroTask(
   if (task.intentionId && queue.some((item) => item.intentionId === task.intentionId)) {
     return null;
   }
+  if (task.habitId && queue.some((item) => item.habitId === task.habitId)) {
+    return null;
+  }
   const item: PomodoroQueueItem = {
     id: task.id ?? crypto.randomUUID(),
     intentionId: task.intentionId,
+    habitId: task.habitId ?? null,
     intentionText: task.intentionText,
     targetMs: task.targetMs,
     queuedAt: task.queuedAt ?? Date.now(),

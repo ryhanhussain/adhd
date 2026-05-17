@@ -305,17 +305,22 @@ html[data-keyboard="open"] .keyboard-hide-on-keyboard {
   font-variant-numeric: tabular-nums;
 }
 
+.font-display-serif {
+  font-family: "Playfair Display", "Bodoni MT", "Didot", "Times New Roman", Times, serif;
+  letter-spacing: 0;
+}
+
 .focus-orb-wrap {
   --focus-progress: 0deg;
-  width: min(78vw, 22rem);
+  width: min(85vw, 26rem);
   aspect-ratio: 1;
-  padding: 0.45rem;
+  padding: 0.35rem;
   border-radius: 9999px;
   background:
-    conic-gradient(from -90deg, #F472B6 0deg, #FBBF24 var(--focus-progress), rgba(255, 255, 255, 0.55) var(--focus-progress), rgba(255, 255, 255, 0.55) 360deg);
+    conic-gradient(from -90deg, #F472B6 0deg, #FBBF24 var(--focus-progress), rgba(255, 255, 255, 0.45) var(--focus-progress), rgba(255, 255, 255, 0.45) 360deg);
   box-shadow:
-    0 28px 90px -36px rgba(40, 20, 80, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    0 28px 90px -36px rgba(40, 20, 80, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .focus-orb {
@@ -326,13 +331,13 @@ html[data-keyboard="open"] .keyboard-hide-on-keyboard {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.7rem;
+  gap: 0.5rem;
   background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.2) 52%, rgba(255, 255, 255, 0.08) 72%),
-    linear-gradient(135deg, #F472B6, #FBBF24);
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0.45) 80%),
+    linear-gradient(135deg, rgba(244, 114, 182, 0.2), rgba(251, 191, 36, 0.2));
   box-shadow:
-    inset 0 0 42px rgba(255, 255, 255, 0.42),
-    0 24px 70px -22px rgba(244, 114, 182, 0.6);
+    inset 0 0 60px rgba(255, 255, 255, 0.8),
+    0 12px 40px -10px rgba(244, 114, 182, 0.2);
 }
 
 .focus-orb-wrap.is-running .focus-orb {

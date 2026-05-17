@@ -13,7 +13,6 @@ import EntryEditSheet from "@/components/EntryEditSheet";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import EmptyHome from "@/components/EmptyHome";
 import ActiveTimerCard from "@/components/ActiveTimerCard";
-import PomodoroCard from "@/components/PomodoroCard";
 import HabitsCard from "@/components/HabitsCard";
 import HomeTabs, { type HomeTab } from "@/components/home/HomeTabs";
 import BucketGrid from "@/components/home/BucketGrid";
@@ -269,7 +268,11 @@ export default function Home() {
   };
 
   const handleCoachStartFocus = (intentionId?: string | null) => {
-    router.push(intentionId ? `/focus?task=${encodeURIComponent(intentionId)}` : "/focus?start=burst");
+    if (intentionId === undefined) {
+      router.push("/focus");
+    } else {
+      router.push(intentionId ? `/focus?task=${encodeURIComponent(intentionId)}` : "/focus?start=burst");
+    }
   };
 
   const openCapture = useCallback((mode: "log" | "plan") => {
@@ -344,6 +347,14 @@ export default function Home() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [activeInput, selectedEntry, milestoneToShow, openCapture]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const capture = params.get("capture");
+    if (capture !== "log" && capture !== "plan") return;
+    openCapture(capture);
+    router.replace("/", { scroll: false });
+  }, [openCapture, router]);
 
   const handleIntentionComplete = async (
     id: string,
@@ -489,12 +500,9 @@ export default function Home() {
             <HabitsCard onHabitToggled={handleHabitToggled} />
           </div>
 
-          {/* Active timer is shown inline on mobile; on desktop it lives in the
-              sidebar so the centerpiece stays focused on the backlog. When a
-              Pomodoro is running it takes over the slot with a countdown. */}
-          {hasPomodoro ? (
-            <PomodoroCard className="lg:hidden" />
-          ) : activeEntry ? (
+          {/* Regular open timers are shown inline on mobile; focus sessions
+              stay on the dedicated Focus page. */}
+          {!hasPomodoro && activeEntry ? (
             <ActiveTimerCard
               activeEntry={activeEntry}
               onFinish={handleFinishActive}
@@ -528,8 +536,6 @@ export default function Home() {
             categories={categories}
             streak={streak}
             hasPomodoro={hasPomodoro}
-            focusedIntention={focusedIntention}
-            intentionCategories={intentionCategories}
             onHabitToggled={handleHabitToggled}
           />
           <div className="mt-3">

@@ -1,17 +1,15 @@
 "use client";
 
-import type { Entry, EnergyLevel, Intention } from "@/lib/db";
-import type { Category, IntentionCategory } from "@/lib/categories";
+import type { Entry, Habit } from "@/lib/db";
+import type { Category } from "@/lib/categories";
 import type { StreakInfo } from "@/lib/streaks";
 import ActiveTimerCard from "@/components/ActiveTimerCard";
-import PomodoroCard from "@/components/PomodoroCard";
 import DailySummary from "@/components/DailySummary";
 import WeekTeaser from "@/components/WeekTeaser";
 import ReflectionTease from "@/components/ReflectionTease";
 import HabitsCard from "@/components/HabitsCard";
 import StreakMiniCard from "./StreakMiniCard";
 import TodaySparklineCard from "./TodaySparklineCard";
-import type { Habit } from "@/lib/db";
 
 interface MiniSidebarProps {
   activeEntry: Entry | null | undefined;
@@ -19,17 +17,14 @@ interface MiniSidebarProps {
   entries: Entry[];
   categories: Category[];
   streak: StreakInfo | null;
-  /** When true, the Pomodoro countdown card replaces the regular active-timer card. */
+  /** Focus sessions live on /focus; the Now rail only shows regular open timers. */
   hasPomodoro?: boolean;
-  /** Currently running Pomodoro target — used to source bucket + energy for the dark IN-FOCUS card. */
-  focusedIntention?: Intention | null;
-  intentionCategories?: IntentionCategory[];
   onHabitToggled?: (habit: Habit, ticked: boolean) => void;
 }
 
 /**
  * Desktop right rail. The dashboard's secondary column:
- *   [ IN FOCUS (dark) | ActiveTimerCard | nothing ]
+ *   [ ActiveTimerCard | nothing ]  Focus sessions are opened in /focus.
  *   [ Streak ] [ Today ]   ← grid-cols-2
  *   [ Daily habits ]
  *   [ Daily summary | week teaser | reflection ] ← demoted but rendered
@@ -41,24 +36,11 @@ export default function MiniSidebar({
   categories,
   streak,
   hasPomodoro = false,
-  focusedIntention,
-  intentionCategories,
   onHabitToggled,
 }: MiniSidebarProps) {
-  const focusedBucketName = focusedIntention
-    ? intentionCategories?.find((b) => b.id === focusedIntention.categoryId)?.name ?? null
-    : null;
-  const focusedEnergy: EnergyLevel | null = focusedIntention?.energy ?? null;
-
   return (
     <div className="flex flex-col gap-3 animate-fade-in">
-      {hasPomodoro ? (
-        <PomodoroCard
-          variant="dark"
-          bucketName={focusedBucketName}
-          energy={focusedEnergy}
-        />
-      ) : activeEntry ? (
+      {!hasPomodoro && activeEntry ? (
         <ActiveTimerCard activeEntry={activeEntry} onFinish={onFinishActive} />
       ) : null}
 

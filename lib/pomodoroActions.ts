@@ -3,8 +3,10 @@
 import {
   addEntry,
   deleteEntry,
+  getHabitById,
   toLocalDateStr,
   updateEntry,
+  updateHabit,
   updateIntention,
   type EnergyLevel,
 } from "@/lib/db";
@@ -24,6 +26,7 @@ export const FOCUS_BURST_MINUTES = 25;
 
 export interface PomodoroTaskInput {
   intentionId: string | null;
+  habitId?: string | null;
   intentionText: string;
   targetMs: number;
   energy?: EnergyLevel | null;
@@ -32,6 +35,7 @@ export interface PomodoroTaskInput {
 export function taskFromQueueItem(item: PomodoroQueueItem): PomodoroTaskInput {
   return {
     intentionId: item.intentionId,
+    habitId: item.habitId ?? null,
     intentionText: item.intentionText,
     targetMs: item.targetMs,
   };
@@ -74,6 +78,7 @@ export async function startPomodoroSession(
     entryId,
     mode: isBurst ? "burst" : "intention",
     intentionId: task.intentionId,
+    habitId: task.habitId ?? null,
     intentionText: task.intentionText,
     targetMs: task.targetMs,
     startedAt: now,
@@ -105,6 +110,15 @@ export async function finishPomodoroSession(
       completedAt: finishedAt,
       entryId: state.entryId,
     });
+  }
+  if (shouldCompleteIntention && state.habitId) {
+    const habit = await getHabitById(state.habitId);
+    const dateStr = toLocalDateStr(finishedAt);
+    if (habit && !habit.completions.includes(dateStr)) {
+      await updateHabit(habit.id, {
+        completions: [dateStr, ...habit.completions],
+      });
+    }
   }
 
   clearPomodoroState();

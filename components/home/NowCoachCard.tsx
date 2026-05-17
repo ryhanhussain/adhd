@@ -83,7 +83,9 @@ function getTitleAndActions({
       eyebrow: "Best next move",
       title: "Stay with the session already in motion.",
       detail: label,
-      actions: [],
+      actions: [
+        { label: "Open Focus", onClick: () => onStartFocus(), primary: true },
+      ],
     };
   }
 
