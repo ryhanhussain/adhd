@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
+  addIntentions,
   getActiveIntentions,
   getEntriesByDate,
   toLocalDateStr,
@@ -51,11 +52,24 @@ import {
 import { confettiBurst } from "@/lib/confetti";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
 import { useHabits } from "@/lib/useHabits";
+import { getEnergyEmoji } from "@/lib/energy";
+import type { ParsedIntention } from "@/lib/gemini";
+import BrainDumpInput from "@/components/BrainDumpInput";
+import BottomSheet from "@/components/BottomSheet";
 
 const DEFAULT_DURATION_MINUTES = 25;
 const FALLBACK_BUCKET_COLOR = "#a1a1aa";
 const MIN_TIMER_MINUTES = 1;
 const MAX_TIMER_MINUTES = 180;
+const TASK_GROUP_ALL = "all";
+const TASK_GROUP_HABITS = "habits";
+
+type FocusTaskBucket = {
+  id: string;
+  label: string;
+  color: string;
+  intentions: Intention[];
+};
 
 const navLinks = [
   { href: "/", label: "Now" },
@@ -135,6 +149,38 @@ function energyLabel(energy: EnergyLevel | null): string | null {
   return "scattered energy";
 }
 
+function taskBucketFor(intention: Intention, buckets: FocusTaskBucket[]): FocusTaskBucket | null {
+  return buckets.find((bucket) => bucket.intentions.some((candidate) => candidate.id === intention.id)) ?? null;
+}
+
+function TaskMetaMarks({
+  bucket,
+  energy,
+}: {
+  bucket?: FocusTaskBucket | null;
+  energy?: EnergyLevel | null;
+}) {
+  return (
+    <span className="mt-1 flex h-4 items-center gap-1.5" aria-hidden="true">
+      {bucket && (
+        <span
+          className="h-2 w-2 rounded-full ring-1 ring-white/70"
+          style={{ backgroundColor: bucket.color }}
+        />
+      )}
+      {energy ? (
+        <span className="text-[12px] leading-none">
+          {getEnergyEmoji(energy)}
+        </span>
+      ) : !bucket ? (
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-[var(--color-text-muted)]/50"
+        />
+      ) : null}
+    </span>
+  );
+}
+
 function taskInputFromIntention(intention: Intention, minutes: number): PomodoroTaskInput {
   return {
     intentionId: intention.id,
@@ -173,8 +219,11 @@ export default function FocusPageClient() {
   const [timerDraft, setTimerDraft] = useState<string>(String(DEFAULT_DURATION_MINUTES));
   const [openBucketId, setOpenBucketId] = useState<string | null>(null);
   const [timerPickerOpen, setTimerPickerOpen] = useState(false);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const [taskGroupId, setTaskGroupId] = useState<string>(TASK_GROUP_ALL);
   const [habitPickerOpen, setHabitPickerOpen] = useState(false);
   const [queuePanelOpen, setQueuePanelOpen] = useState(false);
+  const [brainDumpOpen, setBrainDumpOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [completionMode, setCompletionMode] = useState(false);
   const [readyNextId, setReadyNextId] = useState<string | null>(null);
@@ -228,10 +277,11 @@ export default function FocusPageClient() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!openBucketId && !timerPickerOpen && !habitPickerOpen && !queuePanelOpen) return;
+    if (!openBucketId && !taskPickerOpen && !timerPickerOpen && !habitPickerOpen && !queuePanelOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpenBucketId(null);
+        setTaskPickerOpen(false);
         setTimerPickerOpen(false);
         setHabitPickerOpen(false);
         setQueuePanelOpen(false);
@@ -239,7 +289,7 @@ export default function FocusPageClient() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [openBucketId, timerPickerOpen, habitPickerOpen, queuePanelOpen]);
+  }, [openBucketId, taskPickerOpen, timerPickerOpen, habitPickerOpen, queuePanelOpen]);
 
   useEffect(() => {
     if (autoStartedRef.current || state) return;
@@ -248,6 +298,20 @@ export default function FocusPageClient() {
     void startPomodoroSession(focusBurstTask());
     router.replace("/focus");
   }, [router, searchParams, state]);
+
+  useEffect(() => {
+    if (!brainDumpOpen) return;
+    let innerId = 0;
+    const outerId = requestAnimationFrame(() => {
+      innerId = requestAnimationFrame(() => {
+        document.getElementById("brain-dump-textarea")?.focus({ preventScroll: true });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outerId);
+      cancelAnimationFrame(innerId);
+    };
+  }, [brainDumpOpen]);
 
   useEffect(() => {
     if (!state) {
@@ -313,15 +377,6 @@ export default function FocusPageClient() {
       : energyLabel((state ? getTaskEnergy(activeIntention) : selectedIntention?.energy ?? null) ?? null)) ??
     "energy open";
   const selectedDurationMs = msFromMinutes(selectedMinutes);
-  const upNextIntention = upNext?.intentionId
-    ? intentions.find((intention) => intention.id === upNext.intentionId) ?? null
-    : null;
-  const upNextHabit = upNext?.habitId
-    ? habits.find((habit) => habit.id === upNext.habitId) ?? null
-    : null;
-  const upNextEnergyLabel = upNextHabit
-    ? "habit"
-    : energyLabel(getTaskEnergy(upNextIntention)) ?? "energy open";
   const canStartSelectedFromPill =
     selectedIsPickedInitial && !selectedIsDuplicate && !hasNonPomodoroActive && !awaitingCompletion;
   const canQueueSelected = !!selectedIntention && !selectedIsDuplicate && !selectedIsPickedInitial;
@@ -337,7 +392,7 @@ export default function FocusPageClient() {
         : "Start"
       : "Queue";
 
-  const dockBuckets = useMemo(() => {
+  const taskBuckets = useMemo<FocusTaskBucket[]>(() => {
     const byCategory = intentionCategories
       .map((category) => ({
         id: category.id,
@@ -355,7 +410,7 @@ export default function FocusPageClient() {
 
     const buckets = [
       ...byCategory,
-      ...(uncategorized.length > 0 || byCategory.length === 0
+      ...(uncategorized.length > 0 || (byCategory.length === 0 && intentions.length > 0)
         ? [
             {
               id: "uncategorized",
@@ -367,11 +422,25 @@ export default function FocusPageClient() {
         : []),
     ];
 
-    return buckets.slice(0, 4);
+    return buckets;
   }, [intentionCategories, intentions]);
+
+  const dockBuckets = useMemo(() => taskBuckets.slice(0, 4), [taskBuckets]);
   const activePickerBucket = openBucketId
     ? dockBuckets.find((bucket) => bucket.id === openBucketId) ?? null
     : null;
+  const mobileTaskIntentions = useMemo(() => {
+    if (taskGroupId === TASK_GROUP_ALL) {
+      return taskBuckets.flatMap((bucket) => bucket.intentions);
+    }
+    return taskBuckets.find((bucket) => bucket.id === taskGroupId)?.intentions ?? [];
+  }, [taskBuckets, taskGroupId]);
+  const mobileTaskGroupLabel =
+    taskGroupId === TASK_GROUP_HABITS
+      ? "Habits"
+      : taskGroupId === TASK_GROUP_ALL
+        ? "All tasks"
+        : taskBuckets.find((bucket) => bucket.id === taskGroupId)?.label ?? "Tasks";
 
   const todayFocusMs = useMemo(
     () =>
@@ -400,6 +469,7 @@ export default function FocusPageClient() {
 
   const closeFloatingPanels = () => {
     setOpenBucketId(null);
+    setTaskPickerOpen(false);
     setTimerPickerOpen(false);
     setHabitPickerOpen(false);
     setQueuePanelOpen(false);
@@ -515,6 +585,7 @@ export default function FocusPageClient() {
     }
     await startTask(task);
     setHabitPickerOpen(false);
+    setTaskPickerOpen(false);
   };
 
   const startQueuedItem = async (item: PomodoroQueueItem) => {
@@ -556,14 +627,24 @@ export default function FocusPageClient() {
   };
 
   const handleOpenBucket = (bucketId: string) => {
+    setTaskPickerOpen(false);
     setTimerPickerOpen(false);
     setHabitPickerOpen(false);
     setQueuePanelOpen(false);
     setOpenBucketId((current) => (current === bucketId ? null : bucketId));
   };
 
+  const handleOpenTaskPicker = () => {
+    setOpenBucketId(null);
+    setTimerPickerOpen(false);
+    setHabitPickerOpen(false);
+    setQueuePanelOpen(false);
+    setTaskPickerOpen((current) => !current);
+  };
+
   const handleOpenTimerPicker = () => {
     setOpenBucketId(null);
+    setTaskPickerOpen(false);
     setHabitPickerOpen(false);
     setQueuePanelOpen(false);
     setTimerPickerOpen((current) => !current);
@@ -571,6 +652,7 @@ export default function FocusPageClient() {
 
   const handleOpenHabits = () => {
     setOpenBucketId(null);
+    setTaskPickerOpen(false);
     setTimerPickerOpen(false);
     setQueuePanelOpen(false);
     setHabitPickerOpen((current) => !current);
@@ -578,6 +660,7 @@ export default function FocusPageClient() {
 
   const handleOpenQueue = () => {
     setOpenBucketId(null);
+    setTaskPickerOpen(false);
     setTimerPickerOpen(false);
     setHabitPickerOpen(false);
     setQueuePanelOpen((current) => !current);
@@ -587,6 +670,7 @@ export default function FocusPageClient() {
     await handleStartSelected();
     if (selectedIntention && !selectedIsDuplicate && !hasNonPomodoroActive && !awaitingCompletion) {
       setOpenBucketId(null);
+      setTaskPickerOpen(false);
     }
   };
 
@@ -676,8 +760,34 @@ export default function FocusPageClient() {
     if (next) playPomodoroSound("resume");
   };
 
+  const handleIntentionsParsed = async (parsed: ParsedIntention[]) => {
+    const createdAt = Date.now();
+    const date = toLocalDateStr(createdAt);
+    const maxOrder = intentions.reduce((acc, intention) => Math.max(acc, intention.order), -1);
+    const newIntentions: Intention[] = parsed.map((item, index) => ({
+      id: crypto.randomUUID(),
+      text: item.text,
+      date,
+      completed: false,
+      completedAt: null,
+      entryId: null,
+      order: maxOrder + 1 + index,
+      createdAt,
+      categoryId: item.categoryId ?? null,
+      energy: item.energy ?? null,
+      updatedAt: createdAt,
+      deleted: false,
+      syncedAt: null,
+    }));
+
+    await addIntentions(newIntentions);
+    window.dispatchEvent(new Event("entry-updated"));
+    await refreshData();
+  };
+
   const openBrainDump = () => {
-    router.push("/?capture=plan");
+    closeFloatingPanels();
+    setBrainDumpOpen(true);
   };
 
   const activeLabel = completionMode
@@ -699,14 +809,17 @@ export default function FocusPageClient() {
       <div className="absolute inset-0 pointer-events-none opacity-60 bg-[radial-gradient(circle_at_50%_45%,rgba(255,255,255,0.7),transparent_50%)]" />
 
       {/* Top Nav Pill */}
-      <div className="relative z-20 flex justify-center pt-6 px-4">
-        <div className="glass-panel flex items-center h-12 px-2 rounded-full shadow-sm text-sm font-medium border border-white/60 max-w-full">
-          <Link href="/" className="flex items-center gap-1.5 px-3 rounded-full hover:bg-white/20 transition-colors h-8 flex-shrink-0">
+      <div className="relative z-20 flex justify-center pt-3 sm:pt-6 px-2 sm:px-4">
+        <div className="glass-panel flex items-center h-11 sm:h-12 px-1.5 sm:px-2 rounded-full shadow-sm text-xs sm:text-sm font-medium border border-white/60 max-w-full">
+          <Link href="/" className="flex items-center gap-1.5 px-2.5 sm:px-3 rounded-full hover:bg-white/20 transition-colors h-8 flex-shrink-0">
             <span className="text-[var(--color-accent)] text-lg leading-none" aria-hidden="true">✦</span>
             <span className="font-semibold text-[#1A1640]">ADDit</span>
           </Link>
-          <div className="w-px h-4 bg-[var(--color-border)] mx-1" />
-          <nav aria-label="Primary" className="flex items-center gap-1 px-1 overflow-x-auto scrollbar-hide">
+          <div className="hidden sm:block w-px h-4 bg-[var(--color-border)] mx-1" />
+          <span className="sm:hidden h-8 px-3 rounded-full bg-[#1A1640] text-white flex items-center font-semibold">
+            Focus
+          </span>
+          <nav aria-label="Primary" className="hidden sm:flex items-center gap-1 px-1 overflow-x-auto scrollbar-hide">
             {navLinks.map((link) => {
               const active =
                 pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
@@ -726,7 +839,7 @@ export default function FocusPageClient() {
               );
             })}
           </nav>
-          <div className="w-px h-4 bg-[var(--color-border)] mx-1" />
+          <div className="hidden sm:block w-px h-4 bg-[var(--color-border)] mx-1" />
           <div className="hidden sm:block px-3 text-[var(--color-text-muted)] text-xs font-medium tabular-nums whitespace-nowrap">
             {new Date(now).toLocaleDateString(undefined, { weekday: "short" })} - {new Date(now).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
           </div>
@@ -783,22 +896,22 @@ export default function FocusPageClient() {
       </div>
 
       {/* Center Layout */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 -mt-10">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-3 pt-3 pb-24 sm:px-4 sm:pt-0 sm:pb-0 sm:-mt-10">
         <div
           className={`focus-orb-wrap ${state && !paused && !completionMode ? "is-running" : ""}`}
           style={{ "--focus-progress": `${progress * 360}deg` } as React.CSSProperties & { "--focus-progress": string }}
         >
-          <div className="focus-orb text-center p-8">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-2">
+          <div className="focus-orb text-center p-6 sm:p-8">
+            <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.18em] sm:tracking-[0.2em] text-[var(--color-text-muted)] mb-1 sm:mb-2">
               {activeLabel} {state?.mode === "burst" && !state.habitId ? "" : "· FOCUS"}
             </span>
-            <span className="text-7xl sm:text-[7.5rem] font-display-serif tabular-nums leading-none text-[#1A1640] -ml-2 mb-4">
+            <span className="text-[4.25rem] sm:text-[7.5rem] font-display-serif tabular-nums leading-none text-[#1A1640] -ml-1 sm:-ml-2 mb-2 sm:mb-4">
               {state ? formatCountdown(remaining) : formatCountdown(selectedDurationMs)}
             </span>
-            <span className="max-w-[20rem] text-lg sm:text-xl font-semibold text-[#1A1640] truncate px-4">
+            <span className="max-w-[14rem] sm:max-w-[20rem] text-base sm:text-xl font-semibold text-[#1A1640] truncate px-3 sm:px-4">
               {state?.intentionText ?? selectedIntention?.text ?? "Choose a task"}
             </span>
-            <span className="text-xs font-medium text-[var(--color-text-muted)] mt-1 mb-6">
+            <span className="text-[11px] sm:text-xs font-medium text-[var(--color-text-muted)] mt-0.5 sm:mt-1 mb-3 sm:mb-6">
               {state
                 ? `started ${new Date(state.startedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
                 : `${selectedMinutes} min ready`} · {displayedEnergy}
@@ -806,31 +919,31 @@ export default function FocusPageClient() {
 
             {/* Actions inside Orb */}
             {confirmCancel ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-1 sm:mt-2">
                 <span className="text-xs font-semibold text-[#e11d48]">Cancel?</span>
                 <button
                   type="button"
                   onClick={handleCancel}
                   disabled={busy}
-                  className="h-9 px-4 rounded-full bg-[#e11d48] text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all disabled:opacity-60"
+                  className="h-9 px-3 sm:px-4 rounded-full bg-[#e11d48] text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all disabled:opacity-60"
                 >
                   Yes
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmCancel(false)}
-                  className="h-9 px-4 rounded-full bg-white text-xs font-semibold shadow-sm border border-white/80 active:scale-[0.98] transition-all"
+                  className="h-9 px-3 sm:px-4 rounded-full bg-white text-xs font-semibold shadow-sm border border-white/80 active:scale-[0.98] transition-all"
                 >
                   Keep going
                 </button>
               </div>
             ) : completionMode && state ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-1 sm:mt-2">
                 <button
                   type="button"
                   onClick={state.mode === "burst" && !activeIsHabit ? () => setConfirmCancel(true) : handleSaveOnly}
                   disabled={busy}
-                  className="h-9 px-4 rounded-full bg-white text-xs font-semibold shadow-sm border border-white/80 active:scale-[0.98] transition-all disabled:opacity-60"
+                  className="h-9 px-3 sm:px-4 rounded-full bg-white text-xs font-semibold shadow-sm border border-white/80 active:scale-[0.98] transition-all disabled:opacity-60"
                 >
                   {state.mode === "burst" && !activeIsHabit ? "Discard" : "Save only"}
                 </button>
@@ -838,7 +951,7 @@ export default function FocusPageClient() {
                   type="button"
                   onClick={handleFinish}
                   disabled={busy}
-                  className="h-9 px-5 rounded-full bg-[#1A1640] text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all disabled:opacity-60"
+                  className="h-9 px-4 sm:px-5 rounded-full bg-[#1A1640] text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all disabled:opacity-60"
                 >
                   {state.mode === "burst" && !activeIsHabit ? "Save session" : "Tick off"}
                 </button>
@@ -846,18 +959,18 @@ export default function FocusPageClient() {
                   type="button"
                   onClick={handleFinishAndStartNext}
                   disabled={busy || !upNext}
-                  className="h-9 px-4 rounded-full text-xs font-semibold text-[#1A1640] hover:bg-white/30 active:scale-[0.98] transition-all disabled:opacity-35 disabled:cursor-not-allowed"
+                  className="h-9 px-3 sm:px-4 rounded-full text-xs font-semibold text-[#1A1640] hover:bg-white/30 active:scale-[0.98] transition-all disabled:opacity-35 disabled:cursor-not-allowed"
                 >
                   Start next
                 </button>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-1 sm:mt-2">
                 <button
                   type="button"
                   onClick={state ? togglePause : handleStartBurst}
                   disabled={busy || (!state && hasNonPomodoroActive)}
-                  className="h-9 px-4 rounded-full bg-white text-xs font-semibold shadow-sm border border-white/80 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center gap-1.5"
+                  className="h-9 px-3 sm:px-4 rounded-full bg-white text-xs font-semibold shadow-sm border border-white/80 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center gap-1.5"
                 >
                   {state ? (
                     paused ? (
@@ -879,7 +992,7 @@ export default function FocusPageClient() {
                     busy ||
                     (state ? false : !selectedIntention || selectedIsDuplicate || hasNonPomodoroActive)
                   }
-                  className="h-9 px-5 rounded-full bg-[#1A1640] text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all disabled:opacity-60 flex items-center gap-1.5"
+                  className="h-9 px-4 sm:px-5 rounded-full bg-[#1A1640] text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all disabled:opacity-60 flex items-center gap-1.5"
                 >
                   {state ? "Finish" : "Start"} ✔
                 </button>
@@ -887,7 +1000,7 @@ export default function FocusPageClient() {
                   type="button"
                   onClick={state ? () => setConfirmCancel(true) : handleQueueSelected}
                   disabled={!state && (!selectedIntention || selectedIsDuplicate)}
-                  className={`h-9 px-4 rounded-full text-xs font-semibold hover:bg-white/30 active:scale-[0.98] transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
+                  className={`h-9 px-3 sm:px-4 rounded-full text-xs font-semibold hover:bg-white/30 active:scale-[0.98] transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                     state ? "text-[#e11d48]" : "text-[#1A1640]"
                   }`}
                 >
@@ -899,42 +1012,39 @@ export default function FocusPageClient() {
         </div>
 
         {/* Up Next Pill below orb */}
-        <div className="mt-8 max-w-full">
+        <div className="mt-4 sm:mt-8 w-full max-w-[21rem] sm:max-w-full">
           <div className="glass-panel h-10 rounded-full flex items-center px-1.5 shadow-sm border border-white/60 max-w-full overflow-hidden">
-             <div className="h-7 px-3 rounded-full bg-white/50 flex items-center text-[9px] font-semibold tracking-widest text-[#7C3AED] uppercase mr-3 ml-1">
-               Up Next
-             </div>
-             <span className="text-sm font-medium text-[#1A1640] truncate max-w-[90px] sm:max-w-[200px]">
-               {upNext?.intentionText ?? selectedIntention?.text ?? "Add something"}
-             </span>
-             <span className="hidden sm:inline text-xs font-medium text-[var(--color-text-muted)] ml-3 mr-3 whitespace-nowrap">
-               ~{upNext ? minutesFromMs(upNext.targetMs) : selectedMinutes} min · {upNext ? upNextEnergyLabel : displayedEnergy}
-             </span>
-             {upNext && (
-               <button
-                 type="button"
-                 aria-label="Remove up next"
-                 title="Remove up next"
-                 onClick={() => removePomodoroQueueItem(upNext.id)}
-                 className="h-7 w-7 rounded-full text-[#1A1640]/55 hover:bg-white/40 hover:text-[#e11d48] active:scale-[0.95] transition-all"
-               >
-                 ×
-               </button>
-             )}
-             <button
-               type="button"
-               className="h-7 px-4 rounded-full bg-[#1A1640] text-white text-xs font-semibold ml-auto flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-               onClick={
-                 canStartSelectedFromPill
-                   ? handleStartSelected
-                   : canQueueSelected
-                     ? handleQueueSelected
-                     : handleStartQueued
-               }
-               disabled={busy || (!canStartSelectedFromPill && !canQueueSelected && !upNext)}
-             >
-               {upNextActionLabel}
-             </button>
+            <div className="h-7 px-2.5 sm:px-3 rounded-full bg-white/50 flex items-center text-[9px] font-semibold tracking-widest text-[#7C3AED] uppercase mr-2 sm:mr-3 ml-1 flex-shrink-0">
+              Up Next
+            </div>
+            <span className="text-sm font-medium text-[#1A1640] truncate min-w-0 max-w-[7rem] sm:max-w-[200px]">
+              {upNext?.intentionText ?? selectedIntention?.text ?? "Add something"}
+            </span>
+            {upNext && (
+              <button
+                type="button"
+                aria-label="Remove up next"
+                title="Remove up next"
+                onClick={() => removePomodoroQueueItem(upNext.id)}
+                className="h-7 w-7 rounded-full text-[#1A1640]/55 hover:bg-white/40 hover:text-[#e11d48] active:scale-[0.95] transition-all"
+              >
+                ×
+              </button>
+            )}
+            <button
+              type="button"
+              className="h-7 px-4 rounded-full bg-[#1A1640] text-white text-xs font-semibold ml-auto flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={
+                canStartSelectedFromPill
+                  ? handleStartSelected
+                  : canQueueSelected
+                    ? handleQueueSelected
+                    : handleStartQueued
+              }
+              disabled={busy || (!canStartSelectedFromPill && !canQueueSelected && !upNext)}
+            >
+              {upNextActionLabel}
+            </button>
           </div>
         </div>
         {hasNonPomodoroActive && (
@@ -944,7 +1054,7 @@ export default function FocusPageClient() {
         )}
       </div>
 
-      {(activePickerBucket || timerPickerOpen || habitPickerOpen || queuePanelOpen) && (
+      {(activePickerBucket || taskPickerOpen || timerPickerOpen || habitPickerOpen || queuePanelOpen) && (
         <button
           type="button"
           aria-label="Close focus popup"
@@ -953,8 +1063,219 @@ export default function FocusPageClient() {
         />
       )}
 
+      {taskPickerOpen && (
+        <div className="focus-popover absolute inset-x-0 z-[30] flex justify-center px-3 pointer-events-none sm:hidden">
+          <section
+            role="dialog"
+            aria-label="Tasks"
+            className="glass-panel pointer-events-auto flex max-h-[min(72dvh,34rem)] w-full max-w-lg flex-col rounded-[1.75rem] border border-white/60 shadow-[0_28px_90px_-34px_rgba(40,20,80,0.38)] p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                  Tasks
+                </p>
+                <h2 className="truncate text-lg font-semibold text-[#1A1640]">
+                  {mobileTaskGroupLabel}
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Close tasks"
+                onClick={() => setTaskPickerOpen(false)}
+                className="h-9 w-9 rounded-full bg-white/45 text-[#1A1640]/70 transition-all hover:bg-white/65 hover:text-[#1A1640] active:scale-95 flex-shrink-0"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <button
+                type="button"
+                onClick={() => setTaskGroupId(TASK_GROUP_ALL)}
+                className={`h-9 rounded-full px-3 text-xs font-semibold transition-colors flex items-center gap-1.5 flex-shrink-0 ${
+                  taskGroupId === TASK_GROUP_ALL
+                    ? "bg-[#1A1640] text-white"
+                    : "bg-white/50 text-[#1A1640] hover:bg-white/70"
+                }`}
+              >
+                All
+              </button>
+              {taskBuckets.map((bucket) => (
+                <button
+                  key={bucket.id}
+                  type="button"
+                  onClick={() => setTaskGroupId(bucket.id)}
+                  className={`h-9 max-w-[8.5rem] rounded-full px-3 text-xs font-semibold transition-colors flex items-center gap-1.5 flex-shrink-0 ${
+                    taskGroupId === bucket.id
+                      ? "bg-[#1A1640] text-white"
+                      : "bg-white/50 text-[#1A1640] hover:bg-white/70"
+                  }`}
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: bucket.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{bucket.label}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setTaskGroupId(TASK_GROUP_HABITS)}
+                className={`h-9 rounded-full px-3 text-xs font-semibold transition-colors flex items-center gap-1.5 flex-shrink-0 ${
+                  taskGroupId === TASK_GROUP_HABITS
+                    ? "bg-[#1A1640] text-white"
+                    : "bg-white/50 text-[#1A1640] hover:bg-white/70"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#EC4899]" aria-hidden="true" />
+                Habits
+              </button>
+            </div>
+
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 space-y-2">
+              {taskGroupId === TASK_GROUP_HABITS ? (
+                habits.length === 0 ? (
+                  <div className="rounded-2xl border border-white/60 bg-white/35 px-4 py-5 text-sm text-[var(--color-text-muted)]">
+                    No habits yet.
+                  </div>
+                ) : (
+                  habits.map((habit) => {
+                    const isCurrent = habit.id === currentHabitId;
+                    const isQueued = queuedHabitIds.has(habit.id);
+                    const ticked = habit.completions.includes(todayDateStr);
+                    return (
+                      <div
+                        key={habit.id}
+                        className={`flex items-center gap-2 rounded-2xl p-1.5 transition-colors ${
+                          isCurrent ? "bg-white/65 shadow-sm" : "bg-white/30"
+                        }`}
+                      >
+                        <div
+                          className="h-9 w-9 rounded-full flex-shrink-0 ring-1 ring-white/70"
+                          style={{
+                            backgroundColor: `color-mix(in srgb, ${habit.color} ${ticked ? "82%" : "18%"}, white)`,
+                            color: ticked ? "white" : habit.color,
+                          }}
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0 flex-1 px-1">
+                          <p className="truncate text-sm font-medium text-[#1A1640]">{habit.name}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleStartHabit(habit)}
+                          disabled={busy || hasNonPomodoroActive || awaitingCompletion || isCurrent}
+                          className="h-9 px-3 rounded-full bg-[#1A1640] text-white text-xs font-semibold active:scale-[0.97] transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {state && !completionMode ? "Switch" : "Start"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQueueHabit(habit)}
+                          disabled={busy || isCurrent || isQueued}
+                          className={`h-9 px-3 rounded-full text-xs font-semibold active:scale-[0.97] transition-all flex-shrink-0 disabled:cursor-not-allowed ${
+                            isCurrent || isQueued
+                              ? "bg-white/35 text-[var(--color-text-muted)]"
+                              : "bg-white/65 text-[#1A1640]"
+                          }`}
+                        >
+                          {isCurrent ? "Now" : isQueued ? "Queued" : "Queue"}
+                        </button>
+                      </div>
+                    );
+                  })
+                )
+              ) : mobileTaskIntentions.length === 0 ? (
+                <div className="rounded-2xl border border-white/60 bg-white/35 px-4 py-5 text-sm text-[var(--color-text-muted)]">
+                  No open tasks here.
+                </div>
+              ) : (
+                mobileTaskIntentions.map((intention) => {
+                  const selected = intention.id === selectedId;
+                  const isCurrent = intention.id === currentIntentionId;
+                  const isQueued = queuedIntentionIds.has(intention.id);
+                  const isPickedInitial = !state && selected;
+                  const queueDisabled = busy || isCurrent || isQueued || isPickedInitial;
+                  const queueLabel = isCurrent
+                    ? "Now"
+                    : isQueued
+                      ? "Queued"
+                      : isPickedInitial
+                        ? "Picked"
+                        : "Queue";
+                  const bucket = taskBucketFor(intention, taskBuckets);
+                  return (
+                    <div
+                      key={intention.id}
+                      className={`flex items-center gap-2 rounded-2xl p-1.5 transition-colors ${
+                        selected ? "bg-white/65 shadow-sm" : "bg-white/30"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(intention.id)}
+                        className="min-w-0 flex-1 rounded-xl px-3 py-2 text-left active:scale-[0.99] transition-transform"
+                      >
+                        <span className="block truncate text-sm font-medium text-[#1A1640]">
+                          {intention.text}
+                        </span>
+                        <TaskMetaMarks bucket={bucket} energy={intention.energy ?? null} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQueueIntention(intention)}
+                        disabled={queueDisabled}
+                        className={`h-9 px-3 rounded-full text-xs font-semibold active:scale-[0.97] transition-all flex-shrink-0 disabled:cursor-not-allowed ${
+                          queueDisabled
+                            ? "bg-white/35 text-[var(--color-text-muted)]"
+                            : "bg-[#1A1640] text-white"
+                        }`}
+                      >
+                        {queueLabel}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {taskGroupId !== TASK_GROUP_HABITS && (
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleStartSelectedFromPicker}
+                  disabled={
+                    busy ||
+                    !selectedIntention ||
+                    selectedIsDuplicate ||
+                    hasNonPomodoroActive ||
+                    awaitingCompletion
+                  }
+                  className="h-11 flex-1 rounded-full bg-[#1A1640] text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all disabled:opacity-45 disabled:cursor-not-allowed"
+                >
+                  {selectedIntention
+                    ? state && !completionMode
+                      ? "Switch to selected"
+                      : "Start selected"
+                    : "Choose a task"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskPickerOpen(false)}
+                  className="h-11 px-4 rounded-full bg-white/45 text-xs font-semibold text-[#1A1640] transition-all hover:bg-white/65 active:scale-[0.98]"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
       {activePickerBucket && (
-        <div className="absolute inset-x-0 bottom-24 z-[30] flex justify-center px-4 pointer-events-none">
+        <div className="focus-popover absolute inset-x-0 z-[30] hidden justify-center px-4 pointer-events-none sm:flex">
           <section
             role="dialog"
             aria-label={`${activePickerBucket.label} tasks`}
@@ -1015,9 +1336,7 @@ export default function FocusPageClient() {
                       <span className="block truncate text-sm font-medium text-[#1A1640]">
                         {intention.text}
                       </span>
-                      <span className="mt-0.5 block truncate text-[11px] font-medium text-[var(--color-text-muted)]">
-                        {energyLabel(intention.energy ?? null) ?? "energy open"} · {formatTimerChoice(selectedMinutes)}
-                      </span>
+                      <TaskMetaMarks energy={intention.energy ?? null} />
                     </button>
                     <button
                       type="button"
@@ -1064,7 +1383,7 @@ export default function FocusPageClient() {
       )}
 
       {timerPickerOpen && (
-        <div className="absolute inset-x-0 bottom-24 z-[30] flex justify-center px-4 pointer-events-none">
+        <div className="focus-popover absolute inset-x-0 z-[30] flex justify-center px-3 sm:px-4 pointer-events-none">
           <section
             role="dialog"
             aria-label="Timer length"
@@ -1146,7 +1465,7 @@ export default function FocusPageClient() {
       )}
 
       {habitPickerOpen && (
-        <div className="absolute inset-x-0 bottom-24 z-[30] flex justify-center px-4 pointer-events-none">
+        <div className="focus-popover absolute inset-x-0 z-[30] hidden justify-center px-4 pointer-events-none sm:flex">
           <section
             role="dialog"
             aria-label="Habits"
@@ -1198,9 +1517,6 @@ export default function FocusPageClient() {
                       />
                       <div className="min-w-0 flex-1 px-1">
                         <p className="truncate text-sm font-medium text-[#1A1640]">{habit.name}</p>
-                        <p className="truncate text-[11px] font-medium text-[var(--color-text-muted)]">
-                          {ticked ? "done today" : "open today"} · {formatTimerChoice(selectedMinutes)}
-                        </p>
                       </div>
                       <button
                         type="button"
@@ -1232,7 +1548,7 @@ export default function FocusPageClient() {
       )}
 
       {queuePanelOpen && (
-        <div className="absolute inset-x-0 bottom-24 z-[30] flex justify-center px-4 pointer-events-none">
+        <div className="focus-popover absolute inset-x-0 z-[30] flex justify-center px-3 sm:px-4 pointer-events-none">
           <section
             role="dialog"
             aria-label="Focus queue"
@@ -1331,9 +1647,106 @@ export default function FocusPageClient() {
         </div>
       )}
 
+      <BottomSheet
+        open={brainDumpOpen}
+        onClose={() => setBrainDumpOpen(false)}
+        ariaLabel="Brain dump"
+      >
+        <div className="px-4 pb-5 pt-1">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              Brain dump
+            </span>
+            <button
+              type="button"
+              onClick={() => setBrainDumpOpen(false)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-text)]/5 active:scale-90 transition-all"
+              aria-label="Close brain dump"
+            >
+              ×
+            </button>
+          </div>
+          <BrainDumpInput
+            onIntentionsParsed={handleIntentionsParsed}
+            onClose={() => setBrainDumpOpen(false)}
+            intentionCategories={intentionCategories}
+          />
+        </div>
+      </BottomSheet>
+
       {/* Bottom Dock */}
-      <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 flex justify-center px-3 sm:px-4 z-20">
-        <div className="glass-panel min-h-14 rounded-[1.65rem] sm:rounded-full flex items-center p-1.5 border border-white/60 shadow-sm gap-1.5 overflow-x-auto scrollbar-hide max-w-[min(100%,46rem)]">
+      <div className="focus-dock absolute left-0 right-0 flex justify-center px-3 sm:px-4 z-20">
+        <div className="glass-panel grid h-16 w-full max-w-[23rem] grid-cols-4 gap-1.5 rounded-[1.4rem] border border-white/60 p-1.5 shadow-sm sm:hidden">
+          <button
+            type="button"
+            onClick={handleOpenTaskPicker}
+            aria-expanded={taskPickerOpen}
+            className={`relative rounded-[1.05rem] border transition-colors flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${
+              taskPickerOpen || !!selectedIntention
+                ? "bg-[#1A1640] border-[#1A1640]/80 text-white shadow-sm"
+                : "bg-white/70 border-white/85 text-[#1A1640] active:bg-white/90"
+            }`}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M8 6h13" />
+              <path d="M8 12h13" />
+              <path d="M8 18h13" />
+              <path d="M3 6h.01" />
+              <path d="M3 12h.01" />
+              <path d="M3 18h.01" />
+            </svg>
+            <span>Tasks</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenTimerPicker}
+            aria-expanded={timerPickerOpen}
+            className={`relative rounded-[1.05rem] border transition-colors flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${
+              timerPickerOpen
+                ? "bg-[#1A1640] border-[#1A1640]/80 text-white shadow-sm"
+                : "bg-white/70 border-white/85 text-[#1A1640] active:bg-white/90"
+            }`}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" />
+              <path d="M12 8v4l2.5 2" />
+            </svg>
+            <span>Timer</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenQueue}
+            aria-expanded={queuePanelOpen}
+            className={`relative rounded-[1.05rem] border transition-colors flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${
+              queuePanelOpen
+                ? "bg-[#1A1640] border-[#1A1640]/80 text-white shadow-sm"
+                : "bg-white/70 border-white/85 text-[#1A1640] active:bg-white/90"
+            }`}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M7 7h10" />
+              <path d="M7 12h10" />
+              <path d="M7 17h6" />
+            </svg>
+            <span>Queue</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openBrainDump}
+            className="rounded-[1.05rem] border border-white/85 bg-white/70 text-[#1A1640] transition-colors flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold active:bg-white/90"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+            <span>Dump</span>
+          </button>
+        </div>
+
+        <div className="glass-panel hidden min-h-14 rounded-full items-center p-1.5 border border-white/60 shadow-sm gap-1.5 overflow-x-auto scrollbar-hide max-w-[min(100%,46rem)] sm:flex">
           {dockBuckets.map((bucket) => {
             const isSelected = bucket.intentions.some((intention) => intention.id === selectedId);
             const isOpen = openBucketId === bucket.id;
@@ -1344,7 +1757,7 @@ export default function FocusPageClient() {
                 onClick={() => handleOpenBucket(bucket.id)}
                 disabled={bucket.intentions.length === 0}
                 aria-expanded={isOpen}
-                className={`h-10 px-3 sm:px-4 rounded-full border transition-colors flex items-center gap-2 min-w-max max-w-[8.5rem] sm:max-w-none flex-shrink-0 disabled:opacity-45 disabled:cursor-not-allowed ${
+                className={`h-10 px-4 rounded-full border transition-colors flex items-center gap-2 min-w-max max-w-none flex-shrink-0 disabled:opacity-45 disabled:cursor-not-allowed ${
                   isOpen || isSelected
                     ? "bg-[#1A1640] border-[#1A1640]/80 text-white shadow-sm"
                     : "bg-white/70 border-white/85 text-[#1A1640] hover:bg-white/90"
@@ -1356,9 +1769,6 @@ export default function FocusPageClient() {
                   aria-hidden="true"
                 />
                 <span className="truncate text-xs font-semibold">{bucket.label}</span>
-                <span className={`text-[10px] font-semibold ${isOpen || isSelected ? "text-white/70" : "text-[var(--color-text-muted)]"}`}>
-                  {bucket.intentions.length}
-                </span>
               </button>
             );
           })}
@@ -1377,14 +1787,14 @@ export default function FocusPageClient() {
               <circle cx="12" cy="12" r="8" />
               <path d="M12 8v4l2.5 2" />
             </svg>
-            <span>{formatTimerChoice(selectedMinutes)}</span>
+            <span>Timer</span>
           </button>
 
           <button
             type="button"
             onClick={handleOpenHabits}
             aria-expanded={habitPickerOpen}
-            className={`h-10 px-3 sm:px-4 rounded-full border transition-colors flex items-center gap-2 min-w-max flex-shrink-0 ${
+            className={`h-10 px-4 rounded-full border transition-colors flex items-center gap-2 min-w-max flex-shrink-0 ${
               habitPickerOpen
                 ? "bg-[#1A1640] border-[#1A1640]/80 text-white shadow-sm"
                 : "bg-white/70 border-white/85 hover:bg-white/90 text-[#1A1640]"
@@ -1392,35 +1802,28 @@ export default function FocusPageClient() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-[#EC4899]" aria-hidden="true" />
             <span className="text-xs font-semibold">Habits</span>
-            <span className={`text-[10px] font-semibold ${habitPickerOpen ? "text-white/70" : "text-[var(--color-text-muted)]"}`}>
-              {habits.length}
-            </span>
           </button>
 
           <button
             type="button"
             onClick={handleOpenQueue}
             aria-expanded={queuePanelOpen}
-            className={`h-10 px-3 sm:px-4 rounded-full border transition-colors flex items-center gap-2 min-w-max flex-shrink-0 ${
+            className={`h-10 px-4 rounded-full border transition-colors flex items-center gap-2 min-w-max flex-shrink-0 ${
               queuePanelOpen
                 ? "bg-[#1A1640] border-[#1A1640]/80 text-white shadow-sm"
                 : "bg-white/70 border-white/85 hover:bg-white/90 text-[#1A1640]"
             }`}
           >
             <span className="text-xs font-semibold">Queue</span>
-            <span className={`text-[10px] font-semibold ${queuePanelOpen ? "text-white/70" : "text-[var(--color-text-muted)]"}`}>
-              {queue.length}
-            </span>
           </button>
 
           <button
             type="button"
             onClick={openBrainDump}
-            className="h-10 px-3 sm:px-4 rounded-full border border-white/85 bg-white/70 hover:bg-white/90 text-[#1A1640] transition-colors flex items-center gap-1.5 min-w-max flex-shrink-0 text-xs font-semibold"
+            className="h-10 px-4 rounded-full border border-white/85 bg-white/70 hover:bg-white/90 text-[#1A1640] transition-colors flex items-center gap-1.5 min-w-max flex-shrink-0 text-xs font-semibold"
           >
             <span aria-hidden="true">+</span>
-            <span className="sm:hidden">Dump</span>
-            <span className="hidden sm:inline">Brain dump</span>
+            <span>Brain dump</span>
           </button>
         </div>
       </div>
