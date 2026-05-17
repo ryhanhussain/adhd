@@ -16,10 +16,15 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const [dragY, setDragY] = useState(0);
   const touchStartY = useRef<number | null>(null);
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -29,7 +34,7 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === "Tab" && sheetRef.current) {
@@ -53,6 +58,7 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
 
     const raf = requestAnimationFrame(() => {
       if (!sheetRef.current) return;
+      if (sheetRef.current.contains(document.activeElement)) return;
       const first = sheetRef.current.querySelector<HTMLElement>(
         'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
@@ -65,7 +71,7 @@ export default function BottomSheet({ open, onClose, children, ariaLabel = "Dial
       cancelAnimationFrame(raf);
       previouslyFocused.current?.focus?.({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!mounted || !open) return null;
 

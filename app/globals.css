@@ -32,6 +32,9 @@
   /* Glassmorphism tokens from the frosted reference. */
   --glass-bg: rgba(255, 255, 255, 0.45);
   --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-mobile-bg: rgba(255, 255, 255, 0.94);
+  --glass-control-mobile-bg: rgba(255, 255, 255, 0.9);
+  --popup-mobile-bg: rgba(255, 255, 255, 0.96);
   --glass-shadow:
     0 24px 70px -24px rgba(40, 20, 80, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -80,6 +83,9 @@
 
     --glass-bg: rgba(38, 27, 48, 0.62);
     --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-mobile-bg: rgba(48, 34, 60, 0.94);
+    --glass-control-mobile-bg: rgba(48, 34, 60, 0.9);
+    --popup-mobile-bg: rgba(48, 34, 60, 0.96);
     --glass-shadow:
       0 22px 70px -24px rgba(0, 0, 0, 0.78),
       inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -112,6 +118,9 @@ html.dark {
 
   --glass-bg: rgba(38, 27, 48, 0.62);
   --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-mobile-bg: rgba(48, 34, 60, 0.94);
+  --glass-control-mobile-bg: rgba(48, 34, 60, 0.9);
+  --popup-mobile-bg: rgba(48, 34, 60, 0.96);
   --glass-shadow:
     0 22px 70px -24px rgba(0, 0, 0, 0.78),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -212,18 +221,21 @@ html.dark .gradient-mesh {
   }
 
   .glass-panel {
+    background: var(--glass-mobile-bg);
     background: color-mix(in srgb, var(--color-popup-solid) 88%, var(--glass-bg));
     backdrop-filter: blur(8px) saturate(135%);
     -webkit-backdrop-filter: blur(8px) saturate(135%);
   }
 
   .glass-control {
-    background: color-mix(in srgb, var(--color-popup-solid) 82%, transparent);
+    background: var(--glass-control-mobile-bg);
+    background: color-mix(in srgb, var(--color-popup-solid) 90%, transparent);
     backdrop-filter: blur(6px) saturate(130%);
     -webkit-backdrop-filter: blur(6px) saturate(130%);
   }
 
   .popup-panel {
+    background: var(--popup-mobile-bg);
     background: color-mix(in srgb, var(--color-popup-solid) 94%, transparent);
     backdrop-filter: blur(6px) saturate(120%);
     -webkit-backdrop-filter: blur(6px) saturate(120%);
@@ -237,6 +249,7 @@ html.dark .gradient-mesh {
 
   .capture-panel,
   .capture-textarea {
+    background: var(--popup-mobile-bg);
     background: color-mix(in srgb, var(--color-popup-solid) 94%, transparent);
     backdrop-filter: blur(4px) saturate(115%);
     -webkit-backdrop-filter: blur(4px) saturate(115%);
