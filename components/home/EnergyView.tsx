@@ -21,6 +21,9 @@ interface EnergyViewProps {
   onTextChange: (id: string, text: string) => Promise<void>;
   /** Reassigns an intention to a different energy level (or null). */
   onEnergyChange: (id: string, energy: EnergyLevel | null) => Promise<void>;
+  pullLabel?: string;
+  pullDisabled?: boolean;
+  onPullToNowNext?: (id: string) => Promise<void>;
   editingIntentionId?: string | null;
   editSignal?: number;
 }
@@ -41,6 +44,9 @@ export default function EnergyView({
   onCategoryChange,
   onTextChange,
   onEnergyChange,
+  pullLabel,
+  pullDisabled,
+  onPullToNowNext,
   editingIntentionId,
   editSignal = 0,
 }: EnergyViewProps) {
@@ -273,6 +279,9 @@ export default function EnergyView({
           intentionCategories={intentionCategories}
           draggingId={dragActiveId}
           hideEnergyChip={true}
+          pullLabel={pullLabel}
+          pullDisabled={pullDisabled}
+          onPullToNowNext={onPullToNowNext}
           editingIntentionId={editingIntentionId}
           editSignal={editSignal}
           onComplete={onComplete}

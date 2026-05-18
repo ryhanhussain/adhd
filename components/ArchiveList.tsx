@@ -55,6 +55,7 @@ export default function ArchiveList() {
         entryId: null,
         order: existing.length,
         createdAt: now,
+        nowNextRank: null,
         updatedAt: now,
         archived: false,
         deleted: false,

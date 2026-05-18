@@ -36,6 +36,10 @@ interface IntentionItemProps {
   hideBucketChip?: boolean;
   /** When true, hides the energy chip picker entirely. */
   hideEnergyChip?: boolean;
+  /** Optional vault action for pulling this intention into Now & Next. */
+  pullLabel?: string;
+  pullDisabled?: boolean;
+  onPullToNowNext?: (id: string) => Promise<void>;
   /** Incremented by a parent to open this row's inline editor. */
   editSignal?: number;
 }
@@ -63,6 +67,9 @@ export default function IntentionItem({
   showEnergyLabel = false,
   hideBucketChip = false,
   hideEnergyChip = false,
+  pullLabel = "Pull",
+  pullDisabled = false,
+  onPullToNowNext,
   editSignal = 0,
 }: IntentionItemProps) {
   const [expanded, setExpanded] = useState(false);
@@ -208,6 +215,10 @@ export default function IntentionItem({
     ? "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[#1A1640]/45 hover:text-red-500 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
     : "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0";
 
+  const pullButtonClass = compact
+    ? "h-7 px-2.5 rounded-full bg-[#1A1640] text-white text-[10px] font-bold transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed"
+    : "h-8 px-3 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] text-xs font-bold transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed";
+
   return (
     <div
       data-intention-id={intention.id}
@@ -305,6 +316,21 @@ export default function IntentionItem({
             compact={compact}
             forceLabel={showEnergyLabel}
           />
+        )}
+
+        {onPullToNowNext && !editing && !expanded && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              void onPullToNowNext(intention.id);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            disabled={pullDisabled}
+            className={pullButtonClass}
+          >
+            {pullLabel}
+          </button>
         )}
 
         {canEdit && !editing && (

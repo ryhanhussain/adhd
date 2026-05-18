@@ -16,6 +16,8 @@ interface HomeTabsProps {
   subtitle?: string;
   /** Legacy single-line date label used when overline/headline aren't passed. */
   dateLabel?: string;
+  /** Hide grouping controls when another surface owns the backlog controls. */
+  showTabs?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export default function HomeTabs({
   headline,
   subtitle,
   dateLabel,
+  showTabs = true,
 }: HomeTabsProps) {
   const [hydrated, setHydrated] = useState(false);
 
@@ -93,18 +96,20 @@ export default function HomeTabs({
           </p>
         )}
       </div>
-      <div
-        role="tablist"
-        aria-label="Group intentions by"
-        className="glass-control inline-flex p-1 rounded-full flex-shrink-0"
-      >
-        <TabButton active={value === "life"} onClick={() => set("life")}>
-          Life areas
-        </TabButton>
-        <TabButton active={value === "energy"} onClick={() => set("energy")}>
-          Energy
-        </TabButton>
-      </div>
+      {showTabs && (
+        <div
+          role="tablist"
+          aria-label="Group intentions by"
+          className="glass-control inline-flex p-1 rounded-full flex-shrink-0"
+        >
+          <TabButton active={value === "life"} onClick={() => set("life")}>
+            Life areas
+          </TabButton>
+          <TabButton active={value === "energy"} onClick={() => set("energy")}>
+            Energy
+          </TabButton>
+        </div>
+      )}
     </div>
   );
 }

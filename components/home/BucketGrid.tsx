@@ -18,6 +18,9 @@ interface BucketGridProps {
   focusedIntentionId?: string | null;
   /** When true, intention rows show the energy chip's text label. */
   showEnergyLabel?: boolean;
+  pullLabel?: string;
+  pullDisabled?: boolean;
+  onPullToNowNext?: (id: string) => Promise<void>;
   editingIntentionId?: string | null;
   editSignal?: number;
   onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
@@ -41,6 +44,9 @@ export default function BucketGrid({
   intentionCategories,
   focusedIntentionId,
   showEnergyLabel,
+  pullLabel,
+  pullDisabled,
+  onPullToNowNext,
   editingIntentionId,
   editSignal = 0,
   onComplete,
@@ -305,6 +311,9 @@ export default function BucketGrid({
           focusedIntentionId={focusedIntentionId}
           showEnergyLabel={showEnergyLabel}
           hideBucketChip={true}
+          pullLabel={pullLabel}
+          pullDisabled={pullDisabled}
+          onPullToNowNext={onPullToNowNext}
           editingIntentionId={editingIntentionId}
           editSignal={editSignal}
           onComplete={onComplete}

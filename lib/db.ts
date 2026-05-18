@@ -23,6 +23,7 @@ export function clampToLocalDate(ts: number, dateStr: string): number {
 }
 
 export type EnergyLevel = "high" | "medium" | "low" | "scattered";
+export type NowNextRank = 0 | 1;
 
 export interface Entry {
   id: string;
@@ -174,6 +175,11 @@ export interface Intention {
   snoozedUntil?: string | null;
   /** Epoch ms of the last "make smaller" / reframe edit. */
   lastReframedAt?: number | null;
+  /**
+   * Rolling Time Block slot on the home dashboard.
+   * 0 = Now, 1 = Next, null/undefined = Brain Dump Vault.
+   */
+  nowNextRank?: NowNextRank | null;
   // --- sync metadata (v6) ---
   updatedAt: number;         // epoch ms of the last local or remote write; drives last-write-wins merge
   deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
@@ -666,6 +672,29 @@ function INTENTION_UPDATED_EVENT() {
   }
 }
 
+function normalizeNowNextRankValue(value: unknown): NowNextRank | null {
+  return value === 0 || value === 1 ? value : null;
+}
+
+function shouldKeepNowNextRank(intention: Intention, today: string): boolean {
+  return (
+    !intention.completed &&
+    !intention.archived &&
+    !intention.deleted &&
+    (!intention.snoozedUntil || intention.snoozedUntil <= today)
+  );
+}
+
+function clearsNowNextRank(updates: Partial<Omit<Intention, "id" | "createdAt">>): boolean {
+  if (updates.completed === true || updates.archived === true || updates.deleted === true) {
+    return true;
+  }
+  if (updates.snoozedUntil !== undefined && updates.snoozedUntil) {
+    return updates.snoozedUntil > toLocalDateStr(new Date());
+  }
+  return false;
+}
+
 export async function addIntentions(intentions: Intention[]): Promise<void> {
   const db = await getDB();
   const now = Date.now();
@@ -673,6 +702,7 @@ export async function addIntentions(intentions: Intention[]): Promise<void> {
   for (const intention of intentions) {
     tx.store.put({
       ...intention,
+      nowNextRank: normalizeNowNextRankValue(intention.nowNextRank),
       updatedAt: intention.updatedAt ?? now,
       deleted: intention.deleted ?? false,
       syncedAt: intention.syncedAt ?? null,
@@ -725,6 +755,7 @@ export async function getReflectionsForDateRange(startDate: string, endDate: str
  * adding an index.
  */
 export async function getActiveIntentions(): Promise<Intention[]> {
+  await normalizeNowNextRanks();
   const db = await getDB();
   const all = await db.getAll("intentions");
   const today = toLocalDateStr(new Date());
@@ -760,6 +791,7 @@ export async function archiveIntentions(ids: string[]): Promise<void> {
       await tx.store.put({
         ...intention,
         archived: true,
+        nowNextRank: null,
         updatedAt: now,
         syncedAt: null,
       });
@@ -776,14 +808,163 @@ export async function updateIntention(
   const db = await getDB();
   const intention = await db.get("intentions", id);
   if (intention) {
+    const shouldClearNowNext = clearsNowNextRank(updates);
     await db.put("intentions", {
       ...intention,
       ...updates,
+      nowNextRank: shouldClearNowNext
+        ? null
+        : updates.nowNextRank !== undefined
+          ? normalizeNowNextRankValue(updates.nowNextRank)
+          : normalizeNowNextRankValue(intention.nowNextRank),
       updatedAt: updates.updatedAt ?? Date.now(),
       syncedAt: null,
     });
     INTENTION_UPDATED_EVENT();
   }
+}
+
+/**
+ * Places one active intention into the Now (0) or Next (1) slot. Any existing
+ * occupant of that slot is returned to the vault, preserving the hard two-slot
+ * rolling block invariant.
+ */
+export async function setNowNextRank(id: string, rank: NowNextRank): Promise<void> {
+  const db = await getDB();
+  const now = Date.now();
+  const today = toLocalDateStr(new Date());
+  const tx = db.transaction("intentions", "readwrite");
+  const all = await tx.store.getAll();
+  const target = all.find((row) => row.id === id);
+  if (!target || !shouldKeepNowNextRank(target, today)) {
+    await tx.done;
+    return;
+  }
+
+  let changed = false;
+  for (const row of all) {
+    if (row.id !== id && normalizeNowNextRankValue(row.nowNextRank) === rank) {
+      await tx.store.put({
+        ...row,
+        nowNextRank: null,
+        updatedAt: now,
+        syncedAt: null,
+      });
+      changed = true;
+    }
+  }
+
+  if (normalizeNowNextRankValue(target.nowNextRank) !== rank) {
+    await tx.store.put({
+      ...target,
+      nowNextRank: rank,
+      updatedAt: now,
+      syncedAt: null,
+    });
+    changed = true;
+  }
+
+  await tx.done;
+  if (changed) INTENTION_UPDATED_EVENT();
+}
+
+export async function clearNowNextRank(id: string): Promise<void> {
+  const db = await getDB();
+  const row = await db.get("intentions", id);
+  if (!row || normalizeNowNextRankValue(row.nowNextRank) == null) return;
+  await db.put("intentions", {
+    ...row,
+    nowNextRank: null,
+    updatedAt: Date.now(),
+    syncedAt: null,
+  });
+  INTENTION_UPDATED_EVENT();
+}
+
+export async function swapNowNextRanks(): Promise<void> {
+  const db = await getDB();
+  const now = Date.now();
+  const tx = db.transaction("intentions", "readwrite");
+  const all = await tx.store.getAll();
+  const nowItem = all.find((row) => normalizeNowNextRankValue(row.nowNextRank) === 0);
+  const nextItem = all.find((row) => normalizeNowNextRankValue(row.nowNextRank) === 1);
+  if (!nowItem || !nextItem) {
+    await tx.done;
+    return;
+  }
+
+  await tx.store.put({
+    ...nowItem,
+    nowNextRank: 1,
+    updatedAt: now,
+    syncedAt: null,
+  });
+  await tx.store.put({
+    ...nextItem,
+    nowNextRank: 0,
+    updatedAt: now,
+    syncedAt: null,
+  });
+  await tx.done;
+  INTENTION_UPDATED_EVENT();
+}
+
+/**
+ * Clears invalid Now/Next ranks and duplicate slot occupants. If sync pulls two
+ * rows into the same slot, the most recently updated active row keeps it.
+ */
+export async function normalizeNowNextRanks(): Promise<void> {
+  const db = await getDB();
+  const today = toLocalDateStr(new Date());
+  const tx = db.transaction("intentions", "readwrite");
+  const all = await tx.store.getAll();
+  const now = Date.now();
+  const keepers = new Map<NowNextRank, string>();
+  const candidates = all
+    .map((row) => ({ row, rank: normalizeNowNextRankValue(row.nowNextRank) }))
+    .filter((item): item is { row: Intention; rank: NowNextRank } => item.rank !== null)
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if ((a.row.updatedAt ?? 0) !== (b.row.updatedAt ?? 0)) return (b.row.updatedAt ?? 0) - (a.row.updatedAt ?? 0);
+      if (a.row.order !== b.row.order) return a.row.order - b.row.order;
+      return b.row.createdAt - a.row.createdAt;
+    });
+
+  for (const { row, rank } of candidates) {
+    if (!shouldKeepNowNextRank(row, today)) continue;
+    if (!keepers.has(rank)) keepers.set(rank, row.id);
+  }
+
+  let changed = false;
+  for (const row of all) {
+    const rank = normalizeNowNextRankValue(row.nowNextRank);
+    if (rank === null) {
+      if (row.nowNextRank !== null && row.nowNextRank !== undefined) {
+        await tx.store.put({
+          ...row,
+          nowNextRank: null,
+          updatedAt: now,
+          syncedAt: null,
+        });
+        changed = true;
+      }
+      continue;
+    }
+
+    const keeperId = keepers.get(rank);
+    if (keeperId !== row.id) {
+      await tx.store.put({
+        ...row,
+        nowNextRank: null,
+        updatedAt: now,
+        syncedAt: null,
+      });
+      changed = true;
+    }
+  }
+
+  await tx.done;
+  if (changed) INTENTION_UPDATED_EVENT();
 }
 
 /**
@@ -822,6 +1003,7 @@ export async function deleteIntention(id: string): Promise<void> {
   await db.put("intentions", {
     ...intention,
     deleted: true,
+    nowNextRank: null,
     updatedAt: Date.now(),
     syncedAt: null,
   });

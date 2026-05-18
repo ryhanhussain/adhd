@@ -781,6 +781,7 @@ export default function FocusPageClient() {
       createdAt,
       categoryId: item.categoryId ?? null,
       energy: item.energy ?? null,
+      nowNextRank: null,
       updatedAt: createdAt,
       deleted: false,
       syncedAt: null,

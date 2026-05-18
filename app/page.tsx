@@ -12,13 +12,11 @@ import MilestoneCelebration from "@/components/MilestoneCelebration";
 import EntryEditSheet from "@/components/EntryEditSheet";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import EmptyHome from "@/components/EmptyHome";
-import ActiveTimerCard from "@/components/ActiveTimerCard";
 import HabitsCard from "@/components/HabitsCard";
 import HomeTabs, { type HomeTab } from "@/components/home/HomeTabs";
-import BucketGrid from "@/components/home/BucketGrid";
-import EnergyView from "@/components/home/EnergyView";
 import MiniSidebar from "@/components/home/MiniSidebar";
-import NowCoachCard from "@/components/home/NowCoachCard";
+import NowNextZone from "@/components/home/NowNextZone";
+import BrainDumpVault from "@/components/home/BrainDumpVault";
 import Toast from "@/components/Toast";
 import {
   getEntriesByDate,
@@ -32,12 +30,16 @@ import {
   updateIntention,
   deleteIntention,
   archiveIntentions,
+  clearNowNextRank,
   toLocalDateStr,
   markEntryPendingDelete,
+  setNowNextRank,
+  swapNowNextRanks,
   unmarkEntryPendingDelete,
   type Entry,
   type Intention,
   type EnergyLevel,
+  type NowNextRank,
 } from "@/lib/db";
 import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
@@ -91,11 +93,10 @@ export default function Home() {
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [recentTaDaIds, setRecentTaDaIds] = useState<Set<string>>(new Set());
   const [homeTab, setHomeTab] = useState<HomeTab>("life");
-  const [editingIntentionId, setEditingIntentionId] = useState<string | null>(null);
-  const [editSignal, setEditSignal] = useState(0);
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [vaultTargetRank, setVaultTargetRank] = useState<NowNextRank | null>(null);
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const deleteTimeout = useRef<NodeJS.Timeout>(undefined);
-  const reframingIds = useRef<Set<string>>(new Set());
   // First-mount sync gate so the backlog reflects converged remote state on
   // load (intentions added on another device show up immediately).
   const initialSyncDoneRef = useRef(false);
@@ -227,6 +228,7 @@ export default function Home() {
       createdAt: now,
       categoryId: p.categoryId ?? null,
       energy: p.energy ?? null,
+      nowNextRank: null,
       updatedAt: now,
       deleted: false,
       syncedAt: null,
@@ -252,12 +254,7 @@ export default function Home() {
   };
 
   const handleIntentionTextChange = async (id: string, text: string) => {
-    const isReframe = reframingIds.current.has(id);
-    if (isReframe) reframingIds.current.delete(id);
-    await updateIntention(id, {
-      text,
-      ...(isReframe ? { lastReframedAt: Date.now(), snoozedUntil: null } : {}),
-    });
+    await updateIntention(id, { text });
     window.dispatchEvent(new Event("entry-updated"));
   };
 
@@ -291,12 +288,6 @@ export default function Home() {
     toastTimeout.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const handleCoachReframe = (id: string) => {
-    reframingIds.current.add(id);
-    setEditingIntentionId(id);
-    setEditSignal((n) => n + 1);
-  };
-
   const handleCoachArchive = async (id: string) => {
     await archiveIntentions([id]);
     window.dispatchEvent(new Event("entry-updated"));
@@ -305,10 +296,24 @@ export default function Home() {
     toastTimeout.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const handleCoachHabitToggle = async (habit: Habit) => {
-    const { ticked } = await toggleHabitCompletion(habit.id, today);
+  const handleOpenVaultForRank = (rank: NowNextRank) => {
+    setVaultTargetRank(rank);
+    setVaultOpen(true);
+  };
+
+  const handlePullToNowNext = async (id: string, rank: NowNextRank) => {
+    await setNowNextRank(id, rank);
     window.dispatchEvent(new Event("entry-updated"));
-    handleHabitToggled(habit, ticked);
+  };
+
+  const handleClearNowNext = async (id: string) => {
+    await clearNowNextRank(id);
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const handleSwapNowNext = async () => {
+    await swapNowNextRanks();
+    window.dispatchEvent(new Event("entry-updated"));
   };
 
   const handleHabitToggled = (habit: Habit, ticked: boolean) => {
@@ -427,6 +432,11 @@ export default function Home() {
   const focusedIntention = focusedIntentionId
     ? intentions.find((i) => i.id === focusedIntentionId) ?? null
     : null;
+  const nowNextSlots: [Intention | null, Intention | null] = [
+    intentions.find((i) => i.nowNextRank === 0) ?? null,
+    intentions.find((i) => i.nowNextRank === 1) ?? null,
+  ];
+  const vaultIntentions = intentions.filter((i) => i.nowNextRank !== 0 && i.nowNextRank !== 1);
 
   return (
     <>
@@ -445,53 +455,53 @@ export default function Home() {
             headline={headline}
             subtitle={subtitle}
             dateLabel={formatTodayLabel()}
+            showTabs={false}
           />
 
-          <NowCoachCard
+          <NowNextZone
+            slots={nowNextSlots}
+            vaultCount={vaultIntentions.length}
             activeEntry={activeEntry}
             hasPomodoro={hasPomodoro}
             focusedIntention={focusedIntention}
-            intentions={intentions}
             intentionCategories={intentionCategories}
-            today={today}
+            focusedIntentionId={focusedIntentionId}
             onFinishActive={handleFinishActive}
             onOpenBrainDump={() => openCapture("plan")}
             onStartFocus={handleCoachStartFocus}
+            onOpenVault={handleOpenVaultForRank}
+            onClearSlot={handleClearNowNext}
+            onSwapSlots={handleSwapNowNext}
             onSnoozeIntention={handleCoachSnooze}
-            onReframeIntention={handleCoachReframe}
             onArchiveIntention={handleCoachArchive}
-            onToggleHabit={handleCoachHabitToggle}
+            onComplete={handleIntentionComplete}
+            onDelete={handleIntentionDelete}
+            onCategoryChange={handleIntentionCategoryChange}
+            onEnergyChange={handleIntentionEnergyChange}
+            onTextChange={handleIntentionTextChange}
           />
 
-          {hasBacklog ? (
-            homeTab === "life" ? (
-              <BucketGrid
-                intentions={intentions}
-                intentionCategories={intentionCategories}
-                focusedIntentionId={focusedIntentionId}
-                showEnergyLabel
-                editingIntentionId={editingIntentionId}
-                editSignal={editSignal}
-                onComplete={handleIntentionComplete}
-                onDelete={handleIntentionDelete}
-                onCategoryChange={handleIntentionCategoryChange}
-                onEnergyChange={handleIntentionEnergyChange}
-                onTextChange={handleIntentionTextChange}
-              />
-            ) : (
-              <EnergyView
-                intentions={intentions}
-                intentionCategories={intentionCategories}
-                onComplete={handleIntentionComplete}
-                onDelete={handleIntentionDelete}
-                onCategoryChange={handleIntentionCategoryChange}
-                onTextChange={handleIntentionTextChange}
-                onEnergyChange={handleIntentionEnergyChange}
-                editingIntentionId={editingIntentionId}
-                editSignal={editSignal}
-              />
-            )
-          ) : streak ? (
+          <BrainDumpVault
+            open={vaultOpen}
+            targetRank={vaultTargetRank}
+            nowFilled={!!nowNextSlots[0]}
+            nextFilled={!!nowNextSlots[1]}
+            intentions={vaultIntentions}
+            intentionCategories={intentionCategories}
+            homeTab={homeTab}
+            onOpenChange={setVaultOpen}
+            onTargetRankChange={setVaultTargetRank}
+            onHomeTabChange={setHomeTab}
+            onOpenBrainDump={() => openCapture("plan")}
+            onPullToNowNext={handlePullToNowNext}
+            onComplete={handleIntentionComplete}
+            onDelete={handleIntentionDelete}
+            onCategoryChange={handleIntentionCategoryChange}
+            onEnergyChange={handleIntentionEnergyChange}
+            onTextChange={handleIntentionTextChange}
+          />
+
+          {!hasBacklog && streak ? (
             <EmptyHome totalDays={streak.totalDays} currentStreak={streak.currentStreak} />
           ) : null}
 
@@ -499,16 +509,6 @@ export default function Home() {
           <div className="lg:hidden">
             <HabitsCard onHabitToggled={handleHabitToggled} />
           </div>
-
-          {/* Regular open timers are shown inline on mobile; focus sessions
-              stay on the dedicated Focus page. */}
-          {!hasPomodoro && activeEntry ? (
-            <ActiveTimerCard
-              activeEntry={activeEntry}
-              onFinish={handleFinishActive}
-              className="lg:hidden"
-            />
-          ) : null}
 
           {tadaEntries.length > 0 && (
             <TaDaTimeline
@@ -530,12 +530,9 @@ export default function Home() {
         {/* ── Desktop right rail ── */}
         <aside className="hidden lg:block lg:sticky lg:top-4">
           <MiniSidebar
-            activeEntry={activeEntry}
-            onFinishActive={handleFinishActive}
             entries={entries}
             categories={categories}
             streak={streak}
-            hasPomodoro={hasPomodoro}
             onHabitToggled={handleHabitToggled}
           />
           <div className="mt-3">

@@ -30,6 +30,9 @@ interface BucketCardProps {
   hideBucketChip?: boolean;
   /** When true, hides the energy chip picker on all intention items. */
   hideEnergyChip?: boolean;
+  pullLabel?: string;
+  pullDisabled?: boolean;
+  onPullToNowNext?: (id: string) => Promise<void>;
   /** Parent-driven inline edit target, used by the Home coach reframe action. */
   editingIntentionId?: string | null;
   editSignal?: number;
@@ -68,6 +71,9 @@ export default function BucketCard({
   showEnergyLabel,
   hideBucketChip,
   hideEnergyChip,
+  pullLabel,
+  pullDisabled,
+  onPullToNowNext,
   editingIntentionId,
   editSignal = 0,
   onComplete,
@@ -146,6 +152,9 @@ export default function BucketCard({
                 showEnergyLabel={showEnergyLabel}
                 hideBucketChip={hideBucketChip}
                 hideEnergyChip={hideEnergyChip}
+                pullLabel={pullLabel}
+                pullDisabled={pullDisabled}
+                onPullToNowNext={onPullToNowNext}
                 editSignal={editingIntentionId === intention.id ? editSignal : 0}
               />
             </div>
