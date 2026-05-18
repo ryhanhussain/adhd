@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   addIntentions,
+  addEntry,
   getActiveIntentions,
   getEntriesByDate,
   toLocalDateStr,
@@ -51,8 +52,11 @@ import {
 } from "@/lib/pomodoroActions";
 import { confettiBurst } from "@/lib/confetti";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
+import { useLifeAreas } from "@/lib/useLifeAreas";
+import { useCategories } from "@/lib/useCategories";
 import { useHabits } from "@/lib/useHabits";
 import { getEnergyEmoji } from "@/lib/energy";
+import { getLifeAreaById } from "@/lib/lifeAreas";
 import type { ParsedIntention } from "@/lib/gemini";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import BottomSheet from "@/components/BottomSheet";
@@ -187,6 +191,8 @@ function taskInputFromIntention(intention: Intention, minutes: number): Pomodoro
     intentionText: intention.text,
     targetMs: msFromMinutes(minutes),
     energy: intention.energy ?? null,
+    lifeAreaId: intention.lifeAreaId ?? null,
+    activityCategory: intention.activityCategory ?? null,
   };
 }
 
@@ -204,7 +210,9 @@ export default function FocusPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const categories = useCategories();
   const intentionCategories = useIntentionCategories();
+  const lifeAreas = useLifeAreas();
   const habits = useHabits();
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -230,6 +238,7 @@ export default function FocusPageClient() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [whatsNextOpen, setWhatsNextOpen] = useState(false);
   const autoStartedRef = useRef(false);
   const nextCueRef = useRef<string | null>(null);
 
@@ -298,6 +307,19 @@ export default function FocusPageClient() {
     void startPomodoroSession(focusBurstTask());
     router.replace("/focus");
   }, [router, searchParams, state]);
+
+  useEffect(() => {
+    if (state) setWhatsNextOpen(false);
+  }, [state]);
+
+  useEffect(() => {
+    if (!whatsNextOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setWhatsNextOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [whatsNextOpen]);
 
   useEffect(() => {
     if (!brainDumpOpen) return;
@@ -466,6 +488,7 @@ export default function FocusPageClient() {
     : readyNext
       ? readyNext.intentionText
       : "The queue can hold the noise while you stay with one task.";
+  const whyLifeArea = activeIntention ? getLifeAreaById(activeIntention.lifeAreaId, lifeAreas) : null;
 
   const closeFloatingPanels = () => {
     setOpenBucketId(null);
@@ -601,6 +624,8 @@ export default function FocusPageClient() {
       const task = {
         ...taskFromQueueItem(item),
         energy: getTaskEnergy(intention),
+        lifeAreaId: intention?.lifeAreaId ?? null,
+        activityCategory: intention?.activityCategory ?? null,
       };
       if (state && completionMode) {
         await finishPomodoroSession(state);
@@ -679,6 +704,7 @@ export default function FocusPageClient() {
 
   const handleFinish = async (event?: React.MouseEvent<HTMLButtonElement>) => {
     if (!state || busy) return;
+    const shouldShowWhatsNext = state.mode === "burst" && !state.habitId;
     setBusy(true);
     try {
       if (event) {
@@ -688,6 +714,12 @@ export default function FocusPageClient() {
       await finishPomodoroSession(state);
       setCompletionMode(false);
       await refreshData();
+      if (shouldShowWhatsNext) {
+        closeFloatingPanels();
+        setConfirmCancel(false);
+        setBrainDumpOpen(false);
+        setWhatsNextOpen(true);
+      }
     } finally {
       setBusy(false);
     }
@@ -708,6 +740,8 @@ export default function FocusPageClient() {
         await startPomodoroSession({
           ...taskFromQueueItem(next),
           energy: getTaskEnergy(intention),
+          lifeAreaId: intention?.lifeAreaId ?? null,
+          activityCategory: intention?.activityCategory ?? null,
         });
       }
       setReadyNextId(null);
@@ -725,10 +759,17 @@ export default function FocusPageClient() {
 
   const handleSaveOnly = async () => {
     if (!state || busy) return;
+    const shouldShowWhatsNext = state.mode === "burst" && !state.habitId;
     setBusy(true);
     try {
       await savePomodoroWithoutCompleting(state);
       setCompletionMode(false);
+      if (shouldShowWhatsNext) {
+        closeFloatingPanels();
+        setConfirmCancel(false);
+        setBrainDumpOpen(false);
+        setWhatsNextOpen(true);
+      }
     } finally {
       setBusy(false);
     }
@@ -770,7 +811,31 @@ export default function FocusPageClient() {
     const createdAt = Date.now();
     const date = toLocalDateStr(createdAt);
     const maxOrder = intentions.reduce((acc, intention) => Math.max(acc, intention.order), -1);
-    const newIntentions: Intention[] = actionable.map((item, index) => ({
+    const past = actionable.filter((item) => item.tense === "past");
+    for (const item of past) {
+      const end = item.loggedAt && !Number.isNaN(Date.parse(item.loggedAt))
+        ? new Date(item.loggedAt).getTime()
+        : createdAt;
+      const durationMinutes = Math.max(1, Math.min(24 * 60, Math.round(item.durationMinutes ?? 30)));
+      const start = end - durationMinutes * 60_000;
+      await addEntry({
+        id: crypto.randomUUID(),
+        text: item.rawText?.trim() || item.text.trim(),
+        timestamp: createdAt,
+        startTime: start,
+        endTime: end,
+        date: toLocalDateStr(end),
+        location: null,
+        tags: [item.categoryName || "Other"],
+        energy: item.energy ?? null,
+        lifeAreaId: item.lifeAreaId ?? null,
+        summary: item.text.trim(),
+        createdAt,
+      });
+    }
+
+    const future = actionable.filter((item) => item.tense !== "past");
+    const newIntentions: Intention[] = future.map((item, index) => ({
       id: crypto.randomUUID(),
       text: item.text.trim(),
       date,
@@ -781,16 +846,21 @@ export default function FocusPageClient() {
       createdAt,
       categoryId: item.categoryId ?? null,
       energy: item.energy ?? null,
+      lifeAreaId: item.lifeAreaId ?? null,
+      priority: item.priority ?? null,
+      activityCategory: item.categoryName ?? null,
       nowNextRank: null,
       updatedAt: createdAt,
       deleted: false,
       syncedAt: null,
     }));
 
-    await addIntentions(newIntentions);
-    const firstNewIntention = newIntentions[0];
-    setSelectedId(firstNewIntention.id);
-    setTaskGroupId(firstNewIntention.categoryId ?? TASK_GROUP_ALL);
+    if (newIntentions.length > 0) {
+      await addIntentions(newIntentions);
+      const firstNewIntention = newIntentions[0];
+      setSelectedId(firstNewIntention.id);
+      setTaskGroupId(firstNewIntention.categoryId ?? TASK_GROUP_ALL);
+    }
     window.dispatchEvent(new Event("entry-updated"));
     await refreshData();
   };
@@ -811,6 +881,21 @@ export default function FocusPageClient() {
           ? "Focus burst"
           : "In focus"
         : "Ready";
+
+  if (whatsNextOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setWhatsNextOpen(false)}
+        className="fixed inset-0 z-[90] flex min-h-dvh w-full items-center justify-center bg-[#08030f] px-6 text-center text-white"
+        aria-label="What's next?"
+      >
+        <span className="text-4xl font-semibold leading-none sm:text-6xl">
+          What's next?
+        </span>
+      </button>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[50] flex flex-col pointer-events-auto bg-[var(--color-bg)] bg-[image:var(--app-base-gradient)] text-[var(--color-text)]">
@@ -879,7 +964,16 @@ export default function FocusPageClient() {
 
       {/* Floating Left Card */}
       <div className="absolute left-6 xl:left-12 top-1/2 -translate-y-1/2 w-64 p-5 glass-panel rounded-3xl hidden lg:block z-20 border border-white/60">
-        <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)] mb-2">Why you're here</p>
+        {whyLifeArea ? (
+          <p
+            className="text-[9px] font-black uppercase tracking-[0.18em] mb-1"
+            style={{ color: whyLifeArea.color }}
+          >
+            {whyLifeArea.name} · Why you're here
+          </p>
+        ) : (
+          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)] mb-2">Why you're here</p>
+        )}
         <p className="text-sm font-semibold leading-snug">
           {whyTitle}
         </p>
@@ -1680,6 +1774,8 @@ export default function FocusPageClient() {
             onIntentionsParsed={handleIntentionsParsed}
             onClose={() => setBrainDumpOpen(false)}
             intentionCategories={intentionCategories}
+            activityCategories={categories}
+            lifeAreas={lifeAreas}
           />
         </div>
       </BottomSheet>

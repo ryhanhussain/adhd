@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import type { Entry, EnergyLevel, Intention, NowNextRank } from "@/lib/db";
-import type { IntentionCategory } from "@/lib/categories";
+import type { Category, IntentionCategory } from "@/lib/categories";
+import type { LifeArea } from "@/lib/lifeAreas";
 import IntentionItem, { type IntentionMoreAction } from "@/components/IntentionItem";
 
 interface NowNextZoneProps {
@@ -12,6 +13,8 @@ interface NowNextZoneProps {
   hasPomodoro: boolean;
   focusedIntention?: Intention | null;
   intentionCategories: IntentionCategory[];
+  lifeAreas: LifeArea[];
+  categories: Category[];
   focusedIntentionId?: string | null;
   onOpenVault: (rank: NowNextRank) => void;
   onOpenBrainDump: () => void;
@@ -25,6 +28,8 @@ interface NowNextZoneProps {
   onDelete: (id: string) => Promise<void>;
   onCategoryChange: (id: string, categoryId: string | null) => Promise<void>;
   onEnergyChange: (id: string, energy: EnergyLevel | null) => Promise<void>;
+  onLifeAreaChange: (id: string, lifeAreaId: string | null) => Promise<void>;
+  onPriorityChange: (id: string, priority: Intention["priority"] | null) => Promise<void>;
   onTextChange: (id: string, text: string) => Promise<void>;
 }
 
@@ -138,6 +143,8 @@ function FilledSlot({
   intention,
   canSwap,
   intentionCategories,
+  lifeAreas,
+  categories,
   focused,
   onClearSlot,
   onSwapSlots,
@@ -148,12 +155,16 @@ function FilledSlot({
   onDelete,
   onCategoryChange,
   onEnergyChange,
+  onLifeAreaChange,
+  onPriorityChange,
   onTextChange,
 }: {
   rank: NowNextRank;
   intention: Intention;
   canSwap: boolean;
   intentionCategories: IntentionCategory[];
+  lifeAreas: LifeArea[];
+  categories: Category[];
   focused: boolean;
 } & Pick<
   NowNextZoneProps,
@@ -166,6 +177,8 @@ function FilledSlot({
   | "onDelete"
   | "onCategoryChange"
   | "onEnergyChange"
+  | "onLifeAreaChange"
+  | "onPriorityChange"
   | "onTextChange"
 >) {
   const moreActions: IntentionMoreAction[] = [
@@ -204,8 +217,12 @@ function FilledSlot({
         onComplete={onComplete}
         onDelete={onDelete}
         intentionCategories={intentionCategories}
+        lifeAreas={lifeAreas}
+        categories={categories}
         onCategoryChange={onCategoryChange}
         onEnergyChange={onEnergyChange}
+        onLifeAreaChange={onLifeAreaChange}
+        onPriorityChange={onPriorityChange}
         onTextChange={onTextChange}
         focused={focused}
         showEnergyLabel
@@ -228,6 +245,8 @@ export default function NowNextZone({
   hasPomodoro,
   focusedIntention,
   intentionCategories,
+  lifeAreas,
+  categories,
   focusedIntentionId,
   onOpenVault,
   onOpenBrainDump,
@@ -241,6 +260,8 @@ export default function NowNextZone({
   onDelete,
   onCategoryChange,
   onEnergyChange,
+  onLifeAreaChange,
+  onPriorityChange,
   onTextChange,
 }: NowNextZoneProps) {
   const bothFilled = !!slots[0] && !!slots[1];
@@ -280,6 +301,8 @@ export default function NowNextZone({
                 intention={intention}
                 canSwap={bothFilled}
                 intentionCategories={intentionCategories}
+                lifeAreas={lifeAreas}
+                categories={categories}
                 focused={focusedIntentionId === intention.id}
                 onClearSlot={onClearSlot}
                 onSwapSlots={onSwapSlots}
@@ -290,6 +313,8 @@ export default function NowNextZone({
                 onDelete={onDelete}
                 onCategoryChange={onCategoryChange}
                 onEnergyChange={onEnergyChange}
+                onLifeAreaChange={onLifeAreaChange}
+                onPriorityChange={onPriorityChange}
                 onTextChange={onTextChange}
               />
             ) : (

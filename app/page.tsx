@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
-import EntryInput from "@/components/EntryInput";
 import TaDaTimeline from "@/components/TaDaTimeline";
 import DailySummary from "@/components/DailySummary";
 import WeekTeaser from "@/components/WeekTeaser";
@@ -36,6 +35,7 @@ import {
   setNowNextRank,
   swapNowNextRanks,
   unmarkEntryPendingDelete,
+  addLifeArea,
   type Entry,
   type Intention,
   type EnergyLevel,
@@ -44,15 +44,23 @@ import {
 import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
-import { getCategoryNames } from "@/lib/categories";
+import { useLifeAreas } from "@/lib/useLifeAreas";
+import { COLOR_OPTIONS, getCategoryNames } from "@/lib/categories";
 import { getStreakInfo, getMilestone, type StreakInfo, type MilestoneInfo } from "@/lib/streaks";
 import { syncIntentionsNow } from "@/lib/intentionsSync";
 import { syncCategoriesNow } from "@/lib/categoriesSync";
 import { syncHabitsNow } from "@/lib/habitsSync";
+import { syncLifeAreasNow } from "@/lib/lifeAreasSync";
 import { supabase } from "@/lib/supabase";
 import { getPomodoroState, POMODORO_EVENT } from "@/lib/pomodoro";
 import type { Habit } from "@/lib/db";
 import { toggleHabitCompletion } from "@/lib/db";
+import {
+  LIFE_AREA_STARTERS,
+  SUGGESTED_LIFE_AREAS,
+  activeLifeAreas,
+  type LifeArea,
+} from "@/lib/lifeAreas";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -82,12 +90,13 @@ export default function Home() {
   const router = useRouter();
   const categories = useCategories();
   const intentionCategories = useIntentionCategories();
+  const lifeAreas = useLifeAreas();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
   const [milestoneToShow, setMilestoneToShow] = useState<MilestoneInfo | null>(null);
-  const [activeInput, setActiveInput] = useState<"none" | "log" | "plan">("none");
+  const [activeInput, setActiveInput] = useState<"none" | "plan">("none");
   const [hasPomodoro, setHasPomodoro] = useState(false);
   const [focusedIntentionId, setFocusedIntentionId] = useState<string | null>(null);
   const [intentions, setIntentions] = useState<Intention[]>([]);
@@ -95,6 +104,10 @@ export default function Home() {
   const [homeTab, setHomeTab] = useState<HomeTab>("life");
   const [vaultOpen, setVaultOpen] = useState(false);
   const [vaultTargetRank, setVaultTargetRank] = useState<NowNextRank | null>(null);
+  const [lifeAreaOnboardingOpen, setLifeAreaOnboardingOpen] = useState(false);
+  const [lifeAreaOnboardingStep, setLifeAreaOnboardingStep] = useState<1 | 2>(1);
+  const [selectedLifeAreaNames, setSelectedLifeAreaNames] = useState<string[]>([]);
+  const [lifeAreaDescriptions, setLifeAreaDescriptions] = useState<Record<string, string>>({});
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const deleteTimeout = useRef<NodeJS.Timeout>(undefined);
   // First-mount sync gate so the backlog reflects converged remote state on
@@ -129,7 +142,7 @@ export default function Home() {
         initialSyncDoneRef.current = true;
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session?.user?.id) {
-          await Promise.all([syncIntentionsNow(), syncCategoriesNow(), syncHabitsNow()]);
+          await Promise.all([syncIntentionsNow(), syncCategoriesNow(), syncHabitsNow(), syncLifeAreasNow()]);
           const refreshed = await getActiveIntentions();
           setIntentions(refreshed);
         }
@@ -160,6 +173,14 @@ export default function Home() {
     window.addEventListener(POMODORO_EVENT, sync);
     return () => window.removeEventListener(POMODORO_EVENT, sync);
   }, []);
+
+  useEffect(() => {
+    if (activeLifeAreas(lifeAreas).length > 0) return;
+    if (typeof window !== "undefined" && window.localStorage.getItem("addit-life-area-onboarding-dismissed") === "1") {
+      return;
+    }
+    setLifeAreaOnboardingOpen(true);
+  }, [lifeAreas]);
 
   const activeEntry = entries.find((e) => e.endTime === 0);
   const tadaEntries = entries.filter((e) => e.id !== activeEntry?.id);
@@ -212,12 +233,37 @@ export default function Home() {
   const handleIntentionsParsed = async (parsed: ParsedIntention[]) => {
     const now = Date.now();
     const todayDate = toLocalDateStr(now);
+    const future = parsed.filter((p) => (p.tense ?? "future") !== "past" && p.text.trim());
+    const past = parsed.filter((p) => p.tense === "past" && p.text.trim());
+
+    for (const item of past) {
+      const end = item.loggedAt && !Number.isNaN(Date.parse(item.loggedAt))
+        ? new Date(item.loggedAt).getTime()
+        : now;
+      const durationMinutes = Math.max(1, Math.min(24 * 60, Math.round(item.durationMinutes ?? 30)));
+      const start = end - durationMinutes * 60_000;
+      await addEntry({
+        id: crypto.randomUUID(),
+        text: item.rawText?.trim() || item.text.trim(),
+        timestamp: now,
+        startTime: start,
+        endTime: end,
+        date: toLocalDateStr(end),
+        location: null,
+        tags: [item.categoryName || "Other"],
+        energy: item.energy ?? null,
+        lifeAreaId: item.lifeAreaId ?? null,
+        summary: item.text.trim(),
+        createdAt: now,
+      });
+    }
+
     // Append to the end of the backlog: bump `order` past the largest existing
     // value so newly added rows don't visually jump above older ones until the
     // user reorders.
     const maxOrder = intentions.reduce((acc, i) => Math.max(acc, i.order), -1);
 
-    const newIntentions: Intention[] = parsed.map((p, i) => ({
+    const newIntentions: Intention[] = future.map((p, i) => ({
       id: crypto.randomUUID(),
       text: p.text,
       date: todayDate,
@@ -228,13 +274,16 @@ export default function Home() {
       createdAt: now,
       categoryId: p.categoryId ?? null,
       energy: p.energy ?? null,
+      lifeAreaId: p.lifeAreaId ?? null,
+      priority: p.priority ?? null,
+      activityCategory: p.categoryName ?? null,
       nowNextRank: null,
       updatedAt: now,
       deleted: false,
       syncedAt: null,
     }));
 
-    await addIntentions(newIntentions);
+    if (newIntentions.length > 0) await addIntentions(newIntentions);
     window.dispatchEvent(new Event("entry-updated"));
   };
 
@@ -250,6 +299,16 @@ export default function Home() {
 
   const handleIntentionEnergyChange = async (id: string, energy: EnergyLevel | null) => {
     await updateIntention(id, { energy });
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const handleIntentionLifeAreaChange = async (id: string, lifeAreaId: string | null) => {
+    await updateIntention(id, { lifeAreaId });
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const handleIntentionPriorityChange = async (id: string, priority: Intention["priority"] | null) => {
+    await updateIntention(id, { priority });
     window.dispatchEvent(new Event("entry-updated"));
   };
 
@@ -272,11 +331,10 @@ export default function Home() {
     }
   };
 
-  const openCapture = useCallback((mode: "log" | "plan") => {
-    flushSync(() => setActiveInput(mode));
+  const openCapture = useCallback((_mode: "plan" = "plan") => {
+    flushSync(() => setActiveInput("plan"));
     requestAnimationFrame(() => {
-      const targetId = mode === "log" ? "entry-input" : "brain-dump-textarea";
-      document.getElementById(targetId)?.focus({ preventScroll: true });
+      document.getElementById("brain-dump-textarea")?.focus({ preventScroll: true });
     });
   }, []);
 
@@ -332,7 +390,40 @@ export default function Home() {
     toastTimeout.current = setTimeout(() => setToast(null), 5000);
   };
 
-  // Keyboard shortcuts: ⌘K log, ⌘⇧K plan, Esc collapse.
+  const createLifeAreasFromOnboarding = async (names: string[]) => {
+    const now = Date.now();
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i];
+      const area: LifeArea = {
+        id: crypto.randomUUID(),
+        name,
+        description: lifeAreaDescriptions[name] || LIFE_AREA_STARTERS[name] || "",
+        color: COLOR_OPTIONS[i % COLOR_OPTIONS.length].color,
+        icon: name === "Career" ? "briefcase" : name === "Health" ? "dumbbell" : name === "Family" ? "home" : name === "Faith" ? "church" : "sparkle",
+        coreValue: null,
+        sortOrder: i,
+        archived: false,
+        createdAt: now,
+        updatedAt: now,
+        deleted: false,
+        syncedAt: null,
+      };
+      await addLifeArea(area);
+    }
+    window.localStorage.setItem("addit-life-area-onboarding-dismissed", "1");
+    window.dispatchEvent(new Event("life-areas-updated"));
+    window.dispatchEvent(new Event("entry-updated"));
+    setLifeAreaOnboardingOpen(false);
+  };
+
+  const skipLifeAreaOnboarding = async () => {
+    await createLifeAreasFromOnboarding(["General"]);
+    setToast({ message: "General Life Area created. You can edit it in Settings." });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => setToast(null), 4000);
+  };
+
+  // Keyboard shortcuts: ⌘K opens the single Brain dump capture pipe, Esc collapse.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const modalOpen = !!selectedEntry || !!milestoneToShow;
@@ -341,7 +432,7 @@ export default function Home() {
       const cmdOrCtrl = e.metaKey || e.ctrlKey;
       if (cmdOrCtrl && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        openCapture(e.shiftKey ? "plan" : "log");
+        openCapture("plan");
         return;
       }
       if (e.key === "Escape" && activeInput !== "none") {
@@ -357,7 +448,7 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     const capture = params.get("capture");
     if (capture !== "log" && capture !== "plan") return;
-    openCapture(capture);
+    openCapture("plan");
     router.replace("/", { scroll: false });
   }, [openCapture, router]);
 
@@ -380,7 +471,7 @@ export default function Home() {
       getCategoryNames(categories),
       isBackdated ? { referenceDate: dateStr } : undefined
     );
-    const tags = result.tags;
+    const tags = intention.activityCategory ? [intention.activityCategory] : result.tags;
     const summary = result.summary || intention.text;
     // Prefer the user's pick at completion; fall back to the intention's
     // brain-dump-time energy; only consult the fresh AI guess as a last resort.
@@ -397,6 +488,7 @@ export default function Home() {
       location: null,
       tags,
       energy,
+      lifeAreaId: intention.lifeAreaId ?? null,
       summary,
       createdAt: now,
     });
@@ -465,6 +557,8 @@ export default function Home() {
             hasPomodoro={hasPomodoro}
             focusedIntention={focusedIntention}
             intentionCategories={intentionCategories}
+            lifeAreas={lifeAreas}
+            categories={categories}
             focusedIntentionId={focusedIntentionId}
             onFinishActive={handleFinishActive}
             onOpenBrainDump={() => openCapture("plan")}
@@ -478,6 +572,8 @@ export default function Home() {
             onDelete={handleIntentionDelete}
             onCategoryChange={handleIntentionCategoryChange}
             onEnergyChange={handleIntentionEnergyChange}
+            onLifeAreaChange={handleIntentionLifeAreaChange}
+            onPriorityChange={handleIntentionPriorityChange}
             onTextChange={handleIntentionTextChange}
           />
 
@@ -488,6 +584,8 @@ export default function Home() {
             nextFilled={!!nowNextSlots[1]}
             intentions={vaultIntentions}
             intentionCategories={intentionCategories}
+            lifeAreas={lifeAreas}
+            categories={categories}
             homeTab={homeTab}
             onOpenChange={setVaultOpen}
             onTargetRankChange={setVaultTargetRank}
@@ -498,6 +596,8 @@ export default function Home() {
             onDelete={handleIntentionDelete}
             onCategoryChange={handleIntentionCategoryChange}
             onEnergyChange={handleIntentionEnergyChange}
+            onLifeAreaChange={handleIntentionLifeAreaChange}
+            onPriorityChange={handleIntentionPriorityChange}
             onTextChange={handleIntentionTextChange}
           />
 
@@ -555,28 +655,7 @@ export default function Home() {
                 : ""
             }
           >
-            {activeInput === "log" ? (
-              <div className="animate-fade-in">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                    Quick log
-                  </span>
-                  <button
-                    onClick={() => setActiveInput("none")}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-text)]/5 active:scale-90 transition-all"
-                    aria-label="Collapse input"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M19 15l-7-7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-                <EntryInput onEntryAdded={() => {
-                  loadData();
-                  setActiveInput("none");
-                }} />
-              </div>
-            ) : activeInput === "plan" ? (
+            {activeInput === "plan" ? (
               <div className="animate-fade-in">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
@@ -596,25 +675,16 @@ export default function Home() {
                   onIntentionsParsed={handleIntentionsParsed}
                   onClose={() => setActiveInput("none")}
                   intentionCategories={intentionCategories}
+                  activityCategories={categories}
+                  lifeAreas={lifeAreas}
                 />
               </div>
             ) : (
               <div className="flex items-center justify-center gap-2">
                 <div className="bg-[#1A1B2E] rounded-full p-1 flex items-center gap-1 shadow-2xl">
                   <button
-                    onClick={() => openCapture("log")}
-                    className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-white text-[#1A1B2E] text-sm font-semibold active:scale-[0.97] transition-transform"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M12 5v14" />
-                      <path d="M5 12h14" />
-                    </svg>
-                    Log activity
-                    <span className="hidden lg:inline text-[10px] opacity-60 ml-1">⌘K</span>
-                  </button>
-                  <button
                     onClick={() => openCapture("plan")}
-                    className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-transparent text-white/75 text-sm font-medium active:scale-[0.97] transition-all hover:text-white"
+                    className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-white text-[#1A1B2E] text-sm font-semibold active:scale-[0.97] transition-transform"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M4 6h16" />
@@ -622,7 +692,7 @@ export default function Home() {
                       <path d="M4 18h10" />
                     </svg>
                     Brain dump
-                    <span className="hidden lg:inline text-[10px] opacity-60 ml-1">⌘⇧K</span>
+                    <span className="hidden lg:inline text-[10px] opacity-60 ml-1">⌘K</span>
                   </button>
                 </div>
                 <button
@@ -644,9 +714,110 @@ export default function Home() {
 
       {/* ── Overlays ── */}
 
+      {lifeAreaOnboardingOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/35 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="glass-panel w-full max-w-lg rounded-3xl border border-[var(--glass-border)] p-5 shadow-2xl">
+            {lifeAreaOnboardingStep === 1 ? (
+              <>
+                <h2 className="text-xl font-black tracking-tight">Set up Life Areas</h2>
+                <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                  These are what you&apos;re building toward. ADDit uses them to make sense of your time.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {SUGGESTED_LIFE_AREAS.map((name) => {
+                    const selected = selectedLifeAreaNames.includes(name);
+                    const disabled = !selected && selectedLifeAreaNames.length >= 5;
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          setSelectedLifeAreaNames((prev) =>
+                            prev.includes(name)
+                              ? prev.filter((item) => item !== name)
+                              : prev.length < 5
+                                ? [...prev, name]
+                                : prev
+                          );
+                          setLifeAreaDescriptions((prev) => ({
+                            ...prev,
+                            [name]: prev[name] ?? LIFE_AREA_STARTERS[name] ?? "",
+                          }));
+                        }}
+                        className={`h-9 px-3 rounded-full text-xs font-semibold border transition-all active:scale-95 disabled:opacity-40 ${
+                          selected
+                            ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] border-[var(--color-accent)]"
+                            : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-muted)]"
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedLifeAreaNames.length >= 5 && (
+                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">Pick your top 5. You can edit later.</p>
+                )}
+                <div className="mt-5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={selectedLifeAreaNames.length < 3}
+                    onClick={() => setLifeAreaOnboardingStep(2)}
+                    className="h-11 flex-1 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold disabled:opacity-40"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void skipLifeAreaOnboarding()}
+                    className="h-11 px-3 text-sm font-medium text-[var(--color-text-muted)]"
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-black tracking-tight">One line each</h2>
+                <div className="mt-4 flex flex-col gap-3">
+                  {selectedLifeAreaNames.map((name) => (
+                    <label key={name} className="block">
+                      <span className="text-xs font-semibold text-[var(--color-text-muted)]">{name}</span>
+                      <input
+                        value={lifeAreaDescriptions[name] ?? LIFE_AREA_STARTERS[name] ?? ""}
+                        onChange={(e) => setLifeAreaDescriptions((prev) => ({ ...prev, [name]: e.target.value.slice(0, 140) }))}
+                        className="mt-1 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void createLifeAreasFromOnboarding(selectedLifeAreaNames)}
+                    className="h-11 flex-1 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold"
+                  >
+                    Done
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLifeAreaOnboardingStep(1)}
+                    className="h-11 px-3 text-sm font-medium text-[var(--color-text-muted)]"
+                  >
+                    Back
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <EntryEditSheet
         entry={selectedEntry}
         categories={categories}
+        lifeAreas={lifeAreas}
         onClose={() => setSelectedEntry(null)}
         onSave={handleSave}
         onDelete={handleDelete}

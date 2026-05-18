@@ -33,6 +33,12 @@ export interface CategoryBreakdownRow {
   deltaPct: number | null;
 }
 
+export interface LifeAreaBreakdownRow {
+  lifeAreaId: string | null;
+  minutes: number;
+  deltaPct: number | null;
+}
+
 export interface IntentionStats {
   created: number;
   completed: number;
@@ -74,6 +80,7 @@ export interface PeriodMetrics {
   daysLogged: number;
   longestStreakInWindow: number;
   categoryBreakdown: CategoryBreakdownRow[];
+  lifeAreaBreakdown: LifeAreaBreakdownRow[];
   growers: { name: string; deltaPct: number }[];
   shrinkers: { name: string; deltaPct: number }[];
   energyCounts: { high: number; medium: number; low: number; scattered: number };
@@ -485,6 +492,31 @@ export async function getPeriodMetrics(
     .slice(0, 3)
     .map((r) => ({ name: r.name, deltaPct: r.deltaPct as number }));
 
+  const currLifeMins = new Map<string, number>();
+  const priorLifeMins = new Map<string, number>();
+  for (const e of current) {
+    const mins = getEntryDuration(e);
+    if (mins <= 0) continue;
+    const key = e.lifeAreaId ?? "__untagged__";
+    currLifeMins.set(key, (currLifeMins.get(key) ?? 0) + mins);
+  }
+  for (const e of prior) {
+    const mins = getEntryDuration(e);
+    if (mins <= 0) continue;
+    const key = e.lifeAreaId ?? "__untagged__";
+    priorLifeMins.set(key, (priorLifeMins.get(key) ?? 0) + mins);
+  }
+  const lifeAreaBreakdown: LifeAreaBreakdownRow[] = Array.from(currLifeMins.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, minutes]) => {
+      const prev = priorLifeMins.get(key) ?? 0;
+      return {
+        lifeAreaId: key === "__untagged__" ? null : key,
+        minutes,
+        deltaPct: prev > 0 ? Math.round(((minutes - prev) / prev) * 100) : null,
+      };
+    });
+
   const shrinkers = categoryBreakdown
     .filter((r) => r.deltaPct !== null && r.deltaPct < 0)
     .sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0))
@@ -724,6 +756,7 @@ export async function getPeriodMetrics(
     daysLogged,
     longestStreakInWindow,
     categoryBreakdown,
+    lifeAreaBreakdown,
     growers,
     shrinkers,
     energyCounts,
@@ -758,7 +791,7 @@ export interface AIPeriodSummary {
 type Cache = Partial<Record<PeriodWindow, AIPeriodSummary>>;
 
 async function readCache(): Promise<Cache> {
-  const db = await openDB("addit-db", 8);
+  const db = await openDB("addit-db");
   try {
     const raw = (await db.get("settings", "aiAnalysisCache")) as string | undefined;
     if (!raw) return {};
@@ -771,7 +804,7 @@ async function readCache(): Promise<Cache> {
 }
 
 async function writeCache(cache: Cache): Promise<void> {
-  const db = await openDB("addit-db", 8);
+  const db = await openDB("addit-db");
   try {
     await db.put("settings", JSON.stringify(cache), "aiAnalysisCache");
   } finally {

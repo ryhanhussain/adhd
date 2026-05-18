@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { BucketIconKey } from "./categories";
+import { MAX_LIFE_AREAS, type LifeArea } from "./lifeAreas";
 
 /** Returns a YYYY-MM-DD string in the user's local timezone (not UTC). */
 export function toLocalDateStr(ts: number | Date): string {
@@ -24,6 +25,7 @@ export function clampToLocalDate(ts: number, dateStr: string): number {
 
 export type EnergyLevel = "high" | "medium" | "low" | "scattered";
 export type NowNextRank = 0 | 1;
+export type PriorityLevel = "high" | "medium" | "low";
 
 export interface Entry {
   id: string;
@@ -35,6 +37,7 @@ export interface Entry {
   location: { lat: number; lng: number } | null;
   tags: string[];
   energy?: EnergyLevel | null;
+  lifeAreaId?: string | null;
   summary?: string | null;
   createdAt: number;
   // --- sync metadata (v7) ---
@@ -96,6 +99,10 @@ export interface Settings {
   habitSyncOwner: string | null;
   /** High-water mark for remote habits `updated_at` already pulled into local. */
   lastHabitPullAt: number;
+  /** Supabase user id whose life areas are currently mirrored in this browser. */
+  lifeAreaSyncOwner: string | null;
+  /** High-water mark for remote life area `updated_at` values already pulled into local. */
+  lastLifeAreaPullAt: number;
 }
 
 /**
@@ -118,6 +125,7 @@ export interface Habit {
   name: string;         // 1-30 chars
   color: string;        // hex from COLOR_OPTIONS
   icon?: BucketIconKey;
+  lifeAreaId?: string | null;
   order: number;
   /** Sorted-desc, deduped, capped at MAX_COMPLETIONS. Each entry is a local YYYY-MM-DD. */
   completions: string[];
@@ -168,6 +176,12 @@ export interface Intention {
    * when the intention is completed; user can still override.
    */
   energy?: EnergyLevel | null;
+  /** Optional Life Area id; null = untagged. */
+  lifeAreaId?: string | null;
+  /** Optional user-facing priority inferred at brain-dump time or edited later. */
+  priority?: PriorityLevel | null;
+  /** Optional activity category name used as a visual hint before completion. */
+  activityCategory?: string | null;
   /**
    * Local YYYY-MM-DD. When set in the future, the intention is hidden from the
    * active Home backlog until that date arrives.
@@ -219,13 +233,17 @@ interface ADDitDB extends DBSchema {
     key: string;
     value: Habit;
   };
+  lifeAreas: {
+    key: string;
+    value: LifeArea;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<ADDitDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<ADDitDB>("addit-db", 10, {
+    dbPromise = openDB<ADDitDB>("addit-db", 11, {
       upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           const entryStore = db.createObjectStore("entries", { keyPath: "id" });
@@ -258,6 +276,14 @@ function getDB() {
         if (oldVersion < 10) {
           if (!db.objectStoreNames.contains("habits")) {
             db.createObjectStore("habits", { keyPath: "id" });
+          }
+        }
+        // v11: Life Areas store + optional lifeAreaId/priority/activityCategory
+        // fields on entries, intentions, and habits. Optional fields need no
+        // backfill; old rows naturally render as untagged.
+        if (oldVersion < 11) {
+          if (!db.objectStoreNames.contains("lifeAreas")) {
+            db.createObjectStore("lifeAreas", { keyPath: "id" });
           }
         }
         //
@@ -367,6 +393,12 @@ function ENTRY_DIRTY_EVENT() {
 function REFLECTION_DIRTY_EVENT() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("reflection-dirty"));
+  }
+}
+
+function LIFE_AREA_DIRTY_EVENT() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("life-area-dirty"));
   }
 }
 
@@ -534,6 +566,9 @@ export async function getSettings(): Promise<Settings> {
   const habitSyncOwner = (await db.get("settings", "habitSyncOwner")) || null;
   const lastHabitPullAtRaw = (await db.get("settings", "lastHabitPullAt")) || "0";
   const lastHabitPullAt = Number.parseInt(lastHabitPullAtRaw, 10) || 0;
+  const lifeAreaSyncOwner = (await db.get("settings", "lifeAreaSyncOwner")) || null;
+  const lastLifeAreaPullAtRaw = (await db.get("settings", "lastLifeAreaPullAt")) || "0";
+  const lastLifeAreaPullAt = Number.parseInt(lastLifeAreaPullAtRaw, 10) || 0;
   return {
     customCategories,
     theme,
@@ -553,6 +588,8 @@ export async function getSettings(): Promise<Settings> {
     homeTabSyncedAt,
     habitSyncOwner,
     lastHabitPullAt,
+    lifeAreaSyncOwner,
+    lastLifeAreaPullAt,
   };
 }
 
@@ -634,6 +671,12 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   }
   if (settings.lastHabitPullAt !== undefined) {
     await db.put("settings", String(settings.lastHabitPullAt ?? 0), "lastHabitPullAt");
+  }
+  if (settings.lifeAreaSyncOwner !== undefined) {
+    await db.put("settings", settings.lifeAreaSyncOwner || "", "lifeAreaSyncOwner");
+  }
+  if (settings.lastLifeAreaPullAt !== undefined) {
+    await db.put("settings", String(settings.lastLifeAreaPullAt ?? 0), "lastLifeAreaPullAt");
   }
 }
 
@@ -1165,6 +1208,131 @@ export async function markReflectionsSynced(dates: string[]): Promise<void> {
 export async function clearAllReflections(): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("reflections", "readwrite");
+  await tx.store.clear();
+  await tx.done;
+}
+
+// ---------------------------------------------------------------------------
+// Life Areas (v11)
+//
+// User-defined meaning layer. Archive preserves historical references; hard
+// deletion is only used for sync tombstones/account switching.
+// ---------------------------------------------------------------------------
+
+function sortLifeAreas(rows: LifeArea[]): LifeArea[] {
+  return rows.sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    return a.createdAt - b.createdAt;
+  });
+}
+
+export async function getLifeAreas(options: { includeArchived?: boolean } = {}): Promise<LifeArea[]> {
+  const db = await getDB();
+  const all = await db.getAll("lifeAreas");
+  return sortLifeAreas(
+    all.filter((area) => !area.deleted && (options.includeArchived || !area.archived))
+  );
+}
+
+export async function getAllLifeAreasForSync(): Promise<LifeArea[]> {
+  const db = await getDB();
+  return db.getAll("lifeAreas");
+}
+
+export async function getActiveLifeAreaCount(): Promise<number> {
+  const areas = await getLifeAreas();
+  return areas.length;
+}
+
+export async function addLifeArea(area: LifeArea): Promise<"ok" | "cap"> {
+  const db = await getDB();
+  const all = await db.getAll("lifeAreas");
+  const activeCount = all.filter((row) => !row.deleted && !row.archived).length;
+  if (!area.archived && activeCount >= MAX_LIFE_AREAS) return "cap";
+
+  const now = Date.now();
+  await db.put("lifeAreas", {
+    ...area,
+    name: area.name.trim().slice(0, 30),
+    description: area.description.trim().slice(0, 140),
+    coreValue: area.coreValue ?? null,
+    archived: area.archived ?? false,
+    deleted: area.deleted ?? false,
+    updatedAt: area.updatedAt ?? now,
+    syncedAt: null,
+  });
+  LIFE_AREA_DIRTY_EVENT();
+  return "ok";
+}
+
+export async function updateLifeArea(
+  id: string,
+  updates: Partial<Omit<LifeArea, "id" | "createdAt">>
+): Promise<"ok" | "cap" | "missing"> {
+  const db = await getDB();
+  const current = await db.get("lifeAreas", id);
+  if (!current) return "missing";
+  const isRestoring = updates.archived === false && current.archived;
+  if (isRestoring) {
+    const all = await db.getAll("lifeAreas");
+    const activeCount = all.filter((row) => !row.deleted && !row.archived && row.id !== id).length;
+    if (activeCount >= MAX_LIFE_AREAS) return "cap";
+  }
+
+  const next: LifeArea = {
+    ...current,
+    ...updates,
+    name: (updates.name ?? current.name).trim().slice(0, 30),
+    description: (updates.description ?? current.description).trim().slice(0, 140),
+    coreValue: updates.coreValue === undefined ? current.coreValue ?? null : updates.coreValue,
+    updatedAt: updates.updatedAt ?? Date.now(),
+    syncedAt: null,
+  };
+  await db.put("lifeAreas", next);
+  LIFE_AREA_DIRTY_EVENT();
+  return "ok";
+}
+
+export async function archiveLifeArea(id: string): Promise<void> {
+  await updateLifeArea(id, { archived: true });
+}
+
+export async function restoreLifeArea(id: string): Promise<"ok" | "cap" | "missing"> {
+  return updateLifeArea(id, { archived: false });
+}
+
+export async function getDirtyLifeAreas(): Promise<LifeArea[]> {
+  const rows = await getAllLifeAreasForSync();
+  return rows.filter((area) => area.syncedAt == null || area.syncedAt < area.updatedAt);
+}
+
+export async function mergeRemoteLifeArea(remote: LifeArea): Promise<"applied" | "skipped"> {
+  const db = await getDB();
+  const tx = db.transaction("lifeAreas", "readwrite");
+  const local = await tx.store.get(remote.id);
+  if (local && local.updatedAt >= remote.updatedAt) {
+    await tx.done;
+    return "skipped";
+  }
+  await tx.store.put({ ...remote, syncedAt: remote.updatedAt });
+  await tx.done;
+  return "applied";
+}
+
+export async function markLifeAreasSynced(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDB();
+  const tx = db.transaction("lifeAreas", "readwrite");
+  for (const id of ids) {
+    const row = await tx.store.get(id);
+    if (row) await tx.store.put({ ...row, syncedAt: row.updatedAt });
+  }
+  await tx.done;
+}
+
+export async function clearAllLifeAreas(): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction("lifeAreas", "readwrite");
   await tx.store.clear();
   await tx.done;
 }

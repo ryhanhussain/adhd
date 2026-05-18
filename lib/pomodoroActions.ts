@@ -30,6 +30,8 @@ export interface PomodoroTaskInput {
   intentionText: string;
   targetMs: number;
   energy?: EnergyLevel | null;
+  lifeAreaId?: string | null;
+  activityCategory?: string | null;
 }
 
 export function taskFromQueueItem(item: PomodoroQueueItem): PomodoroTaskInput {
@@ -68,8 +70,9 @@ export async function startPomodoroSession(
     endTime: 0,
     date: toLocalDateStr(now),
     location: null,
-    tags: [],
+    tags: task.activityCategory ? [task.activityCategory] : [],
     energy: task.energy ?? null,
+    lifeAreaId: task.lifeAreaId ?? null,
     summary: isBurst ? task.intentionText : null,
     createdAt: now,
   });

@@ -34,6 +34,11 @@ import {
   startHabitsSync,
   stopHabitsSync,
 } from "@/lib/habitsSync";
+import {
+  handleLifeAreasSignOut,
+  startLifeAreasSync,
+  stopLifeAreasSync,
+} from "@/lib/lifeAreasSync";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextValue {
@@ -94,17 +99,20 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       startReflectionsSync();
       startCategoriesSync();
       startHabitsSync();
+      startLifeAreasSync();
     } else {
       stopIntentionsSync();
       stopEntriesSync();
       stopReflectionsSync();
       stopCategoriesSync();
       stopHabitsSync();
+      stopLifeAreasSync();
       void handleIntentionsSignOut();
       void handleEntriesSignOut();
       void handleReflectionsSignOut();
       void handleCategoriesSignOut();
       void handleHabitsSignOut();
+      void handleLifeAreasSignOut();
     }
     syncedUserId.current = nextId;
   }, [user?.id]);
@@ -116,6 +124,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       stopReflectionsSync();
       stopCategoriesSync();
       stopHabitsSync();
+      stopLifeAreasSync();
     };
   }, []);
 

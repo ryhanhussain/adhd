@@ -1,7 +1,8 @@
 "use client";
 
 import type { Intention, EnergyLevel } from "@/lib/db";
-import type { BucketIconKey, IntentionCategory } from "@/lib/categories";
+import type { BucketIconKey, Category, IntentionCategory } from "@/lib/categories";
+import type { LifeArea } from "@/lib/lifeAreas";
 import IntentionItem from "@/components/IntentionItem";
 import BucketIcon from "./BucketIcon";
 
@@ -20,6 +21,8 @@ interface BucketCardProps {
   items: Intention[];
   /** All user buckets (passed through to IntentionItem for completion form). */
   intentionCategories?: IntentionCategory[];
+  lifeAreas?: LifeArea[];
+  categories?: Category[];
   /** Highlight the row currently being dragged. */
   draggingId?: string | null;
   /** Intention currently running a Pomodoro; gets a FOCUSING pill + tint. */
@@ -42,6 +45,8 @@ interface BucketCardProps {
   onDelete: (id: string) => Promise<void>;
   onCategoryChange?: (id: string, categoryId: string | null) => Promise<void>;
   onEnergyChange?: (id: string, energy: EnergyLevel | null) => Promise<void>;
+  onLifeAreaChange?: (id: string, lifeAreaId: string | null) => Promise<void>;
+  onPriorityChange?: (id: string, priority: Intention["priority"] | null) => Promise<void>;
   onTextChange?: (id: string, text: string) => Promise<void>;
 }
 
@@ -66,6 +71,8 @@ export default function BucketCard({
   icon,
   items,
   intentionCategories,
+  lifeAreas,
+  categories,
   draggingId,
   focusedIntentionId,
   showEnergyLabel,
@@ -80,6 +87,8 @@ export default function BucketCard({
   onDelete,
   onCategoryChange,
   onEnergyChange,
+  onLifeAreaChange,
+  onPriorityChange,
   onTextChange,
 }: BucketCardProps) {
   const count = items.length;
@@ -144,8 +153,12 @@ export default function BucketCard({
                 onComplete={onComplete}
                 onDelete={onDelete}
                 intentionCategories={intentionCategories}
+                lifeAreas={lifeAreas}
+                categories={categories}
                 onCategoryChange={onCategoryChange}
                 onEnergyChange={onEnergyChange}
+                onLifeAreaChange={onLifeAreaChange}
+                onPriorityChange={onPriorityChange}
                 onTextChange={onTextChange}
                 compact
                 focused={focusedIntentionId === intention.id}

@@ -46,6 +46,9 @@ interface RemoteIntentionRow {
   snoozed_until: string | null;
   last_reframed_at: number | null;
   now_next_rank: 0 | 1 | null;
+  life_area_id: string | null;
+  priority: Intention["priority"] | null;
+  activity_category: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -73,6 +76,9 @@ function toRemote(intention: Intention, userId: string): RemoteIntentionRow {
     snoozed_until: intention.snoozedUntil ?? null,
     last_reframed_at: intention.lastReframedAt ?? null,
     now_next_rank: intention.nowNextRank ?? null,
+    life_area_id: intention.lifeAreaId ?? null,
+    priority: intention.priority ?? null,
+    activity_category: intention.activityCategory ?? null,
     created_at: intention.createdAt,
     updated_at: intention.updatedAt,
   };
@@ -96,6 +102,9 @@ function fromRemote(row: RemoteIntentionRow): Intention {
     snoozedUntil: row.snoozed_until ?? null,
     lastReframedAt: row.last_reframed_at ?? null,
     nowNextRank: toNowNextRank(row.now_next_rank),
+    lifeAreaId: row.life_area_id ?? null,
+    priority: row.priority ?? null,
+    activityCategory: row.activity_category ?? null,
     updatedAt: row.updated_at,
     syncedAt: row.updated_at,
   };

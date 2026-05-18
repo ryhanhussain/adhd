@@ -6,10 +6,10 @@ import { getEntriesByDate, deleteEntry, addEntry, searchEntries, markEntryPendin
 import { categorizeEntry } from "@/lib/gemini";
 import { getCategoryNames, getCategoryStyle } from "@/lib/categories";
 import { useCategories } from "@/lib/useCategories";
+import { useLifeAreas } from "@/lib/useLifeAreas";
 import TimelineEntry from "./TimelineEntry";
 import EntryEditSheet from "./EntryEditSheet";
 import WeekStrip from "./WeekStrip";
-import EntryInput from "./EntryInput";
 import Toast from "./Toast";
 import Skeleton from "./Skeleton";
 
@@ -22,12 +22,11 @@ export default function Timeline() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const categories = useCategories();
+  const lifeAreas = useLifeAreas();
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
   const [now, setNow] = useState(Date.now());
-  const [quickText, setQuickText] = useState("");
-  const [isQuickSubmitting, setIsQuickSubmitting] = useState(false);
 
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -40,9 +39,6 @@ export default function Timeline() {
   // Swipe state
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
-
-  // Past-day log sheet
-  const [pastLogOpen, setPastLogOpen] = useState(false);
 
   const showToast = (message: string) => {
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
@@ -72,10 +68,6 @@ export default function Timeline() {
   useEffect(() => {
     loadEntries();
   }, [loadEntries]);
-
-  useEffect(() => {
-    setPastLogOpen(false);
-  }, [date]);
 
   const shiftDate = (days: number) => {
     const d = new Date(date + "T12:00:00");
@@ -155,42 +147,6 @@ export default function Timeline() {
     acc[d].push(entry);
     return acc;
   }, {});
-
-  // Quick add from timeline
-  const handleQuickAdd = async () => {
-    const trimmed = quickText.trim();
-    if (!trimmed || isQuickSubmitting) return;
-
-    setIsQuickSubmitting(true);
-    try {
-      const nowTs = Date.now();
-      const dateStr = toLocalDateStr(nowTs);
-
-      const geminiResult = await categorizeEntry(trimmed, getCategoryNames(categories));
-
-      const startTime = nowTs + geminiResult.startOffsetMinutes * 60 * 1000;
-      const endTime = geminiResult.isOngoing ? 0 : nowTs + geminiResult.endOffsetMinutes * 60 * 1000;
-
-      await addEntry({
-        id: crypto.randomUUID(),
-        text: trimmed,
-        timestamp: nowTs,
-        startTime,
-        endTime,
-        date: dateStr,
-        location: null,
-        tags: geminiResult.tags,
-        createdAt: nowTs,
-      });
-
-      setQuickText("");
-      await loadEntries();
-      showToast(geminiResult.isOngoing ? "Timer started" : "Logged");
-      window.dispatchEvent(new Event("entry-updated"));
-    } finally {
-      setIsQuickSubmitting(false);
-    }
-  };
 
   const handleSave = async (updated: Entry) => {
     setSelectedEntry(null);
@@ -420,6 +376,7 @@ export default function Timeline() {
                         <TimelineEntry
                           entry={entry}
                           categories={categories}
+                          lifeAreas={lifeAreas}
                           onTap={setSelectedEntry}
                           showTimeOnCard
                         />
@@ -466,72 +423,6 @@ export default function Timeline() {
               </svg>
             </button>
           </div>
-
-          {isToday && (
-            <div className="flex gap-2 mb-6">
-              <input
-                id="timeline-quick-add"
-                name="timeline-quick-add"
-                type="text"
-                value={quickText}
-                onChange={(e) => setQuickText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleQuickAdd();
-                }}
-                placeholder="Log an activity..."
-                className="flex-1 h-12 rounded-xl border border-[var(--color-border)] shadow-sm bg-[var(--color-surface)] px-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-opacity-40 placeholder:text-[var(--color-text-muted)] transition-all"
-              />
-              <button
-                onClick={handleQuickAdd}
-                disabled={!quickText.trim() || isQuickSubmitting}
-                className="h-12 px-5 rounded-xl bg-[var(--color-accent)] shadow-md shadow-[var(--color-accent)]/20 text-[var(--color-on-accent)] font-semibold disabled:opacity-40 disabled:shadow-none active:scale-[0.98] transition-all"
-              >
-                {isQuickSubmitting ? "..." : "Log"}
-              </button>
-            </div>
-          )}
-
-          {!isToday && (
-            <div className="mb-6">
-              {pastLogOpen ? (
-                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 animate-fade-in">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      Log for {displayDate}
-                    </span>
-                    <button
-                      onClick={() => setPastLogOpen(false)}
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-text)]/5 active:scale-90 transition-all"
-                      aria-label="Close"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <EntryInput
-                    key={date}
-                    initialDate={date}
-                    onEntryAdded={async () => {
-                      setPastLogOpen(false);
-                      await loadEntries();
-                    }}
-                  />
-                </div>
-              ) : (
-                <button
-                  onClick={() => setPastLogOpen(true)}
-                  className="w-full h-12 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/60 hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-accent-soft)] text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                  aria-label={`Log entry for ${displayDate}`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  <span>Log entry for {displayDate}</span>
-                </button>
-              )}
-            </div>
-          )}
 
           {loading ? (
             <div className="flex flex-col gap-5 py-4">
@@ -602,7 +493,7 @@ export default function Timeline() {
                             onClick={() => setExpandedGapIdx(isGapExpanded ? null : i)}
                             className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] active:scale-95 transition-all"
                           >
-                            <span>{gapText} untracked</span>
+                            <span>{gapText} unlogged</span>
                             <svg
                               width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                               className={`transition-transform duration-200 ${isGapExpanded ? "rotate-180" : ""}`}
@@ -669,6 +560,7 @@ export default function Timeline() {
                           <TimelineEntry
                             entry={entry}
                             categories={categories}
+                            lifeAreas={lifeAreas}
                             onTap={setSelectedEntry}
                             showTimeOnCard={false}
                             style={isActive ? { boxShadow: `0 0 0 2px var(--color-accent)` } : undefined}
@@ -705,6 +597,7 @@ export default function Timeline() {
       <EntryEditSheet
         entry={selectedEntry}
         categories={categories}
+        lifeAreas={lifeAreas}
         onClose={() => setSelectedEntry(null)}
         onSave={handleSave}
         onDelete={handleDelete}

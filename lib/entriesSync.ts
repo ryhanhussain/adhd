@@ -39,6 +39,7 @@ interface RemoteEntryRow {
   location: { lat: number; lng: number } | null;
   tags: string[];
   energy: string | null;
+  life_area_id: string | null;
   summary: string | null;
   deleted: boolean;
   created_at: number;
@@ -57,6 +58,7 @@ function toRemote(entry: Entry, userId: string): RemoteEntryRow {
     location: entry.location ?? null,
     tags: entry.tags,
     energy: entry.energy ?? null,
+    life_area_id: entry.lifeAreaId ?? null,
     summary: entry.summary ?? null,
     deleted: entry.deleted ?? false,
     created_at: entry.createdAt,
@@ -75,6 +77,7 @@ function fromRemote(row: RemoteEntryRow): Entry {
     location: row.location,
     tags: row.tags,
     energy: row.energy as Entry["energy"],
+    lifeAreaId: row.life_area_id ?? null,
     summary: row.summary,
     createdAt: row.created_at,
     deleted: row.deleted,

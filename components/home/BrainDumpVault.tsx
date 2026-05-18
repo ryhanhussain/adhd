@@ -2,10 +2,11 @@
 
 import type { ReactNode } from "react";
 import { saveSettings, type EnergyLevel, type Intention, type NowNextRank } from "@/lib/db";
-import type { IntentionCategory } from "@/lib/categories";
+import type { Category, IntentionCategory } from "@/lib/categories";
+import type { LifeArea } from "@/lib/lifeAreas";
 import type { HomeTab } from "./HomeTabs";
 import BucketGrid from "./BucketGrid";
-import EnergyView from "./EnergyView";
+import LifeAreaGrid from "./LifeAreaGrid";
 
 interface BrainDumpVaultProps {
   open: boolean;
@@ -14,6 +15,8 @@ interface BrainDumpVaultProps {
   nextFilled: boolean;
   intentions: Intention[];
   intentionCategories: IntentionCategory[];
+  lifeAreas: LifeArea[];
+  categories: Category[];
   homeTab: HomeTab;
   editingIntentionId?: string | null;
   editSignal?: number;
@@ -26,6 +29,8 @@ interface BrainDumpVaultProps {
   onDelete: (id: string) => Promise<void>;
   onCategoryChange: (id: string, categoryId: string | null) => Promise<void>;
   onEnergyChange: (id: string, energy: EnergyLevel | null) => Promise<void>;
+  onLifeAreaChange: (id: string, lifeAreaId: string | null) => Promise<void>;
+  onPriorityChange: (id: string, priority: Intention["priority"] | null) => Promise<void>;
   onTextChange: (id: string, text: string) => Promise<void>;
 }
 
@@ -71,6 +76,8 @@ export default function BrainDumpVault({
   nextFilled,
   intentions,
   intentionCategories,
+  lifeAreas,
+  categories,
   homeTab,
   editingIntentionId,
   editSignal = 0,
@@ -83,6 +90,8 @@ export default function BrainDumpVault({
   onDelete,
   onCategoryChange,
   onEnergyChange,
+  onLifeAreaChange,
+  onPriorityChange,
   onTextChange,
 }: BrainDumpVaultProps) {
   const fallbackRank = firstOpenRank(nowFilled, nextFilled);
@@ -165,8 +174,8 @@ export default function BrainDumpVault({
               <VaultTab active={homeTab === "life"} onClick={() => setTab("life")}>
                 Life areas
               </VaultTab>
-              <VaultTab active={homeTab === "energy"} onClick={() => setTab("energy")}>
-                Energy
+              <VaultTab active={homeTab === "buckets"} onClick={() => setTab("buckets")}>
+                Buckets
               </VaultTab>
             </div>
           </div>
@@ -185,10 +194,11 @@ export default function BrainDumpVault({
               </button>
             </div>
           ) : homeTab === "life" ? (
-            <BucketGrid
+            <LifeAreaGrid
               intentions={intentions}
+              lifeAreas={lifeAreas}
               intentionCategories={intentionCategories}
-              showEnergyLabel
+              categories={categories}
               pullLabel={pullLabel}
               pullDisabled={pullDisabled}
               onPullToNowNext={handlePull}
@@ -198,12 +208,16 @@ export default function BrainDumpVault({
               onDelete={onDelete}
               onCategoryChange={onCategoryChange}
               onEnergyChange={onEnergyChange}
+              onLifeAreaChange={onLifeAreaChange}
+              onPriorityChange={onPriorityChange}
               onTextChange={onTextChange}
             />
           ) : (
-            <EnergyView
+            <BucketGrid
               intentions={intentions}
               intentionCategories={intentionCategories}
+              lifeAreas={lifeAreas}
+              categories={categories}
               pullLabel={pullLabel}
               pullDisabled={pullDisabled}
               onPullToNowNext={handlePull}
@@ -212,8 +226,10 @@ export default function BrainDumpVault({
               onComplete={onComplete}
               onDelete={onDelete}
               onCategoryChange={onCategoryChange}
-              onTextChange={onTextChange}
               onEnergyChange={onEnergyChange}
+              onLifeAreaChange={onLifeAreaChange}
+              onPriorityChange={onPriorityChange}
+              onTextChange={onTextChange}
             />
           )}
         </div>

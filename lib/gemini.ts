@@ -99,10 +99,18 @@ export async function categorizeEntry(
 }
 
 export interface ParsedIntention {
+  rawText?: string;
+  tense?: "past" | "future";
   text: string;
+  categoryName?: string | null;
   categoryId?: string | null;
+  lifeAreaId?: string | null;
+  priority?: "high" | "medium" | "low" | null;
+  durationMinutes?: number | null;
+  loggedAt?: string | null;
   /** Gemini-inferred energy level for the task; null when ambiguous. */
   energy?: GeminiEnergyLevel | null;
+  confidence?: number | null;
 }
 
 /** Minimal shape the route needs; callers pass their full IntentionCategory list. */
@@ -112,13 +120,26 @@ export interface BrainDumpCategory {
   description: string;
 }
 
+export interface BrainDumpLifeArea {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface BrainDumpActivityCategory {
+  name: string;
+  color?: string;
+}
+
 export type BrainDumpResult =
   | { ok: true; intentions: ParsedIntention[] }
   | { ok: false; reason: "auth" | "cap" | "burst" | "quota_error" | "network" | "server" };
 
 export async function parseBrainDump(
   transcript: string,
-  categories?: BrainDumpCategory[]
+  categories?: BrainDumpCategory[],
+  lifeAreas?: BrainDumpLifeArea[],
+  activityCategories?: BrainDumpActivityCategory[]
 ): Promise<BrainDumpResult> {
   const token = await getAuthTokenWithRefresh();
   if (!token) return { ok: false, reason: "auth" };
@@ -135,6 +156,8 @@ export async function parseBrainDump(
       body: JSON.stringify({
         text: transcript,
         categories: categories ?? [],
+        lifeAreas: lifeAreas ?? [],
+        activityCategories: activityCategories ?? [],
       }),
     });
   } catch (e) {
@@ -161,14 +184,15 @@ export async function parseBrainDump(
     return { ok: false, reason: "server" };
   }
 
-  let data: { intentions?: unknown };
+  let data: { intentions?: unknown; items?: unknown };
   try {
     data = await res.json();
   } catch {
     return { ok: false, reason: "server" };
   }
-  if (!Array.isArray(data.intentions)) return { ok: false, reason: "server" };
-  return { ok: true, intentions: data.intentions as ParsedIntention[] };
+  const items = Array.isArray(data.items) ? data.items : data.intentions;
+  if (!Array.isArray(items)) return { ok: false, reason: "server" };
+  return { ok: true, intentions: items as ParsedIntention[] };
 }
 
 // ---------------------------------------------------------------------------

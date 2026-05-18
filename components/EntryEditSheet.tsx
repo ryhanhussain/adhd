@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { type Entry, type EnergyLevel, updateEntry } from "@/lib/db";
 import { getCategoryStyle, type Category } from "@/lib/categories";
 import { ENERGY_LEVELS, getEnergyEmoji, getEnergyLabel } from "@/lib/energy";
+import type { LifeArea } from "@/lib/lifeAreas";
 import BottomSheet from "./BottomSheet";
 
 interface EntryEditSheetProps {
   entry: Entry | null;
   categories: Category[];
+  lifeAreas?: LifeArea[];
   onClose: () => void;
   onSave: (updated: Entry) => void;
   onDelete: (id: string) => void;
@@ -26,12 +28,13 @@ function timeStrToTs(timeStr: string, referenceDate: string): number {
   return d.getTime();
 }
 
-export default function EntryEditSheet({ entry, categories, onClose, onSave, onDelete }: EntryEditSheetProps) {
+export default function EntryEditSheet({ entry, categories, lifeAreas = [], onClose, onSave, onDelete }: EntryEditSheetProps) {
   const [text, setText] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [energy, setEnergy] = useState<EnergyLevel | null>(null);
+  const [lifeAreaId, setLifeAreaId] = useState<string | null>(null);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,6 +49,7 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
       setEndTime(entry.endTime === 0 ? "" : tsToTimeStr(entry.endTime || entry.timestamp));
       setTags([...entry.tags]);
       setEnergy(entry.energy ?? null);
+      setLifeAreaId(entry.lifeAreaId ?? null);
       setShowTagPicker(false);
     }
   }, [entry]);
@@ -74,7 +78,8 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
     startTime !== originalStartTime ||
     endTime !== originalEndTime ||
     JSON.stringify(tags) !== JSON.stringify(entry.tags) ||
-    energy !== (entry.energy ?? null);
+    energy !== (entry.energy ?? null) ||
+    lifeAreaId !== (entry.lifeAreaId ?? null);
 
   const handleSave = async () => {
     if (!isDirty || isSaving) return;
@@ -86,6 +91,7 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
       endTime: newEndTime,
       tags,
       energy,
+      lifeAreaId,
     });
     setIsSaving(false);
     if (updated) onSave(updated);
@@ -221,6 +227,20 @@ export default function EntryEditSheet({ entry, categories, onClose, onSave, onD
             </div>
           </div>
         )}
+
+        <label className="text-xs font-medium mt-4 mb-1.5 block text-[var(--color-text-muted)]">
+          Life Area
+        </label>
+        <select
+          value={lifeAreaId ?? ""}
+          onChange={(e) => setLifeAreaId(e.target.value || null)}
+          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-opacity-40"
+        >
+          <option value="">Untagged</option>
+          {lifeAreas.filter((area) => !area.archived && !area.deleted).map((area) => (
+            <option key={area.id} value={area.id}>{area.name}</option>
+          ))}
+        </select>
 
         <label className="text-xs font-medium mt-4 mb-1.5 block text-[var(--color-text-muted)]">
           Energy

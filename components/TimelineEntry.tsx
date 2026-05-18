@@ -3,12 +3,14 @@
 import { useRef, useState } from "react";
 import { updateEntry, type Entry } from "@/lib/db";
 import { getCategoryStyle, type Category } from "@/lib/categories";
+import { getLifeAreaById, type LifeArea } from "@/lib/lifeAreas";
 import TagBadge from "./TagBadge";
 import CategoryPicker from "./CategoryPicker";
 
 interface TimelineEntryProps {
   entry: Entry;
   categories: Category[];
+  lifeAreas?: LifeArea[];
   onTap: (entry: Entry) => void;
   style?: React.CSSProperties;
   showTimeOnCard?: boolean;
@@ -31,8 +33,9 @@ function formatTime(ts: number): string {
   });
 }
 
-export default function TimelineEntry({ entry, categories, onTap, style, showTimeOnCard = false }: TimelineEntryProps) {
+export default function TimelineEntry({ entry, categories, lifeAreas = [], onTap, style, showTimeOnCard = false }: TimelineEntryProps) {
   const primaryStyle = getCategoryStyle(entry.tags[0] || "Other", categories);
+  const lifeArea = getLifeAreaById(entry.lifeAreaId, lifeAreas);
   const startTime = entry.startTime || entry.timestamp;
   const isTimer = entry.endTime === 0;
   const endTime = isTimer ? Date.now() : (entry.endTime || entry.timestamp);
@@ -111,7 +114,7 @@ export default function TimelineEntry({ entry, categories, onTap, style, showTim
         onContextMenu={(e) => e.preventDefault()}
         className="glass-panel w-full rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.01] hover:shadow-lg active:scale-[0.98] relative group"
         style={{
-          borderLeft: `3px solid ${primaryStyle.color}`,
+          borderLeft: lifeArea ? `3px solid ${lifeArea.color}` : undefined,
           ...style,
         }}
       >

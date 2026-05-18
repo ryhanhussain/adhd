@@ -16,7 +16,7 @@ export default function EmptyHome({ totalDays, currentStreak }: EmptyHomeProps) 
 
   const body = isFirstRun
     ? "Tell me what you just did — I'll handle the rest."
-    : "Tap Log Activity below to mark what you're doing, or Brain dump to plan.";
+    : "Use Brain dump below to capture what happened or what needs doing.";
 
   return (
     <div className="glass-panel rounded-2xl p-6 text-center animate-fade-in">

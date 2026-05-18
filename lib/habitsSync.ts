@@ -32,6 +32,7 @@ interface RemoteHabitRow {
   name: string;
   color: string;
   icon: string | null;
+  life_area_id: string | null;
   order_index: number;
   completions: unknown; // jsonb — defensively normalised in fromRemote
   last_untick_at: number | null;
@@ -47,6 +48,7 @@ function toRemote(habit: Habit, userId: string): RemoteHabitRow {
     name: habit.name,
     color: habit.color,
     icon: habit.icon ?? null,
+    life_area_id: habit.lifeAreaId ?? null,
     order_index: habit.order,
     completions: habit.completions,
     last_untick_at: habit.lastUntickAt,
@@ -62,6 +64,7 @@ function fromRemote(row: RemoteHabitRow): Habit {
     name: row.name,
     color: row.color,
     icon: (row.icon ?? undefined) as BucketIconKey | undefined,
+    lifeAreaId: row.life_area_id ?? null,
     order: row.order_index,
     completions: normaliseCompletions(row.completions),
     lastUntickAt: row.last_untick_at,

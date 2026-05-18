@@ -4,7 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Intention, EnergyLevel } from "@/lib/db";
 import { toLocalDateStr, timeStringToTimestampOnDate } from "@/lib/db";
-import type { IntentionCategory } from "@/lib/categories";
+import { getCategoryStyle, type Category, type IntentionCategory } from "@/lib/categories";
+import { getLifeAreaById, type LifeArea } from "@/lib/lifeAreas";
 import DatePill from "./DatePill";
 import EnergyPicker from "./EnergyPicker";
 import { confettiBurst } from "@/lib/confetti";
@@ -24,10 +25,18 @@ interface IntentionItemProps {
   onDelete: (id: string) => Promise<void>;
   /** Current user buckets; shown inside the quiet three-dot menu. */
   intentionCategories?: IntentionCategory[];
+  /** Current Life Areas; shown inside the quiet three-dot menu. */
+  lifeAreas?: LifeArea[];
+  /** Activity categories for the small task colour dot. */
+  categories?: Category[];
   /** Sets or clears the category for this intention. Pass null to clear. */
   onCategoryChange?: (id: string, categoryId: string | null) => Promise<void>;
   /** Sets or clears the energy level for this intention. Pass null to clear. */
   onEnergyChange?: (id: string, energy: EnergyLevel | null) => Promise<void>;
+  /** Sets or clears the Life Area for this intention. Pass null to clear. */
+  onLifeAreaChange?: (id: string, lifeAreaId: string | null) => Promise<void>;
+  /** Sets or clears priority for this intention. */
+  onPriorityChange?: (id: string, priority: Intention["priority"] | null) => Promise<void>;
   /** Updates the intention's text. When omitted, inline edit is disabled. */
   onTextChange?: (id: string, text: string) => Promise<void>;
   /**
@@ -43,6 +52,7 @@ interface IntentionItemProps {
   hideBucketChip?: boolean;
   /** Legacy display hint; metadata now lives inside the three-dot menu. */
   hideEnergyChip?: boolean;
+  hideLifeAreaChip?: boolean;
   /** Optional vault action for pulling this intention into Now & Next. */
   pullLabel?: string;
   pullDisabled?: boolean;
@@ -70,8 +80,12 @@ export default function IntentionItem({
   onComplete,
   onDelete,
   intentionCategories = [],
+  lifeAreas = [],
+  categories = [],
   onCategoryChange,
   onEnergyChange,
+  onLifeAreaChange,
+  onPriorityChange,
   onTextChange,
   compact = false,
   focused = false,
@@ -175,6 +189,10 @@ export default function IntentionItem({
   const currentBucket = intention.categoryId
     ? intentionCategories.find((bucket) => bucket.id === intention.categoryId) ?? null
     : null;
+  const currentLifeArea = getLifeAreaById(intention.lifeAreaId, lifeAreas);
+  const currentActivityCategory = intention.activityCategory
+    ? getCategoryStyle(intention.activityCategory, categories)
+    : null;
 
   const handlePickCategory = async (categoryId: string | null) => {
     if (!onCategoryChange) return;
@@ -184,6 +202,16 @@ export default function IntentionItem({
   const handlePickEnergy = async (energy: EnergyLevel | null) => {
     if (!onEnergyChange) return;
     await onEnergyChange(intention.id, energy);
+  };
+
+  const handlePickLifeArea = async (lifeAreaId: string | null) => {
+    if (!onLifeAreaChange) return;
+    await onLifeAreaChange(intention.id, lifeAreaId);
+  };
+
+  const handlePickPriority = async (priority: Intention["priority"] | null) => {
+    if (!onPriorityChange) return;
+    await onPriorityChange(intention.id, priority);
   };
 
   const canEdit = !!onTextChange && !expanded && !animatingOut;
@@ -233,6 +261,8 @@ export default function IntentionItem({
       540,
       96 +
         (hasBuckets ? Math.min(7, intentionCategories.length + 1) * 36 + 48 : 0) +
+        (onLifeAreaChange ? Math.min(7, lifeAreas.length + 1) * 36 + 48 : 0) +
+        (onPriorityChange ? 5 * 36 + 48 : 0) +
         (onEnergyChange ? (ENERGY_LEVELS.length + 1) * 36 + 48 : 0) +
         actionCount * 40,
     );
@@ -259,7 +289,7 @@ export default function IntentionItem({
       vv?.removeEventListener("scroll", updatePosition);
       window.removeEventListener("resize", updatePosition);
     };
-  }, [canEdit, hasBuckets, intentionCategories.length, moreActions.length, moreOpen, onEnergyChange, onPullToNowNext]);
+  }, [canEdit, hasBuckets, intentionCategories.length, lifeAreas.length, moreActions.length, moreOpen, onEnergyChange, onLifeAreaChange, onPriorityChange, onPullToNowNext]);
 
   const containerClass = compact
     ? `group bg-white ${expanded ? "rounded-2xl" : "rounded-full"} px-3 text-[#1A1640] shadow-[0_10px_24px_-20px_rgba(26,22,64,0.7)] ring-1 ring-black/[0.04] transition-colors ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
@@ -344,16 +374,41 @@ export default function IntentionItem({
             className={editInputClass}
           />
         ) : (
-          <span
-            onDoubleClick={(e) => {
-              if (!canEdit) return;
-              e.stopPropagation();
-              startEdit();
-            }}
-            className={textClass}
-            title={canEdit ? "Double-click to edit" : undefined}
-          >
-            {intention.text}
+          <span className="flex-1 min-w-0">
+            <span
+              onDoubleClick={(e) => {
+                if (!canEdit) return;
+                e.stopPropagation();
+                startEdit();
+              }}
+              className={textClass}
+              title={canEdit ? "Double-click to edit" : undefined}
+            >
+              {intention.text}
+            </span>
+            {compact && (intention.priority || currentBucket || currentActivityCategory) && (
+              <span className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-[#1A1640]/55">
+                {intention.priority && (
+                  <span className="uppercase">{intention.priority}</span>
+                )}
+                {currentBucket && (
+                  <span className="flex items-center gap-1">
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: currentBucket.color }}
+                    />
+                    <span className="truncate max-w-[5.5rem]">{currentBucket.name}</span>
+                  </span>
+                )}
+                {currentActivityCategory && (
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: currentActivityCategory.color }}
+                    title={intention.activityCategory ?? undefined}
+                  />
+                )}
+              </span>
+            )}
           </span>
         )}
 
@@ -408,10 +463,84 @@ export default function IntentionItem({
                 <strong>{currentBucket?.name ?? "No bucket"}</strong>
               </div>
               <div className="quiet-menu-meta-row">
+                <span>Life Area</span>
+                <strong>{currentLifeArea?.name ?? "Untagged"}</strong>
+              </div>
+              <div className="quiet-menu-meta-row">
+                <span>Priority</span>
+                <strong>{intention.priority ?? "None"}</strong>
+              </div>
+              <div className="quiet-menu-meta-row">
                 <span>Energy</span>
                 <strong>{intention.energy ? getEnergyLabel(intention.energy) : "No energy"}</strong>
               </div>
             </div>
+
+            {lifeAreas.length > 0 && onLifeAreaChange && (
+              <div className="quiet-menu-section">
+                <p className="quiet-menu-kicker">Life Area</p>
+                <div className="quiet-menu-options">
+                  {lifeAreas.filter((area) => !area.archived && !area.deleted).map((area) => {
+                    const selected = area.id === intention.lifeAreaId;
+                    return (
+                      <button
+                        key={area.id}
+                        type="button"
+                        onClick={() => void handlePickLifeArea(area.id)}
+                        className="quiet-menu-option"
+                        aria-pressed={selected}
+                      >
+                        <span className="quiet-menu-dot" style={{ backgroundColor: area.color }} aria-hidden="true" />
+                        <span className="quiet-menu-option-label">{area.name}</span>
+                        {selected && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => void handlePickLifeArea(null)}
+                    className="quiet-menu-option"
+                    aria-pressed={!intention.lifeAreaId}
+                  >
+                    <span className="quiet-menu-dot muted" aria-hidden="true" />
+                    <span className="quiet-menu-option-label">Untagged</span>
+                    {!intention.lifeAreaId && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {onPriorityChange && (
+              <div className="quiet-menu-section">
+                <p className="quiet-menu-kicker">Priority</p>
+                <div className="quiet-menu-options">
+                  {(["high", "medium", "low"] as const).map((priority) => {
+                    const selected = priority === intention.priority;
+                    return (
+                      <button
+                        key={priority}
+                        type="button"
+                        onClick={() => void handlePickPriority(priority)}
+                        className="quiet-menu-option"
+                        aria-pressed={selected}
+                      >
+                        <span className="quiet-menu-option-label capitalize">{priority}</span>
+                        {selected && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => void handlePickPriority(null)}
+                    className="quiet-menu-option"
+                    aria-pressed={!intention.priority}
+                  >
+                    <span className="quiet-menu-option-label">No priority</span>
+                    {!intention.priority && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {hasBuckets && (
               <div className="quiet-menu-section">

@@ -19,7 +19,20 @@ export type BucketIconKey =
   | "brain"
   | "home"
   | "code"
-  | "palette";
+  | "palette"
+  | "moon-star"
+  | "users"
+  | "hand-helping"
+  | "shield"
+  | "coins"
+  | "target"
+  | "church"
+  | "graduation-cap"
+  | "baby"
+  | "smile"
+  | "wrench"
+  | "plane"
+  | "calendar";
 
 export const BUCKET_ICON_KEYS: BucketIconKey[] = [
   "sparkle",
@@ -34,6 +47,19 @@ export const BUCKET_ICON_KEYS: BucketIconKey[] = [
   "home",
   "code",
   "palette",
+  "moon-star",
+  "users",
+  "hand-helping",
+  "shield",
+  "coins",
+  "target",
+  "church",
+  "graduation-cap",
+  "baby",
+  "smile",
+  "wrench",
+  "plane",
+  "calendar",
 ];
 
 /**
@@ -64,6 +90,8 @@ export const COLOR_OPTIONS: { color: string; label: string }[] = [
   { color: "#ec4899", label: "Pink" },
   { color: "#14b8a6", label: "Teal" },
   { color: "#a1a1aa", label: "Gray" },
+  { color: "#ef4444", label: "Red" },
+  { color: "#8b5cf6", label: "Violet" },
 ];
 
 export const DEFAULT_CATEGORIES: Category[] = [

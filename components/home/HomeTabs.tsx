@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSettings, saveSettings } from "@/lib/db";
 
-export type HomeTab = "life" | "energy";
+export type HomeTab = "life" | "buckets";
 
 interface HomeTabsProps {
   value: HomeTab;
@@ -43,8 +43,9 @@ export default function HomeTabs({
         try {
           const settings = await getSettings();
           const stored = settings.homeTab;
-          if (!cancelled && (stored === "life" || stored === "energy") && stored !== value) {
-            onChange(stored);
+          const normalized = stored === "energy" ? "buckets" : stored;
+          if (!cancelled && (normalized === "life" || normalized === "buckets") && normalized !== value) {
+            onChange(normalized);
           }
         } catch {
           // IndexedDB may be unavailable; fall through with default.
@@ -59,8 +60,9 @@ export default function HomeTabs({
         try {
           const settings = await getSettings();
           const stored = settings.homeTab;
-          if (!cancelled && (stored === "life" || stored === "energy") && stored !== value) {
-            onChange(stored);
+          const normalized = stored === "energy" ? "buckets" : stored;
+          if (!cancelled && (normalized === "life" || normalized === "buckets") && normalized !== value) {
+            onChange(normalized);
           }
         } catch { /* ignore */ }
       })();
@@ -105,8 +107,8 @@ export default function HomeTabs({
           <TabButton active={value === "life"} onClick={() => set("life")}>
             Life areas
           </TabButton>
-          <TabButton active={value === "energy"} onClick={() => set("energy")}>
-            Energy
+          <TabButton active={value === "buckets"} onClick={() => set("buckets")}>
+            Buckets
           </TabButton>
         </div>
       )}

@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Intention, EnergyLevel } from "@/lib/db";
 import { reorderIntentions } from "@/lib/db";
-import type { IntentionCategory } from "@/lib/categories";
+import type { Category, IntentionCategory } from "@/lib/categories";
+import type { LifeArea } from "@/lib/lifeAreas";
 import BucketCard from "./BucketCard";
 
 const UNSORTED_KEY = "__unsorted__";
@@ -14,6 +15,8 @@ const UNSORTED_COLOR = "#a1a1aa";
 interface BucketGridProps {
   intentions: Intention[];
   intentionCategories: IntentionCategory[];
+  lifeAreas?: LifeArea[];
+  categories?: Category[];
   /** Intention currently running a Pomodoro; threaded down to row tinting. */
   focusedIntentionId?: string | null;
   /** When true, intention rows show the energy chip's text label. */
@@ -27,6 +30,8 @@ interface BucketGridProps {
   onDelete: (id: string) => Promise<void>;
   onCategoryChange: (id: string, categoryId: string | null) => Promise<void>;
   onEnergyChange: (id: string, energy: EnergyLevel | null) => Promise<void>;
+  onLifeAreaChange?: (id: string, lifeAreaId: string | null) => Promise<void>;
+  onPriorityChange?: (id: string, priority: Intention["priority"] | null) => Promise<void>;
   onTextChange: (id: string, text: string) => Promise<void>;
 }
 
@@ -42,6 +47,8 @@ interface BucketGridProps {
 export default function BucketGrid({
   intentions,
   intentionCategories,
+  lifeAreas,
+  categories,
   focusedIntentionId,
   showEnergyLabel,
   pullLabel,
@@ -53,6 +60,8 @@ export default function BucketGrid({
   onDelete,
   onCategoryChange,
   onEnergyChange,
+  onLifeAreaChange,
+  onPriorityChange,
   onTextChange,
 }: BucketGridProps) {
   const validIds = useMemo(() => new Set(intentionCategories.map((b) => b.id)), [intentionCategories]);
@@ -307,6 +316,8 @@ export default function BucketGrid({
           icon={section.icon}
           items={section.items}
           intentionCategories={intentionCategories}
+          lifeAreas={lifeAreas}
+          categories={categories}
           draggingId={dragActiveId}
           focusedIntentionId={focusedIntentionId}
           showEnergyLabel={showEnergyLabel}
@@ -320,6 +331,8 @@ export default function BucketGrid({
           onDelete={onDelete}
           onCategoryChange={onCategoryChange}
           onEnergyChange={onEnergyChange}
+          onLifeAreaChange={onLifeAreaChange}
+          onPriorityChange={onPriorityChange}
           onTextChange={onTextChange}
         />
       ))}

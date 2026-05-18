@@ -9,6 +9,16 @@ interface IncomingBucket {
   description: string;
 }
 
+interface IncomingLifeArea {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface IncomingActivityCategory {
+  name: string;
+}
+
 /** Sanitizes client-supplied buckets; drops malformed rows rather than 400-ing. */
 function sanitizeBuckets(raw: unknown): IncomingBucket[] {
   if (!Array.isArray(raw)) return [];
@@ -22,6 +32,36 @@ function sanitizeBuckets(raw: unknown): IncomingBucket[] {
     if (!id || !name) continue;
     out.push({ id, name, description });
     if (out.length >= 3) break;
+  }
+  return out;
+}
+
+function sanitizeLifeAreas(raw: unknown): IncomingLifeArea[] {
+  if (!Array.isArray(raw)) return [];
+  const out: IncomingLifeArea[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const id = typeof r.id === "string" ? r.id.slice(0, 64) : null;
+    const name = typeof r.name === "string" ? r.name.trim().slice(0, 30) : null;
+    const description = typeof r.description === "string" ? r.description.trim().slice(0, 140) : "";
+    if (!id || !name) continue;
+    out.push({ id, name, description });
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+function sanitizeActivityCategories(raw: unknown): IncomingActivityCategory[] {
+  if (!Array.isArray(raw)) return [];
+  const out: IncomingActivityCategory[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const name = typeof r.name === "string" ? r.name.trim().slice(0, 40) : null;
+    if (!name) continue;
+    out.push({ name });
+    if (out.length >= 12) break;
   }
   return out;
 }
@@ -52,85 +92,160 @@ export async function POST(req: NextRequest) {
   }
 
   const buckets = sanitizeBuckets(body?.categories);
-  const hasBuckets = buckets.length > 0;
+  const lifeAreas = sanitizeLifeAreas(body?.lifeAreas);
+  const activityCategories = sanitizeActivityCategories(body?.activityCategories);
 
-  // Build prompt dynamically from the user's actual buckets — no hard-coded
-  // taxonomies. If no buckets exist, the classification section is omitted
-  // entirely and response items have categoryId: null.
-  const bucketRule = hasBuckets
-    ? `
-- Classify every task into one of the user's intention buckets (listed below). Match based on the bucket's name AND description — reason about which bucket the task belongs to, don't just keyword-match. Use null ONLY as a last resort when a task is genuinely unrelated to every bucket. Do not default to null for convenience. If a task is plausibly related to a bucket's theme (project, domain, life area), assign that bucket.`
-    : "";
+  const bucketList = buckets.length
+    ? buckets.map((b) => `- ${b.id}: ${b.name}${b.description ? ` — ${b.description}` : ""}`).join("\n")
+    : "- none";
+  const lifeAreaList = lifeAreas.length
+    ? lifeAreas.map((a) => `- ${a.id}: ${a.name}${a.description ? ` — ${a.description}` : ""}`).join("\n")
+    : "- none";
+  const categoryList = activityCategories.length
+    ? activityCategories.map((c) => `- ${c.name}`).join("\n")
+    : "- Other";
 
-  const bucketList = hasBuckets
-    ? `
+  const prompt = `Parse this ADHD brain dump into real items. Split distinct tasks/activities even when punctuation is messy. Skip filler, questions, app tests, and vague fragments.
 
-User's intention buckets — classify each task into one of these:
-${buckets.map((b) => `- id: "${b.id}" — ${b.name}${b.description ? ` — ${b.description}` : ""}`).join("\n")}
+For each item detect:
+- tense: "past" if already happened ("spent", "did", "finished", "took me", "from 2-3pm", "this morning"); "future" for tasks ("call", "write", "need to", checklist phrasing).
+- text: short clean title.
+- categoryName: one existing activity category or null.
+- categoryId: future-only bucket id or null.
+- lifeAreaId: best matching life area id or null. Never force a fit.
+- priority: future-only high/medium/low/null.
+- durationMinutes and loggedAt: past-only. Use ISO loggedAt near the activity end; current time if unclear.
+- energy: high/medium/low/scattered/null if obvious.
 
-Only use the exact ids above. Do not invent new buckets or ids.`
-    : "";
+Life areas:
+${lifeAreaList}
 
-  const outputShape = hasBuckets
-    ? `[{"text": "Task description", "categoryId": "<one of: ${buckets.map((b) => `\"${b.id}\"`).join(", ")}, or null>", "energy": "<high|medium|low|scattered|null>"}]`
-    : `[{"text": "Task description", "energy": "<high|medium|low|scattered|null>"}]`;
+Activity categories:
+${categoryList}
 
-  const prompt = `You are an ADHD-friendly task parser. Given a brain dump transcript, extract only real, actionable tasks or intentions.
+Future buckets:
+${bucketList}
 
-Rules:
-- Identify distinct, independent tasks. Two tasks are separate when they produce different deliverables or require independent effort — even if they share a topic, project, or phrase.
-- Punctuation is unreliable: users separate tasks with commas, periods, newlines, "and", or nothing at all. Ignore delimiters and reason about meaning.
-- DO split distinct deliverables that share a topic (e.g. "product design for the pivot, regulatory assessment for the pivot, research the go-to-market for the pivot" → three tasks; "finish the report, prep the slides, email the team" → three tasks)
-- Do NOT split a single task whose verbs describe one action on one deliverable (e.g. "review and edit Cam's CV" → one task; "clean and organise the desk" → one task)
-- Each item must be a concrete action the user needs to do — not a question, observation, or meta-comment about the app
-- Filter out anything that isn't a real task: fragments, rhetorical questions, self-commentary, test phrases
-- Rewrite each task as a short, scannable to-do label (ideally 3–8 words). Strip filler like "I need to", "I have to", "do some", "a full", "a bit of". Prefer an imperative verb or a clean noun phrase. Preserve specifics (names, deliverables, qualifiers like "draft" or "final") — don't over-compress or lose meaning.
-- Example cleanup: "I need to work on the product design for the startup pivot" → "Product design for startup pivot"; "i need to do a full regulatory assessment for the new startup pivot" → "Regulatory assessment for pivot"; "do some research on the go to market for the pivot" → "Research go-to-market for pivot"; "I need to email Sarah about the Q3 numbers" → "Email Sarah about Q3 numbers"${bucketRule}
-- Infer the user's likely energy level for each task: "high" for deep cognitive work, creative output, or high-stakes meetings; "medium" for routine focused work or normal coordination; "low" for admin/email/passive tasks that need attention but not much fuel; "scattered" for context-switching errand-list or chore tasks. Use null only when truly ambiguous — most real tasks have a discernible energy level, so prefer a guess over null.
-- Return at most 10 items
-- If nothing actionable is found, return an empty array
+Current time: ${new Date().toISOString()}
 
-Examples of what NOT to include:
-- "If it summarises" → not a task, skip it
-- "Categorizes the submissions" → not a user task, skip it
-- "Let's see" / "So yeah" → filler, skip${bucketList}
+Return JSON only:
+{"items":[{"rawText":"string","tense":"past|future","text":"string","categoryName":"string|null","categoryId":"uuid|null","lifeAreaId":"uuid|null","priority":"high|medium|low|null","durationMinutes":30,"loggedAt":"ISO|null","energy":"high|medium|low|scattered|null","confidence":0.8}]}
 
-Transcript: "${text}"
-
-Respond with ONLY a JSON array of objects like ${outputShape}. No other text.`;
+Transcript: ${JSON.stringify(text.trim())}`;
 
   try {
     const responseText = await callGemini(prompt, { temperature: 0.2, maxOutputTokens: 512 });
 
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
     if (!jsonMatch) return NextResponse.json({ intentions: null });
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsedRoot = JSON.parse(jsonMatch[0]);
+    const parsed = Array.isArray(parsedRoot) ? parsedRoot : parsedRoot?.items;
     if (!Array.isArray(parsed)) return NextResponse.json({ intentions: null });
 
     const validIds = new Set(buckets.map((b) => b.id));
     const idByName = new Map(buckets.map((b) => [b.name.toLowerCase(), b.id]));
+    const validLifeAreaIds = new Set(lifeAreas.map((a) => a.id));
+    const lifeAreaIdByName = new Map(lifeAreas.map((a) => [a.name.toLowerCase(), a.id]));
+    const validCategoryNames = new Set(activityCategories.map((c) => c.name.toLowerCase()));
+    const categoryNameByLower = new Map(activityCategories.map((c) => [c.name.toLowerCase(), c.name]));
     const validEnergies = new Set(["high", "medium", "low", "scattered"]);
+    const validPriorities = new Set(["high", "medium", "low"]);
 
-    const intentions = parsed
-      .filter((item: { text?: string }) => typeof item.text === "string" && item.text.trim().length > 0)
+    const items = parsed
+      .filter((item: { text?: string; title?: string }) => {
+        const title = typeof item.text === "string" ? item.text : item.title;
+        return typeof title === "string" && title.trim().length > 0;
+      })
       .slice(0, 10)
-      .map((item: { text: string; categoryId?: unknown; energy?: unknown }) => {
-        const rawId = item.categoryId;
+      .map((item: {
+        rawText?: unknown;
+        tense?: unknown;
+        text?: string;
+        title?: string;
+        categoryName?: unknown;
+        category_name?: unknown;
+        categoryId?: unknown;
+        category_id?: unknown;
+        bucketId?: unknown;
+        bucket_id?: unknown;
+        lifeAreaId?: unknown;
+        life_area_id?: unknown;
+        priority?: unknown;
+        durationMinutes?: unknown;
+        duration_minutes?: unknown;
+        loggedAt?: unknown;
+        logged_at?: unknown;
+        energy?: unknown;
+        confidence?: unknown;
+      }) => {
+        const rawBucketId = item.categoryId ?? item.category_id ?? item.bucketId ?? item.bucket_id;
         let categoryId: string | null = null;
-        if (hasBuckets && typeof rawId === "string") {
-          if (validIds.has(rawId)) categoryId = rawId;
-          else categoryId = idByName.get(rawId.toLowerCase()) ?? null;
+        if (typeof rawBucketId === "string") {
+          if (validIds.has(rawBucketId)) categoryId = rawBucketId;
+          else categoryId = idByName.get(rawBucketId.toLowerCase()) ?? null;
         }
+
+        const rawLifeAreaId = item.lifeAreaId ?? item.life_area_id;
+        let lifeAreaId: string | null = null;
+        if (typeof rawLifeAreaId === "string") {
+          if (validLifeAreaIds.has(rawLifeAreaId)) lifeAreaId = rawLifeAreaId;
+          else lifeAreaId = lifeAreaIdByName.get(rawLifeAreaId.toLowerCase()) ?? null;
+        }
+
+        const rawCategoryName = item.categoryName ?? item.category_name;
+        const categoryName =
+          typeof rawCategoryName === "string" && validCategoryNames.has(rawCategoryName.toLowerCase())
+            ? categoryNameByLower.get(rawCategoryName.toLowerCase()) ?? null
+            : null;
+
+        const rawTense = typeof item.tense === "string" ? item.tense.toLowerCase() : "";
+        const tense = rawTense === "past" ? "past" : "future";
+
+        const rawPriority = typeof item.priority === "string" ? item.priority.toLowerCase() : "";
+        const priority =
+          tense === "future" && validPriorities.has(rawPriority)
+            ? (rawPriority as "high" | "medium" | "low")
+            : null;
+
+        const rawDuration = item.durationMinutes ?? item.duration_minutes;
+        const durationMinutes =
+          tense === "past" && typeof rawDuration === "number" && Number.isFinite(rawDuration)
+            ? Math.max(1, Math.min(24 * 60, Math.round(rawDuration)))
+            : null;
+
+        const rawLoggedAt = item.loggedAt ?? item.logged_at;
+        const loggedAt =
+          tense === "past" && typeof rawLoggedAt === "string" && !Number.isNaN(Date.parse(rawLoggedAt))
+            ? new Date(rawLoggedAt).toISOString()
+            : null;
+
         const rawEnergy = item.energy;
         const energy =
           typeof rawEnergy === "string" && validEnergies.has(rawEnergy.toLowerCase())
             ? (rawEnergy.toLowerCase() as "high" | "medium" | "low" | "scattered")
             : null;
-        return { text: item.text.trim(), categoryId, energy };
+        const confidence =
+          typeof item.confidence === "number" && Number.isFinite(item.confidence)
+            ? Math.max(0, Math.min(1, item.confidence))
+            : null;
+
+        return {
+          rawText: typeof item.rawText === "string" ? item.rawText.slice(0, 240) : "",
+          tense,
+          text: (item.text ?? item.title ?? "").trim().slice(0, 120),
+          categoryName,
+          categoryId: tense === "future" ? categoryId : null,
+          lifeAreaId,
+          priority,
+          durationMinutes,
+          loggedAt,
+          energy,
+          confidence,
+        };
       });
 
-    return NextResponse.json({ intentions });
+    return NextResponse.json({ items, intentions: items });
   } catch (e) {
     console.error("parse-brain-dump route error:", e);
     return NextResponse.json({ intentions: null });

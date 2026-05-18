@@ -2,25 +2,35 @@
 
 import { useState, useRef, useLayoutEffect } from "react";
 import type { ParsedIntention, GeminiEnergyLevel } from "@/lib/gemini";
-import type { IntentionCategory } from "@/lib/categories";
+import type { Category, IntentionCategory } from "@/lib/categories";
+import type { LifeArea } from "@/lib/lifeAreas";
 import BucketChipPicker from "./BucketChipPicker";
-import EnergyPicker from "./EnergyPicker";
 import Toast from "./Toast";
 
 interface BrainDumpInputProps {
-  /** Commits the parsed (and possibly user-edited) intentions to the backlog. */
+  /** Commits parsed items. Future items become intentions; past items become entries. */
   onIntentionsParsed: (intentions: ParsedIntention[]) => Promise<void>;
   onClose: () => void;
   /** Current intention buckets; forwarded to the Gemini prompt for dynamic classification. */
   intentionCategories?: IntentionCategory[];
+  activityCategories?: Category[];
+  lifeAreas?: LifeArea[];
   /** Focus the text area as soon as the input mounts. Defaults to true. */
   autoFocus?: boolean;
 }
 
 interface DraftItem {
+  rawText?: string;
+  tense: "past" | "future";
   text: string;
+  categoryName: string | null;
   categoryId: string | null;
+  lifeAreaId: string | null;
+  priority: "high" | "medium" | "low" | null;
+  durationMinutes: number | null;
+  loggedAt: string | null;
   energy: GeminiEnergyLevel | null;
+  confidence?: number | null;
 }
 
 const TEXTAREA_MIN_HEIGHT = 80;
@@ -30,6 +40,8 @@ export default function BrainDumpInput({
   onIntentionsParsed,
   onClose,
   intentionCategories,
+  activityCategories,
+  lifeAreas,
   autoFocus = true,
 }: BrainDumpInputProps) {
   const [transcript, setTranscript] = useState("");
@@ -67,7 +79,11 @@ export default function BrainDumpInput({
       const { parseBrainDump } = await import("@/lib/gemini");
       const result = await parseBrainDump(
         transcript.trim(),
-        intentionCategories?.map((c) => ({ id: c.id, name: c.name, description: c.description }))
+        intentionCategories?.map((c) => ({ id: c.id, name: c.name, description: c.description })),
+        lifeAreas
+          ?.filter((area) => !area.archived && !area.deleted)
+          .map((area) => ({ id: area.id, name: area.name, description: area.description })),
+        activityCategories?.map((category) => ({ name: category.name, color: category.color }))
       );
       if (!result.ok) {
         const messages = {
@@ -87,9 +103,17 @@ export default function BrainDumpInput({
       }
       setDrafts(
         result.intentions.map((i) => ({
+          rawText: i.rawText,
+          tense: i.tense ?? "future",
           text: i.text,
+          categoryName: i.categoryName ?? null,
           categoryId: i.categoryId ?? null,
+          lifeAreaId: i.lifeAreaId ?? null,
+          priority: i.priority ?? null,
+          durationMinutes: i.durationMinutes ?? null,
+          loggedAt: i.loggedAt ?? null,
           energy: i.energy ?? null,
+          confidence: i.confidence ?? null,
         }))
       );
     } catch (e) {
@@ -103,9 +127,46 @@ export default function BrainDumpInput({
   const handleConfirm = async () => {
     if (!drafts || drafts.length === 0) return;
     await onIntentionsParsed(
-      drafts.map((d) => ({ text: d.text, categoryId: d.categoryId, energy: d.energy }))
+      drafts.map((d) => ({
+        rawText: d.rawText,
+        tense: d.tense,
+        text: d.text,
+        categoryName: d.categoryName,
+        categoryId: d.tense === "future" ? d.categoryId : null,
+        lifeAreaId: d.lifeAreaId,
+        priority: d.tense === "future" ? d.priority : null,
+        durationMinutes: d.tense === "past" ? d.durationMinutes : null,
+        loggedAt: d.tense === "past" ? d.loggedAt : null,
+        energy: d.energy,
+        confidence: d.confidence,
+      }))
     );
     onClose();
+  };
+
+  const handleConfirmOne = async (idx: number) => {
+    if (!drafts?.[idx]) return;
+    const d = drafts[idx];
+    await onIntentionsParsed([
+      {
+        rawText: d.rawText,
+        tense: d.tense,
+        text: d.text,
+        categoryName: d.categoryName,
+        categoryId: d.tense === "future" ? d.categoryId : null,
+        lifeAreaId: d.lifeAreaId,
+        priority: d.tense === "future" ? d.priority : null,
+        durationMinutes: d.tense === "past" ? d.durationMinutes : null,
+        loggedAt: d.tense === "past" ? d.loggedAt : null,
+        energy: d.energy,
+        confidence: d.confidence,
+      },
+    ]);
+    setDrafts((prev) => {
+      const next = prev ? prev.filter((_, i) => i !== idx) : prev;
+      if (next && next.length === 0) setTimeout(onClose, 0);
+      return next;
+    });
   };
 
   const updateDraft = (idx: number, patch: Partial<DraftItem>) => {
@@ -118,11 +179,12 @@ export default function BrainDumpInput({
 
   // Stage 2: review + edit parsed items.
   if (drafts) {
+    const activeLifeAreas = (lifeAreas ?? []).filter((area) => !area.archived && !area.deleted);
     return (
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
-            {drafts.length} {drafts.length === 1 ? "task" : "tasks"} parsed — tweak before adding
+            {drafts.length} {drafts.length === 1 ? "item" : "items"} parsed — tweak before adding
           </span>
           <button
             onClick={() => setDrafts(null)}
@@ -139,6 +201,12 @@ export default function BrainDumpInput({
               className="flex flex-col gap-2 p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)]"
             >
               <div className="flex items-start gap-2">
+                <span
+                  className="mt-1 text-lg leading-none text-[var(--color-text-muted)]"
+                  aria-hidden="true"
+                >
+                  {d.tense === "past" ? "‹" : "›"}
+                </span>
                 <input
                   value={d.text}
                   onChange={(e) => updateDraft(idx, { text: e.target.value })}
@@ -157,18 +225,91 @@ export default function BrainDumpInput({
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {intentionCategories && intentionCategories.length > 0 && (
-                  <BucketChipPicker
-                    buckets={intentionCategories}
-                    value={d.categoryId}
-                    onChange={(next) => updateDraft(idx, { categoryId: next })}
-                    popoverZ={61}
-                  />
+                <select
+                  value={d.lifeAreaId ?? ""}
+                  onChange={(e) => updateDraft(idx, { lifeAreaId: e.target.value || null })}
+                  className="h-9 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-xs font-semibold"
+                  aria-label="Life Area"
+                >
+                  <option value="">+ Life Area</option>
+                  {activeLifeAreas.map((area) => (
+                    <option key={area.id} value={area.id}>{area.name}</option>
+                  ))}
+                </select>
+                {activityCategories && activityCategories.length > 0 && (
+                  <select
+                    value={d.categoryName ?? ""}
+                    onChange={(e) => updateDraft(idx, { categoryName: e.target.value || null })}
+                    className="h-9 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-xs font-semibold"
+                    aria-label="Category"
+                  >
+                    <option value="">Category</option>
+                    {activityCategories.map((category) => (
+                      <option key={category.name} value={category.name}>{category.name}</option>
+                    ))}
+                  </select>
                 )}
-                <EnergyPicker
-                  value={d.energy}
-                  onChange={(level) => updateDraft(idx, { energy: level })}
-                />
+                {intentionCategories && intentionCategories.length > 0 && (
+                  d.tense === "future" && (
+                    <BucketChipPicker
+                      buckets={intentionCategories}
+                      value={d.categoryId}
+                      onChange={(next) => updateDraft(idx, { categoryId: next })}
+                      popoverZ={61}
+                    />
+                  )
+                )}
+                {d.tense === "future" ? (
+                  <select
+                    value={d.priority ?? ""}
+                    onChange={(e) => updateDraft(idx, { priority: (e.target.value || null) as DraftItem["priority"] })}
+                    className="h-9 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-xs font-semibold uppercase"
+                    aria-label="Priority"
+                  >
+                    <option value="">Priority</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                ) : (
+                  <>
+                    <label className="inline-flex h-9 items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-xs font-semibold">
+                      <span aria-hidden="true">⏱</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={1440}
+                        value={d.durationMinutes ?? ""}
+                        onChange={(e) => updateDraft(idx, { durationMinutes: e.target.value ? Number(e.target.value) : null })}
+                        className="w-12 bg-transparent outline-none tabular-nums"
+                        aria-label="Duration minutes"
+                      />
+                      <span>m</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={d.loggedAt ? new Date(d.loggedAt).toTimeString().slice(0, 5) : ""}
+                      onChange={(e) => {
+                        const [h, m] = e.target.value.split(":").map(Number);
+                        const base = d.loggedAt ? new Date(d.loggedAt) : new Date();
+                        if (Number.isFinite(h) && Number.isFinite(m)) {
+                          base.setHours(h, m, 0, 0);
+                          updateDraft(idx, { loggedAt: base.toISOString() });
+                        }
+                      }}
+                      className="h-9 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-xs font-semibold tabular-nums"
+                      aria-label="Logged time"
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmOne(idx)}
+                  className="h-9 w-9 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] text-lg font-bold active:scale-95"
+                  aria-label="Confirm this item"
+                >
+                  →
+                </button>
               </div>
             </div>
           ))}
@@ -179,7 +320,7 @@ export default function BrainDumpInput({
             onClick={handleConfirm}
             className="flex-1 h-12 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] shadow-lg shadow-[var(--color-accent)]/20"
           >
-            Add {drafts.length} to backlog
+            Confirm all ({drafts.length})
           </button>
         </div>
 

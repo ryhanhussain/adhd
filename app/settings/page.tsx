@@ -9,13 +9,19 @@ import {
   getAllIntentionsForSync,
   getAllReflectionsForSync,
   getAllHabitsForSync,
+  getAllLifeAreasForSync,
   addHabit,
   updateHabit,
   deleteHabit,
+  addLifeArea,
+  updateLifeArea,
+  archiveLifeArea,
+  restoreLifeArea,
   HABIT_NAME_MAX,
   type Habit,
 } from "@/lib/db";
 import { useHabits } from "@/lib/useHabits";
+import { useLifeAreas } from "@/lib/useLifeAreas";
 import {
   DEFAULT_CATEGORIES,
   COLOR_OPTIONS,
@@ -27,6 +33,16 @@ import {
   type IntentionCategory,
   type BucketIconKey,
 } from "@/lib/categories";
+import {
+  CORE_VALUE_OPTIONS,
+  LIFE_AREA_DESCRIPTION_MAX,
+  LIFE_AREA_ICON_KEYS,
+  LIFE_AREA_NAME_MAX,
+  LIFE_AREA_STARTERS,
+  MAX_LIFE_AREAS,
+  type CoreValue,
+  type LifeArea,
+} from "@/lib/lifeAreas";
 import BucketIcon from "@/components/home/BucketIcon";
 import { useAuth } from "@/components/AuthProvider";
 import { fetchQuota, type QuotaSnapshot } from "@/lib/quota";
@@ -49,6 +65,13 @@ export default function SettingsPage() {
   const [intentionOpenIconPicker, setIntentionOpenIconPicker] = useState<string | null>(null);
   const [intentionPendingRemoveId, setIntentionPendingRemoveId] = useState<string | null>(null);
   const habits = useHabits();
+  const lifeAreas = useLifeAreas({ includeArchived: true });
+  const activeLifeAreas = lifeAreas.filter((area) => !area.archived && !area.deleted);
+  const archivedLifeAreas = lifeAreas.filter((area) => area.archived && !area.deleted);
+  const [expandedLifeAreaId, setExpandedLifeAreaId] = useState<string | null>(null);
+  const [lifeAreaOpenColorPicker, setLifeAreaOpenColorPicker] = useState<string | null>(null);
+  const [lifeAreaOpenIconPicker, setLifeAreaOpenIconPicker] = useState<string | null>(null);
+  const [lifeAreaPendingArchiveId, setLifeAreaPendingArchiveId] = useState<string | null>(null);
   const [habitOpenColorPicker, setHabitOpenColorPicker] = useState<string | null>(null);
   const [habitOpenIconPicker, setHabitOpenIconPicker] = useState<string | null>(null);
   const [habitPendingRemoveId, setHabitPendingRemoveId] = useState<string | null>(null);
@@ -57,6 +80,8 @@ export default function SettingsPage() {
   useEffect(() => {
     const hasOpenPicker =
       openColorPicker !== null ||
+      lifeAreaOpenColorPicker !== null ||
+      lifeAreaOpenIconPicker !== null ||
       intentionOpenColorPicker !== null ||
       intentionOpenIconPicker !== null ||
       habitOpenColorPicker !== null ||
@@ -67,6 +92,8 @@ export default function SettingsPage() {
       if (e.key !== "Escape") return;
       e.preventDefault();
       setOpenColorPicker(null);
+      setLifeAreaOpenColorPicker(null);
+      setLifeAreaOpenIconPicker(null);
       setIntentionOpenColorPicker(null);
       setIntentionOpenIconPicker(null);
       setHabitOpenColorPicker(null);
@@ -77,6 +104,8 @@ export default function SettingsPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
     openColorPicker,
+    lifeAreaOpenColorPicker,
+    lifeAreaOpenIconPicker,
     intentionOpenColorPicker,
     intentionOpenIconPicker,
     habitOpenColorPicker,
@@ -237,6 +266,60 @@ export default function SettingsPage() {
     }, 3000);
   };
 
+  const addNewLifeArea = async () => {
+    if (activeLifeAreas.length >= MAX_LIFE_AREAS) return;
+    const usedColors = new Set(activeLifeAreas.map((area) => area.color));
+    const available = COLOR_OPTIONS.find((co) => !usedColors.has(co.color)) || COLOR_OPTIONS[0];
+    const now = Date.now();
+    const area: LifeArea = {
+      id: crypto.randomUUID(),
+      name: "New area",
+      description: "",
+      color: available.color,
+      icon: "sparkle",
+      coreValue: null,
+      sortOrder: lifeAreas.reduce((acc, item) => Math.max(acc, item.sortOrder), -1) + 1,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+      deleted: false,
+      syncedAt: null,
+    };
+    const result = await addLifeArea(area);
+    if (result === "ok") setExpandedLifeAreaId(area.id);
+    window.dispatchEvent(new Event("life-areas-updated"));
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const updateLifeAreaRow = async (id: string, patch: Partial<LifeArea>) => {
+    await updateLifeArea(id, patch);
+    window.dispatchEvent(new Event("life-areas-updated"));
+    window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const requestArchiveLifeArea = async (id: string) => {
+    if (lifeAreaPendingArchiveId === id) {
+      await archiveLifeArea(id);
+      setLifeAreaPendingArchiveId(null);
+      setExpandedLifeAreaId(null);
+      window.dispatchEvent(new Event("life-areas-updated"));
+      window.dispatchEvent(new Event("entry-updated"));
+      return;
+    }
+    setLifeAreaPendingArchiveId(id);
+    setTimeout(() => {
+      setLifeAreaPendingArchiveId((cur) => (cur === id ? null : cur));
+    }, 4000);
+  };
+
+  const restoreArchivedLifeArea = async (id: string) => {
+    const result = await restoreLifeArea(id);
+    if (result === "ok") {
+      window.dispatchEvent(new Event("life-areas-updated"));
+      window.dispatchEvent(new Event("entry-updated"));
+    }
+  };
+
   const addDailyHabit = async () => {
     const usedColors = new Set(habits.map((h) => h.color));
     const available = COLOR_OPTIONS.find((co) => !usedColors.has(co.color)) || COLOR_OPTIONS[0];
@@ -325,12 +408,13 @@ export default function SettingsPage() {
   };
 
   const handleFullBackupExport = async () => {
-    const [settings, entries, intentions, reflections, allHabits] = await Promise.all([
+    const [settings, entries, intentions, reflections, allHabits, allLifeAreas] = await Promise.all([
       getSettings(),
       getAllEntriesForSync(),
       getAllIntentionsForSync(),
       getAllReflectionsForSync(),
       getAllHabitsForSync(),
+      getAllLifeAreasForSync(),
     ]);
 
     const backup = {
@@ -343,6 +427,7 @@ export default function SettingsPage() {
       intentions,
       reflections,
       habits: allHabits,
+      lifeAreas: allLifeAreas,
     };
 
     const blob = new Blob([JSON.stringify(backup, null, 2)], {
@@ -391,6 +476,221 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Life Areas */}
+      <section>
+        <div className="mb-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+            Life Areas
+          </h2>
+          <p className="text-sm mt-1 text-[var(--color-text-muted)]">
+            What you&apos;re building toward. Up to 5. Gemini uses these to tag your activities.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {activeLifeAreas.map((area) => {
+            const expanded = expandedLifeAreaId === area.id;
+            return (
+              <div
+                key={area.id}
+                className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <button
+                      className="min-w-11 min-h-11 flex items-center justify-center rounded-full"
+                      style={{
+                        backgroundColor: `color-mix(in srgb, ${area.color} 16%, transparent)`,
+                        color: area.color,
+                      }}
+                      onClick={() => setLifeAreaOpenColorPicker(lifeAreaOpenColorPicker === area.id ? null : area.id)}
+                      aria-label={`Change color for ${area.name}`}
+                      aria-expanded={lifeAreaOpenColorPicker === area.id}
+                    >
+                      <BucketIcon name={area.icon} size={18} />
+                    </button>
+                    {lifeAreaOpenColorPicker === area.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setLifeAreaOpenColorPicker(null)} />
+                        <div className="absolute left-0 top-full mt-1 z-50 popup-panel rounded-xl p-2 flex gap-1.5 flex-wrap w-[220px] max-w-[calc(100vw-2rem)] animate-slide-up">
+                          {COLOR_OPTIONS.map((co) => (
+                            <button
+                              key={co.color}
+                              onClick={() => {
+                                void updateLifeAreaRow(area.id, { color: co.color });
+                                setLifeAreaOpenColorPicker(null);
+                              }}
+                              className="min-w-11 min-h-11 flex items-center justify-center rounded-lg transition-transform active:scale-90"
+                              title={co.label}
+                              aria-label={co.label}
+                            >
+                              <span
+                                className="w-7 h-7 rounded-full border-2"
+                                style={{
+                                  backgroundColor: co.color,
+                                  borderColor: co.color === area.color ? "var(--color-text)" : "transparent",
+                                }}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setExpandedLifeAreaId(expanded ? null : area.id)}
+                    className="flex-1 min-w-0 text-left"
+                    aria-expanded={expanded}
+                  >
+                    <p className="text-sm font-bold truncate">{area.name}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] truncate">
+                      {area.description || "Add why this matters"}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => void requestArchiveLifeArea(area.id)}
+                    className={`min-w-11 min-h-11 flex items-center justify-center leading-none transition-colors ${
+                      lifeAreaPendingArchiveId === area.id
+                        ? "text-[var(--color-danger)] text-xs font-semibold"
+                        : "text-[var(--color-text-muted)] text-xl hover:text-[var(--color-danger)]"
+                    }`}
+                    aria-label={lifeAreaPendingArchiveId === area.id ? `Archive ${area.name}` : `Archive ${area.name}`}
+                  >
+                    {lifeAreaPendingArchiveId === area.id ? "Archive?" : "×"}
+                  </button>
+                </div>
+
+                {lifeAreaPendingArchiveId === area.id && (
+                  <p className="mt-2 rounded-lg border border-[var(--color-danger)]/25 bg-[var(--color-danger)]/5 px-3 py-2 text-xs text-[var(--color-text-muted)]">
+                    Archive this area? Past data stays tagged. You can restore it later.
+                  </p>
+                )}
+
+                {expanded && (
+                  <div className="mt-3 flex flex-col gap-3 border-t border-[var(--color-border)] pt-3">
+                    <label className="block">
+                      <span className="flex items-center justify-between text-xs font-medium text-[var(--color-text-muted)]">
+                        Name
+                        <span className="tabular-nums">{area.name.length}/{LIFE_AREA_NAME_MAX}</span>
+                      </span>
+                      <input
+                        value={area.name}
+                        maxLength={LIFE_AREA_NAME_MAX}
+                        onChange={(e) => void updateLifeAreaRow(area.id, { name: e.target.value.slice(0, LIFE_AREA_NAME_MAX) })}
+                        className="mt-1 w-full text-sm font-medium bg-transparent border-b border-[var(--color-border)] focus:border-[var(--color-accent)] outline-none py-1"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="flex items-center justify-between text-xs font-medium text-[var(--color-text-muted)]">
+                        Why this matters
+                        <span className="tabular-nums">{area.description.length}/{LIFE_AREA_DESCRIPTION_MAX}</span>
+                      </span>
+                      <textarea
+                        value={area.description}
+                        maxLength={LIFE_AREA_DESCRIPTION_MAX}
+                        onChange={(e) => void updateLifeAreaRow(area.id, { description: e.target.value.slice(0, LIFE_AREA_DESCRIPTION_MAX) })}
+                        placeholder={LIFE_AREA_STARTERS[area.name] ?? "One line on why this matters"}
+                        rows={2}
+                        className="mt-1 w-full text-sm bg-[var(--color-bg)]/50 rounded-lg px-3 py-2 border border-[var(--color-border)] focus:border-[var(--color-accent)] outline-none resize-none placeholder:text-[var(--color-text-muted)]"
+                      />
+                    </label>
+
+                    <div className="flex flex-wrap gap-2">
+                      <div className="relative">
+                        <button
+                          className="h-10 px-3 rounded-xl border border-[var(--color-border)] text-xs font-semibold flex items-center gap-2"
+                          onClick={() => setLifeAreaOpenIconPicker(lifeAreaOpenIconPicker === area.id ? null : area.id)}
+                          aria-expanded={lifeAreaOpenIconPicker === area.id}
+                        >
+                          <BucketIcon name={area.icon} size={16} />
+                          Icon
+                        </button>
+                        {lifeAreaOpenIconPicker === area.id && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setLifeAreaOpenIconPicker(null)} />
+                            <div className="absolute left-0 top-full mt-1 z-50 popup-panel rounded-xl p-2 grid grid-cols-5 gap-1 w-[240px] max-w-[calc(100vw-2rem)] animate-slide-up">
+                              {LIFE_AREA_ICON_KEYS.map((key) => (
+                                <button
+                                  key={key}
+                                  onClick={() => {
+                                    void updateLifeAreaRow(area.id, { icon: key });
+                                    setLifeAreaOpenIconPicker(null);
+                                  }}
+                                  className="min-h-11 flex items-center justify-center rounded-lg transition-transform active:scale-90"
+                                  style={(area.icon === key)
+                                    ? {
+                                        color: area.color,
+                                        backgroundColor: `color-mix(in srgb, ${area.color} 14%, transparent)`,
+                                        boxShadow: `inset 0 0 0 2px ${area.color}`,
+                                      }
+                                    : { color: "var(--color-text-muted)" }}
+                                  title={key}
+                                  aria-label={key}
+                                >
+                                  <BucketIcon name={key} size={18} />
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <select
+                        value={area.coreValue ?? ""}
+                        onChange={(e) => void updateLifeAreaRow(area.id, { coreValue: (e.target.value || null) as CoreValue | null })}
+                        className="h-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold"
+                        aria-label="Core value"
+                      >
+                        <option value="">Core Value: None</option>
+                        {CORE_VALUE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => void addNewLifeArea()}
+          disabled={activeLifeAreas.length >= MAX_LIFE_AREAS}
+          title={activeLifeAreas.length >= MAX_LIFE_AREAS ? "5 max. Archive one to add another." : "Add Life Area"}
+          className="mt-3 w-full h-11 rounded-xl border-2 border-dashed border-[var(--color-border)] text-sm font-medium text-[var(--color-text-muted)] transition-all active:scale-[0.98] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-45 disabled:hover:border-[var(--color-border)] disabled:hover:text-[var(--color-text-muted)]"
+        >
+          + Add Life Area
+        </button>
+
+        {archivedLifeAreas.length > 0 && (
+          <details className="mt-3 group">
+            <summary className="cursor-pointer list-none text-xs font-semibold text-[var(--color-text-muted)]">
+              Archived
+            </summary>
+            <div className="mt-2 flex flex-col gap-2">
+              {archivedLifeAreas.map((area) => (
+                <div key={area.id} className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: area.color }} />
+                  <span className="flex-1 text-sm font-medium truncate">{area.name}</span>
+                  <button
+                    disabled={activeLifeAreas.length >= MAX_LIFE_AREAS}
+                    title={activeLifeAreas.length >= MAX_LIFE_AREAS ? "5 max. Archive one to restore another." : "Restore"}
+                    onClick={() => void restoreArchivedLifeArea(area.id)}
+                    className="h-9 px-3 rounded-lg text-xs font-semibold text-[var(--color-accent)] disabled:opacity-40"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
 
       {/* Categories */}

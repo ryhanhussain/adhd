@@ -19,7 +19,9 @@ import {
 } from "@/lib/analysis";
 import { useCategories } from "@/lib/useCategories";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
+import { useLifeAreas } from "@/lib/useLifeAreas";
 import { getEnergyColor, getEnergyLabel, ENERGY_LEVELS } from "@/lib/energy";
+import { getLifeAreaById, type LifeArea } from "@/lib/lifeAreas";
 
 function formatMinutes(minutes: number): string {
   if (minutes <= 0) return "0h";
@@ -199,8 +201,14 @@ function DailyTrace({ metrics }: { metrics: PeriodMetrics }) {
   );
 }
 
-function ProgressStory({ metrics }: { metrics: PeriodMetrics }) {
+function ProgressStory({ metrics, lifeAreas }: { metrics: PeriodMetrics; lifeAreas: LifeArea[] }) {
   const [primary, ...secondary] = metrics.progressHighlights;
+  const topLifeArea = metrics.lifeAreaBreakdown[0] ?? null;
+  const topLifeAreaName = topLifeArea
+    ? getLifeAreaById(topLifeArea.lifeAreaId, lifeAreas)?.name ?? "Untagged"
+    : null;
+  const topLifeAreaShare =
+    topLifeArea && metrics.totalMinutes > 0 ? topLifeArea.minutes / metrics.totalMinutes : 0;
 
   return (
     <section className="glass-panel rounded-3xl p-5 sm:p-6 flex flex-col gap-5 overflow-hidden">
@@ -221,6 +229,11 @@ function ProgressStory({ metrics }: { metrics: PeriodMetrics }) {
         <p className="text-sm sm:text-base text-[var(--color-text-muted)] leading-relaxed max-w-3xl">
           {primary?.body ?? "The useful picture is still forming. Every small log gives future-you better evidence."}
         </p>
+        {topLifeAreaName && topLifeAreaShare >= 0.35 && (
+          <p className="text-sm text-[var(--color-text-muted)] leading-relaxed max-w-3xl">
+            {topLifeAreaName} led the Life Area shape here at {Math.round(topLifeAreaShare * 100)}% of tracked time.
+          </p>
+        )}
       </div>
 
       {secondary.length > 0 && (
@@ -333,7 +346,102 @@ function ProofTile({ label, value, hint }: { label: string; value: string; hint:
   );
 }
 
-function BehaviorRhythms({ metrics }: { metrics: PeriodMetrics }) {
+function TimeByLifeAreaCard({
+  metrics,
+  lifeAreas,
+  entries,
+}: {
+  metrics: PeriodMetrics;
+  lifeAreas: LifeArea[];
+  entries: Entry[];
+}) {
+  const [drillId, setDrillId] = useState<string | null | "__untagged__">(null);
+  const rows = metrics.lifeAreaBreakdown
+    .map((row) => {
+      const area = getLifeAreaById(row.lifeAreaId, lifeAreas);
+      return {
+        ...row,
+        key: row.lifeAreaId ?? "__untagged__",
+        name: area ? `${area.name}${area.archived ? " (archived)" : ""}` : "Untagged",
+        color: area?.color ?? "#a1a1aa",
+        pct: metrics.totalMinutes > 0 ? row.minutes / metrics.totalMinutes : 0,
+      };
+    })
+    .sort((a, b) => b.minutes - a.minutes);
+
+  if (rows.length === 0 || metrics.totalMinutes <= 0) return null;
+
+  const drillEntries = drillId
+    ? entries.filter((entry) => (entry.lifeAreaId ?? "__untagged__") === drillId)
+    : [];
+
+  return (
+    <div className="glass-panel rounded-2xl p-5 flex flex-col gap-3 md:col-span-2 xl:col-span-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+        Time by Life Area
+      </h3>
+      <div className="h-3 rounded-full overflow-hidden flex bg-[var(--color-border)]/30">
+        {rows.map((row) => (
+          <button
+            key={row.key}
+            type="button"
+            onClick={() => setDrillId(row.key)}
+            style={{ width: `${Math.max(1, row.pct * 100)}%`, backgroundColor: row.color }}
+            title={`${row.name}: ${formatMinutes(row.minutes)}`}
+            aria-label={`${row.name}: ${formatMinutes(row.minutes)}`}
+          />
+        ))}
+      </div>
+      <div className="flex flex-col gap-2">
+        {rows.map((row) => (
+          <button
+            key={row.key}
+            type="button"
+            onClick={() => setDrillId(drillId === row.key ? null : row.key)}
+            className="flex items-center gap-3 text-sm text-left rounded-xl px-2 py-1.5 hover:bg-[var(--color-text)]/5"
+          >
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: row.color }} />
+            <span className="font-semibold truncate flex-1">{row.name}</span>
+            <span className="tabular-nums">{formatMinutes(row.minutes)}</span>
+            <span className="text-[var(--color-text-muted)] tabular-nums w-10 text-right">
+              {Math.round(row.pct * 100)}%
+            </span>
+            <span
+              className={`tabular-nums text-xs w-14 text-right ${
+                row.deltaPct == null ? "text-[var(--color-text-muted)]" : row.deltaPct >= 0 ? "text-green-600" : "text-red-500"
+              }`}
+            >
+              {row.deltaPct == null ? "new" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct}%`}
+            </span>
+          </button>
+        ))}
+      </div>
+      {drillId && drillEntries.length > 0 && (
+        <div className="border-t border-[var(--color-border)] pt-3 flex flex-col gap-2">
+          {drillEntries.slice(0, 10).map((entry) => (
+            <div key={entry.id} className="flex items-center gap-3 text-xs">
+              <span className="text-[var(--color-text-muted)] tabular-nums">
+                {new Date(entry.startTime || entry.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              </span>
+              <span className="flex-1 truncate">{entry.summary || entry.text}</span>
+              <span className="font-semibold tabular-nums">{formatMinutes(getEntryDuration(entry))}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BehaviorRhythms({
+  metrics,
+  lifeAreas,
+  periodEntries,
+}: {
+  metrics: PeriodMetrics;
+  lifeAreas: LifeArea[];
+  periodEntries: Entry[];
+}) {
   const topCategory = metrics.categoryBreakdown[0] ?? null;
   const totalEnergyMinutes = ENERGY_LEVELS.reduce(
     (sum, level) => sum + metrics.energyMinutes[level],
@@ -402,6 +510,7 @@ function BehaviorRhythms({ metrics }: { metrics: PeriodMetrics }) {
               : `${metrics.moodStats.count} reflection${metrics.moodStats.count === 1 ? "" : "s"} so far`
           }
         />
+        <TimeByLifeAreaCard metrics={metrics} lifeAreas={lifeAreas} entries={periodEntries} />
       </div>
     </section>
   );
@@ -669,6 +778,7 @@ function ExploreDetails({
 function AnalysisPageInner() {
   const categories = useCategories();
   const intentionCategories = useIntentionCategories();
+  const lifeAreas = useLifeAreas();
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialWindow = parseWindowParam(searchParams.get("window"));
@@ -759,9 +869,9 @@ function AnalysisPageInner() {
         </div>
       ) : (
         <>
-          <ProgressStory metrics={metrics} />
+          <ProgressStory metrics={metrics} lifeAreas={lifeAreas} />
           <ProofOfProgress metrics={metrics} />
-          <BehaviorRhythms metrics={metrics} />
+          <BehaviorRhythms metrics={metrics} lifeAreas={lifeAreas} periodEntries={periodEntries} />
           <ExploreDetails
             metrics={metrics}
             periodEntries={periodEntries}
