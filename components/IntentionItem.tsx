@@ -1,20 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Intention, EnergyLevel } from "@/lib/db";
 import { toLocalDateStr, timeStringToTimestampOnDate } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
-import BucketChipPicker from "./BucketChipPicker";
 import DatePill from "./DatePill";
-import EnergyChipPicker from "./EnergyChipPicker";
 import EnergyPicker from "./EnergyPicker";
 import { confettiBurst } from "@/lib/confetti";
+import { computeFixedPopoverPosition } from "@/lib/popoverAnchor";
+import { ENERGY_LEVELS, getEnergyColor, getEnergyEmoji, getEnergyLabel } from "@/lib/energy";
+
+export interface IntentionMoreAction {
+  label: string;
+  onClick: () => void | Promise<void>;
+  disabled?: boolean;
+  destructive?: boolean;
+}
 
 interface IntentionItemProps {
   intention: Intention;
   onComplete: (id: string, note: string, startTime: number, endTime: number, energy?: EnergyLevel | null) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  /** Current user buckets; when non-empty, a chip is shown that opens a picker. */
+  /** Current user buckets; shown inside the quiet three-dot menu. */
   intentionCategories?: IntentionCategory[];
   /** Sets or clears the category for this intention. Pass null to clear. */
   onCategoryChange?: (id: string, categoryId: string | null) => Promise<void>;
@@ -23,26 +31,29 @@ interface IntentionItemProps {
   /** Updates the intention's text. When omitted, inline edit is disabled. */
   onTextChange?: (id: string, text: string) => Promise<void>;
   /**
-   * Compact variant for bucket cards: hides the bucket chip (the card already
-   * implies it), keeps edit/delete affordances visible only on hover, and
-   * trims vertical padding so rows feel like a checklist line.
+   * Compact variant for bucket cards: trims vertical padding so rows feel
+   * like a checklist line.
    */
   compact?: boolean;
   /** When true, the row is the active Pomodoro target — show a FOCUSING pill + tint. */
   focused?: boolean;
-  /** When true, the energy chip renders its text label even in compact mode. */
+  /** Legacy display hint; metadata now lives inside the three-dot menu. */
   showEnergyLabel?: boolean;
-  /** When true, hides the bucket chip picker entirely. */
+  /** Legacy display hint; metadata now lives inside the three-dot menu. */
   hideBucketChip?: boolean;
-  /** When true, hides the energy chip picker entirely. */
+  /** Legacy display hint; metadata now lives inside the three-dot menu. */
   hideEnergyChip?: boolean;
   /** Optional vault action for pulling this intention into Now & Next. */
   pullLabel?: string;
   pullDisabled?: boolean;
   onPullToNowNext?: (id: string) => Promise<void>;
+  /** Extra low-frequency actions shown inside the three-dot menu. */
+  moreActions?: IntentionMoreAction[];
   /** Incremented by a parent to open this row's inline editor. */
   editSignal?: number;
 }
+
+const MORE_POPOVER_WIDTH = 288;
 
 function defaultStartTime(): string {
   const d = new Date(Date.now() - 30 * 60 * 1000);
@@ -64,12 +75,10 @@ export default function IntentionItem({
   onTextChange,
   compact = false,
   focused = false,
-  showEnergyLabel = false,
-  hideBucketChip = false,
-  hideEnergyChip = false,
   pullLabel = "Pull",
   pullDisabled = false,
   onPullToNowNext,
+  moreActions = [],
   editSignal = 0,
 }: IntentionItemProps) {
   const [expanded, setExpanded] = useState(false);
@@ -82,11 +91,15 @@ export default function IntentionItem({
   const [animatingOut, setAnimatingOut] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(intention.text);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [morePos, setMorePos] = useState<{ top: number; left: number; placeAbove: boolean; maxWidth?: number } | null>(null);
   const [bucketFlash, setBucketFlash] = useState(false);
   const [selectedEnergy, setSelectedEnergy] = useState<EnergyLevel | null>(null);
   const prevCategoryId = useRef(intention.categoryId);
   const editRef = useRef<HTMLInputElement>(null);
   const logButtonRef = useRef<HTMLButtonElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
 
   // Flash highlight when bucket changes
   useEffect(() => {
@@ -97,6 +110,24 @@ export default function IntentionItem({
       return () => clearTimeout(t);
     }
   }, [intention.categoryId]);
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMoreOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [moreOpen]);
+
+  useEffect(() => {
+    if (editing || expanded || animatingOut) setMoreOpen(false);
+  }, [editing, expanded, animatingOut]);
 
   // Already completed — show struck-through with check
   if (intention.completed && !animatingOut) {
@@ -141,6 +172,9 @@ export default function IntentionItem({
   };
 
   const hasBuckets = intentionCategories.length > 0 && !!onCategoryChange;
+  const currentBucket = intention.categoryId
+    ? intentionCategories.find((bucket) => bucket.id === intention.categoryId) ?? null
+    : null;
 
   const handlePickCategory = async (categoryId: string | null) => {
     if (!onCategoryChange) return;
@@ -187,6 +221,46 @@ export default function IntentionItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editSignal]);
 
+  useLayoutEffect(() => {
+    if (!moreOpen || !moreButtonRef.current) return;
+
+    const actionCount =
+      moreActions.length +
+      (onPullToNowNext ? 1 : 0) +
+      (canEdit ? 1 : 0) +
+      1;
+    const estimatedHeight = Math.min(
+      540,
+      96 +
+        (hasBuckets ? Math.min(7, intentionCategories.length + 1) * 36 + 48 : 0) +
+        (onEnergyChange ? (ENERGY_LEVELS.length + 1) * 36 + 48 : 0) +
+        actionCount * 40,
+    );
+
+    const updatePosition = () => {
+      if (!moreButtonRef.current) return;
+      setMorePos(
+        computeFixedPopoverPosition(
+          moreButtonRef.current.getBoundingClientRect(),
+          MORE_POPOVER_WIDTH,
+          estimatedHeight,
+        )
+      );
+    };
+
+    updatePosition();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", updatePosition);
+    vv?.addEventListener("scroll", updatePosition);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      vv?.removeEventListener("resize", updatePosition);
+      vv?.removeEventListener("scroll", updatePosition);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [canEdit, hasBuckets, intentionCategories.length, moreActions.length, moreOpen, onEnergyChange, onPullToNowNext]);
+
   const containerClass = compact
     ? `group bg-white ${expanded ? "rounded-2xl" : "rounded-full"} px-3 text-[#1A1640] shadow-[0_10px_24px_-20px_rgba(26,22,64,0.7)] ring-1 ring-black/[0.04] transition-colors ${animatingOut ? "animate-intention-fly-out" : ""} ${bucketFlash ? "animate-bucket-flash" : ""} ${
         focused ? "ring-2 ring-[var(--color-accent)]" : ""
@@ -207,17 +281,12 @@ export default function IntentionItem({
     ? "flex-1 min-w-0 text-sm bg-transparent border-b border-[#1A1640]/30 outline-none py-0.5 text-[#1A1640]"
     : "flex-1 min-w-0 text-sm bg-transparent border-b border-[var(--color-accent)] outline-none py-0.5 text-[var(--color-text)]";
 
-  const actionButtonClass = compact
-    ? "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[#1A1640]/45 hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-    : "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-all duration-200 active:scale-90 flex-shrink-0";
+  const canShowMore = !editing && !expanded && !animatingOut;
 
-  const deleteButtonClass = compact
-    ? "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[#1A1640]/45 hover:text-red-500 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-    : "hit-area w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-all duration-200 active:scale-90 flex-shrink-0";
-
-  const pullButtonClass = compact
-    ? "h-7 px-2.5 rounded-full bg-[#1A1640] text-white text-[10px] font-bold transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed"
-    : "h-8 px-3 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] text-xs font-bold transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed";
+  const runMenuAction = (action: () => void | Promise<void>) => {
+    setMoreOpen(false);
+    void action();
+  };
 
   return (
     <div
@@ -226,16 +295,8 @@ export default function IntentionItem({
       data-editing={editing ? "true" : undefined}
       className={containerClass}
     >
-      {/* Row: checkbox + text + category chip + delete */}
+      {/* Row: checkbox + text + calm overflow menu */}
       <div className={`flex items-center gap-2 ${compact ? "py-1.5" : "py-2"}`}>
-        {focused && (
-          <span
-            className="px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent)] text-[9px] font-bold uppercase tracking-widest flex-shrink-0"
-            aria-label="Currently focusing"
-          >
-            {compact ? "Focus" : "Focusing"}
-          </span>
-        )}
         <button
           onClick={handleCheck}
           onPointerDown={(e) => e.stopPropagation()}
@@ -296,77 +357,185 @@ export default function IntentionItem({
           </span>
         )}
 
-        {/* Category chip — only when user has buckets defined. In compact mode
-            the parent BucketCard already implies the bucket, so we render an
-            icon-only chip that still allows reassignment. */}
-        {hasBuckets && !editing && !hideBucketChip && (
-          <BucketChipPicker
-            buckets={intentionCategories}
-            value={intention.categoryId ?? null}
-            onChange={handlePickCategory}
-            compact={compact}
-          />
-        )}
-
-        {/* Energy chip — only when an onEnergyChange handler is wired. */}
-        {onEnergyChange && !editing && !hideEnergyChip && (
-          <EnergyChipPicker
-            value={intention.energy ?? null}
-            onChange={handlePickEnergy}
-            compact={compact}
-            forceLabel={showEnergyLabel}
-          />
-        )}
-
-        {onPullToNowNext && !editing && !expanded && (
+        {canShowMore && (
           <button
+            ref={moreButtonRef}
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
-              void onPullToNowNext(intention.id);
+              setMoreOpen((open) => !open);
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
-            disabled={pullDisabled}
-            className={pullButtonClass}
+            className="quiet-menu-trigger hit-area"
+            aria-label="More intention options"
+            aria-haspopup="dialog"
+            aria-expanded={moreOpen}
           >
-            {pullLabel}
-          </button>
-        )}
-
-        {canEdit && !editing && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              startEdit();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
-            className={actionButtonClass}
-            aria-label="Edit intention"
-            title="Edit"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="5" cy="12" r="1.7" />
+              <circle cx="12" cy="12" r="1.7" />
+              <circle cx="19" cy="12" r="1.7" />
             </svg>
           </button>
         )}
-
-        <button
-          onClick={() => onDelete(intention.id)}
-          onPointerDown={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-          className={deleteButtonClass}
-          aria-label="Delete intention"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            <path d="M10 11v6M14 11v6" />
-            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-          </svg>
-        </button>
       </div>
+
+      {mounted && moreOpen && morePos && createPortal(
+        <>
+          <div
+            className="fixed inset-0"
+            style={{ zIndex: 49 }}
+            onClick={() => setMoreOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="quiet-menu-panel fixed animate-slide-up"
+            role="dialog"
+            aria-label="Intention options"
+            style={{
+              zIndex: 50,
+              top: morePos.top,
+              left: morePos.left,
+              width: MORE_POPOVER_WIDTH,
+              maxWidth: morePos.maxWidth,
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="quiet-menu-meta">
+              <div className="quiet-menu-meta-row">
+                <span>Bucket</span>
+                <strong>{currentBucket?.name ?? "No bucket"}</strong>
+              </div>
+              <div className="quiet-menu-meta-row">
+                <span>Energy</span>
+                <strong>{intention.energy ? getEnergyLabel(intention.energy) : "No energy"}</strong>
+              </div>
+            </div>
+
+            {hasBuckets && (
+              <div className="quiet-menu-section">
+                <p className="quiet-menu-kicker">Bucket</p>
+                <div className="quiet-menu-options">
+                  {intentionCategories.map((bucket) => {
+                    const selected = bucket.id === intention.categoryId;
+                    return (
+                      <button
+                        key={bucket.id}
+                        type="button"
+                        onClick={() => void handlePickCategory(bucket.id)}
+                        className="quiet-menu-option"
+                        aria-pressed={selected}
+                      >
+                        <span
+                          className="quiet-menu-dot"
+                          style={{ backgroundColor: bucket.color }}
+                          aria-hidden="true"
+                        />
+                        <span className="quiet-menu-option-label">{bucket.name}</span>
+                        {selected && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => void handlePickCategory(null)}
+                    className="quiet-menu-option"
+                    aria-pressed={!intention.categoryId}
+                  >
+                    <span className="quiet-menu-dot quiet-menu-dot-empty" aria-hidden="true" />
+                    <span className="quiet-menu-option-label">No bucket</span>
+                    {!intention.categoryId && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {onEnergyChange && (
+              <div className="quiet-menu-section">
+                <p className="quiet-menu-kicker">Energy</p>
+                <div className="quiet-menu-options">
+                  {ENERGY_LEVELS.map((level) => {
+                    const selected = level === intention.energy;
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => void handlePickEnergy(level)}
+                        className="quiet-menu-option"
+                        aria-pressed={selected}
+                      >
+                        <span
+                          className="quiet-menu-dot"
+                          style={{ backgroundColor: getEnergyColor(level) }}
+                          aria-hidden="true"
+                        />
+                        <span aria-hidden="true">{getEnergyEmoji(level)}</span>
+                        <span className="quiet-menu-option-label">{getEnergyLabel(level)}</span>
+                        {selected && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => void handlePickEnergy(null)}
+                    className="quiet-menu-option"
+                    aria-pressed={!intention.energy}
+                  >
+                    <span className="quiet-menu-dot quiet-menu-dot-empty" aria-hidden="true" />
+                    <span className="quiet-menu-option-label">No energy</span>
+                    {!intention.energy && <span className="quiet-menu-check" aria-hidden="true">✓</span>}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="quiet-menu-section">
+              <p className="quiet-menu-kicker">Actions</p>
+              <div className="quiet-menu-actions">
+                {onPullToNowNext && (
+                  <button
+                    type="button"
+                    onClick={() => runMenuAction(() => onPullToNowNext(intention.id))}
+                    disabled={pullDisabled}
+                    className="quiet-menu-action"
+                  >
+                    {pullLabel}
+                  </button>
+                )}
+                {moreActions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => runMenuAction(action.onClick)}
+                    disabled={action.disabled}
+                    className={`quiet-menu-action ${action.destructive ? "quiet-menu-action-danger" : ""}`}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => runMenuAction(startEdit)}
+                    className="quiet-menu-action"
+                  >
+                    Edit text
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => runMenuAction(() => onDelete(intention.id))}
+                  className="quiet-menu-action quiet-menu-action-danger"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* Expanded form — the dopamine-rich logging area */}
       {expanded && (

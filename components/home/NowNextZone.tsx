@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import type { Entry, EnergyLevel, Intention, NowNextRank } from "@/lib/db";
 import type { IntentionCategory } from "@/lib/categories";
-import IntentionItem from "@/components/IntentionItem";
+import IntentionItem, { type IntentionMoreAction } from "@/components/IntentionItem";
 
 interface NowNextZoneProps {
   slots: [Intention | null, Intention | null];
@@ -168,28 +168,35 @@ function FilledSlot({
   | "onEnergyChange"
   | "onTextChange"
 >) {
+  const moreActions: IntentionMoreAction[] = [
+    ...(canSwap
+      ? [
+          {
+            label: "Swap Now & Next",
+            onClick: onSwapSlots,
+          },
+        ]
+      : []),
+    {
+      label: "Return to vault",
+      onClick: () => onClearSlot(intention.id),
+    },
+    {
+      label: "Snooze until tomorrow",
+      onClick: () => onSnoozeIntention(intention.id),
+    },
+    {
+      label: "Archive",
+      onClick: () => onArchiveIntention(intention.id),
+    },
+  ];
+
   return (
     <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--color-surface-elevated)]/70 p-3 min-h-[8.5rem] flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-accent)]">
           {SLOT_LABELS[rank]}
         </span>
-        <div className="flex gap-1.5">
-          {canSwap && (
-            <button
-              onClick={() => void onSwapSlots()}
-              className="h-7 px-2 rounded-lg text-[10px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-text)]/5 transition-colors"
-            >
-              Swap
-            </button>
-          )}
-          <button
-            onClick={() => void onClearSlot(intention.id)}
-            className="h-7 px-2 rounded-lg text-[10px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-text)]/5 transition-colors"
-          >
-            Clear
-          </button>
-        </div>
       </div>
 
       <IntentionItem
@@ -202,17 +209,12 @@ function FilledSlot({
         onTextChange={onTextChange}
         focused={focused}
         showEnergyLabel
+        moreActions={moreActions}
       />
 
       <div className="flex flex-wrap gap-2">
         <SmallAction onClick={() => onStartFocus(intention.id)} primary>
           Focus
-        </SmallAction>
-        <SmallAction onClick={() => void onSnoozeIntention(intention.id)}>
-          Snooze
-        </SmallAction>
-        <SmallAction onClick={() => void onArchiveIntention(intention.id)}>
-          Archive
         </SmallAction>
       </div>
     </div>

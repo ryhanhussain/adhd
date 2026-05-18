@@ -190,6 +190,173 @@ html.dark .gradient-mesh {
   box-shadow: var(--glass-shadow);
 }
 
+.quiet-menu-trigger {
+  width: 1.8rem;
+  height: 1.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  color: var(--color-text-muted);
+  background: transparent;
+  opacity: 0.72;
+  transition:
+    opacity 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.quiet-menu-trigger:hover,
+.quiet-menu-trigger[aria-expanded="true"] {
+  opacity: 1;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.quiet-menu-trigger:active {
+  transform: scale(0.94);
+}
+
+.quiet-menu-panel {
+  max-height: min(32rem, calc(var(--vvh, 100vh) - 1rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.45rem;
+  border-radius: 1rem;
+  background: var(--color-popover-surface);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 22px 70px -28px rgba(40, 20, 80, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+.quiet-menu-meta {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.45rem 0.55rem 0.55rem;
+}
+
+.quiet-menu-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: var(--color-text-muted);
+}
+
+.quiet-menu-meta-row strong {
+  min-width: 0;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.quiet-menu-section {
+  padding: 0.35rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.quiet-menu-section:first-child {
+  border-top: 0;
+}
+
+.quiet-menu-kicker {
+  padding: 0.25rem 0.55rem 0.35rem;
+  font-size: 0.62rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.quiet-menu-options,
+.quiet-menu-actions {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.quiet-menu-option,
+.quiet-menu-action {
+  min-height: 2.15rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 0.72rem;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  color: var(--color-text);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease,
+    opacity 140ms ease;
+}
+
+.quiet-menu-option:hover,
+.quiet-menu-option[aria-pressed="true"],
+.quiet-menu-action:hover {
+  background: color-mix(in srgb, var(--color-accent-soft) 62%, transparent);
+}
+
+.quiet-menu-option:active,
+.quiet-menu-action:active {
+  transform: scale(0.99);
+}
+
+.quiet-menu-option:disabled,
+.quiet-menu-action:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.quiet-menu-dot {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.quiet-menu-dot-empty {
+  border: 1px dashed var(--color-text-muted);
+  background: transparent;
+}
+
+.quiet-menu-option-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiet-menu-check {
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.quiet-menu-action {
+  justify-content: space-between;
+  font-weight: 650;
+}
+
+.quiet-menu-action-danger {
+  color: var(--color-danger);
+}
+
 .focus-popup-panel {
   background: #fffaf8;
   background: color-mix(in srgb, #ffffff 95%, var(--color-bg));
@@ -234,7 +401,8 @@ html.dark .gradient-mesh {
     -webkit-backdrop-filter: blur(6px) saturate(130%);
   }
 
-  .popup-panel {
+  .popup-panel,
+  .quiet-menu-panel {
     background: var(--popup-mobile-bg);
     background: color-mix(in srgb, var(--color-popup-solid) 94%, transparent);
     backdrop-filter: blur(6px) saturate(120%);
@@ -273,7 +441,8 @@ html.dark .gradient-mesh {
     background: var(--color-surface);
   }
 
-  .popup-panel {
+  .popup-panel,
+  .quiet-menu-panel {
     background: var(--color-popup-solid);
   }
 
