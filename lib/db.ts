@@ -1,6 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { BucketIconKey } from "./categories";
 import { MAX_LIFE_AREAS, type LifeArea } from "./lifeAreas";
+import { getPersonalValueById, normalizePersonalValueIds, type PersonalValueId } from "./values";
+import { normalizeWhyChain } from "./why";
 
 /** Returns a YYYY-MM-DD string in the user's local timezone (not UTC). */
 export function toLocalDateStr(ts: number | Date): string {
@@ -103,6 +105,10 @@ export interface Settings {
   lifeAreaSyncOwner: string | null;
   /** High-water mark for remote life area `updated_at` values already pulled into local. */
   lastLifeAreaPullAt: number;
+  /** JSON-encoded array of selected PersonalValue ids. */
+  personalValues: string | null;
+  /** Epoch ms timestamp of the last local personal-values write; used for LWW push/pull. */
+  personalValuesSyncedAt: number;
 }
 
 /**
@@ -182,6 +188,11 @@ export interface Intention {
   priority?: PriorityLevel | null;
   /** Optional activity category name used as a visual hint before completion. */
   activityCategory?: string | null;
+  /**
+   * Saved one-line reason chain for Focus mode, written when the task is
+   * created and edited by the user before saving.
+   */
+  whyChain?: string | null;
   /**
    * Local YYYY-MM-DD. When set in the future, the intention is hidden from the
    * active Home backlog until that date arrives.
@@ -569,6 +580,9 @@ export async function getSettings(): Promise<Settings> {
   const lifeAreaSyncOwner = (await db.get("settings", "lifeAreaSyncOwner")) || null;
   const lastLifeAreaPullAtRaw = (await db.get("settings", "lastLifeAreaPullAt")) || "0";
   const lastLifeAreaPullAt = Number.parseInt(lastLifeAreaPullAtRaw, 10) || 0;
+  const personalValues = (await db.get("settings", "personalValues")) || null;
+  const personalValuesSyncedAtRaw = (await db.get("settings", "personalValuesSyncedAt")) || "0";
+  const personalValuesSyncedAt = Number.parseInt(personalValuesSyncedAtRaw, 10) || 0;
   return {
     customCategories,
     theme,
@@ -590,6 +604,8 @@ export async function getSettings(): Promise<Settings> {
     lastHabitPullAt,
     lifeAreaSyncOwner,
     lastLifeAreaPullAt,
+    personalValues,
+    personalValuesSyncedAt,
   };
 }
 
@@ -678,6 +694,18 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   if (settings.lastLifeAreaPullAt !== undefined) {
     await db.put("settings", String(settings.lastLifeAreaPullAt ?? 0), "lastLifeAreaPullAt");
   }
+  if (settings.personalValues !== undefined) {
+    await db.put("settings", settings.personalValues || "", "personalValues");
+    if (settings.personalValuesSyncedAt === undefined) {
+      await db.put("settings", String(Date.now()), "personalValuesSyncedAt");
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("personal-values-dirty"));
+    }
+  }
+  if (settings.personalValuesSyncedAt !== undefined) {
+    await db.put("settings", String(settings.personalValuesSyncedAt ?? 0), "personalValuesSyncedAt");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -746,6 +774,7 @@ export async function addIntentions(intentions: Intention[]): Promise<void> {
     tx.store.put({
       ...intention,
       nowNextRank: normalizeNowNextRankValue(intention.nowNextRank),
+      whyChain: normalizeWhyChain(intention.whyChain),
       updatedAt: intention.updatedAt ?? now,
       deleted: intention.deleted ?? false,
       syncedAt: intention.syncedAt ?? null,
@@ -852,15 +881,19 @@ export async function updateIntention(
   const intention = await db.get("intentions", id);
   if (intention) {
     const shouldClearNowNext = clearsNowNextRank(updates);
+    const normalizedUpdates = {
+      ...updates,
+      ...(updates.whyChain !== undefined ? { whyChain: normalizeWhyChain(updates.whyChain) } : {}),
+    };
     await db.put("intentions", {
       ...intention,
-      ...updates,
+      ...normalizedUpdates,
       nowNextRank: shouldClearNowNext
         ? null
-        : updates.nowNextRank !== undefined
-          ? normalizeNowNextRankValue(updates.nowNextRank)
+        : normalizedUpdates.nowNextRank !== undefined
+          ? normalizeNowNextRankValue(normalizedUpdates.nowNextRank)
           : normalizeNowNextRankValue(intention.nowNextRank),
-      updatedAt: updates.updatedAt ?? Date.now(),
+      updatedAt: normalizedUpdates.updatedAt ?? Date.now(),
       syncedAt: null,
     });
     INTENTION_UPDATED_EVENT();
@@ -1226,6 +1259,11 @@ function sortLifeAreas(rows: LifeArea[]): LifeArea[] {
   });
 }
 
+function primaryCoreValueForValueIds(valueIds: PersonalValueId[]): LifeArea["coreValue"] {
+  const first = valueIds[0] ? getPersonalValueById(valueIds[0]) : null;
+  return first?.coreValue ?? null;
+}
+
 export async function getLifeAreas(options: { includeArchived?: boolean } = {}): Promise<LifeArea[]> {
   const db = await getDB();
   const all = await db.getAll("lifeAreas");
@@ -1255,7 +1293,8 @@ export async function addLifeArea(area: LifeArea): Promise<"ok" | "cap"> {
     ...area,
     name: area.name.trim().slice(0, 30),
     description: area.description.trim().slice(0, 140),
-    coreValue: area.coreValue ?? null,
+    valueIds: normalizePersonalValueIds(area.valueIds),
+    coreValue: area.coreValue ?? primaryCoreValueForValueIds(normalizePersonalValueIds(area.valueIds)),
     archived: area.archived ?? false,
     deleted: area.deleted ?? false,
     updatedAt: area.updatedAt ?? now,
@@ -1284,7 +1323,13 @@ export async function updateLifeArea(
     ...updates,
     name: (updates.name ?? current.name).trim().slice(0, 30),
     description: (updates.description ?? current.description).trim().slice(0, 140),
-    coreValue: updates.coreValue === undefined ? current.coreValue ?? null : updates.coreValue,
+    valueIds: updates.valueIds === undefined ? normalizePersonalValueIds(current.valueIds) : normalizePersonalValueIds(updates.valueIds),
+    coreValue:
+      updates.coreValue === undefined
+        ? updates.valueIds === undefined
+          ? current.coreValue ?? null
+          : primaryCoreValueForValueIds(normalizePersonalValueIds(updates.valueIds))
+        : updates.coreValue,
     updatedAt: updates.updatedAt ?? Date.now(),
     syncedAt: null,
   };

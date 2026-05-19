@@ -110,6 +110,8 @@ export interface ParsedIntention {
   loggedAt?: string | null;
   /** Gemini-inferred energy level for the task; null when ambiguous. */
   energy?: GeminiEnergyLevel | null;
+  /** Saved Focus-mode reason chain, editable before the task is created. */
+  whyChain?: string | null;
   confidence?: number | null;
 }
 
@@ -124,6 +126,8 @@ export interface BrainDumpLifeArea {
   id: string;
   name: string;
   description: string;
+  valueLabels?: string[];
+  coreValueLabel?: string | null;
 }
 
 export interface BrainDumpActivityCategory {

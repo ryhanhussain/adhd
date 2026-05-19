@@ -1,16 +1,13 @@
 import type { BucketIconKey } from "./categories";
+import {
+  firstValueForCoreValue,
+  getPersonalValueById,
+  type CoreValue,
+  type PersonalValue,
+  type PersonalValueId,
+} from "./values";
 
-export type CoreValue =
-  | "self_direction"
-  | "achievement"
-  | "benevolence"
-  | "security"
-  | "stimulation"
-  | "hedonism"
-  | "power"
-  | "tradition"
-  | "conformity"
-  | "universalism";
+export { CORE_VALUE_OPTIONS, type CoreValue, type PersonalValueId } from "./values";
 
 export interface LifeArea {
   id: string;
@@ -19,6 +16,7 @@ export interface LifeArea {
   color: string;
   icon: BucketIconKey;
   coreValue: CoreValue | null;
+  valueIds?: PersonalValueId[];
   sortOrder: number;
   archived: boolean;
   createdAt: number;
@@ -30,19 +28,6 @@ export interface LifeArea {
 export const MAX_LIFE_AREAS = 5;
 export const LIFE_AREA_NAME_MAX = 30;
 export const LIFE_AREA_DESCRIPTION_MAX = 140;
-
-export const CORE_VALUE_OPTIONS: { value: CoreValue; label: string }[] = [
-  { value: "self_direction", label: "Self-direction" },
-  { value: "achievement", label: "Achievement" },
-  { value: "benevolence", label: "Benevolence" },
-  { value: "security", label: "Security" },
-  { value: "stimulation", label: "Stimulation" },
-  { value: "hedonism", label: "Hedonism" },
-  { value: "power", label: "Power" },
-  { value: "tradition", label: "Tradition" },
-  { value: "conformity", label: "Conformity" },
-  { value: "universalism", label: "Universalism" },
-];
 
 export const LIFE_AREA_ICON_KEYS: BucketIconKey[] = [
   "briefcase",
@@ -111,3 +96,28 @@ export function activeLifeAreas(lifeAreas: LifeArea[]): LifeArea[] {
     });
 }
 
+export function getLifeAreaValues(
+  area: LifeArea,
+  selectedValues?: PersonalValue[]
+): PersonalValue[] {
+  const hasSelectionContext = selectedValues !== undefined;
+  const selectedById = new Map((selectedValues ?? []).map((value) => [value.id, value]));
+  const values: PersonalValue[] = [];
+  const seen = new Set<string>();
+
+  for (const id of area.valueIds ?? []) {
+    const value = selectedById.get(id) ?? (hasSelectionContext ? null : getPersonalValueById(id));
+    if (!value || seen.has(value.id)) continue;
+    values.push(value);
+    seen.add(value.id);
+  }
+
+  if (values.length === 0 && area.coreValue) {
+    const value =
+      (selectedValues ?? []).find((candidate) => candidate.coreValue === area.coreValue) ??
+      (hasSelectionContext ? null : firstValueForCoreValue(area.coreValue));
+    if (value) values.push(value);
+  }
+
+  return values;
+}

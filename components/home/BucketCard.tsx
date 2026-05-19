@@ -3,6 +3,7 @@
 import type { Intention, EnergyLevel } from "@/lib/db";
 import type { BucketIconKey, Category, IntentionCategory } from "@/lib/categories";
 import type { LifeArea } from "@/lib/lifeAreas";
+import type { PersonalValue } from "@/lib/values";
 import IntentionItem from "@/components/IntentionItem";
 import BucketIcon from "./BucketIcon";
 
@@ -17,6 +18,8 @@ interface BucketCardProps {
   color: string;
   /** Icon shown in the colored chip. */
   icon: BucketIconKey;
+  /** Values this Life Area serves, shown as small root chips. */
+  valueChips?: PersonalValue[];
   /** Active intentions belonging to this card, pre-sorted by `order`. */
   items: Intention[];
   /** All user buckets (passed through to IntentionItem for completion form). */
@@ -69,6 +72,7 @@ export default function BucketCard({
   description,
   color,
   icon,
+  valueChips = [],
   items,
   intentionCategories,
   lifeAreas,
@@ -130,6 +134,20 @@ export default function BucketCard({
         <p className="text-[11px] text-[#1A1640]/60 leading-snug -mt-1 ml-[2.625rem]">
           {description}
         </p>
+      )}
+
+      {valueChips.length > 0 && (
+        <div className="ml-[2.625rem] flex flex-wrap gap-1">
+          {valueChips.map((value) => (
+            <span
+              key={value.id}
+              className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-[#1A1640]/70"
+              title={`${value.label}: ${value.line}`}
+            >
+              {value.label}
+            </span>
+          ))}
+        </div>
       )}
 
       {/* Items list — slim row variant of IntentionItem */}

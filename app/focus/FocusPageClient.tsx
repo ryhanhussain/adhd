@@ -53,10 +53,12 @@ import {
 import { confettiBurst } from "@/lib/confetti";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
 import { useLifeAreas } from "@/lib/useLifeAreas";
+import { usePersonalValues } from "@/lib/usePersonalValues";
 import { useCategories } from "@/lib/useCategories";
 import { useHabits } from "@/lib/useHabits";
 import { getEnergyEmoji } from "@/lib/energy";
 import { getLifeAreaById } from "@/lib/lifeAreas";
+import { buildTaskWhyChain, normalizeWhyChain } from "@/lib/why";
 import type { ParsedIntention } from "@/lib/gemini";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import BottomSheet from "@/components/BottomSheet";
@@ -213,6 +215,7 @@ export default function FocusPageClient() {
   const categories = useCategories();
   const intentionCategories = useIntentionCategories();
   const lifeAreas = useLifeAreas();
+  const personalValues = usePersonalValues();
   const habits = useHabits();
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -477,18 +480,40 @@ export default function FocusPageClient() {
 
   const peakHour = useMemo(() => getPeakHour(entries, now), [entries, now]);
   const todayDateStr = toLocalDateStr(new Date(now));
-
-  const whyTitle = state
-    ? `You're ${formatDurationShort(elapsed)} in.`
-    : readyNext
-      ? "Your next session is lined up."
-      : "Pick one thread and let the rest wait.";
-  const whyDetail = state
-    ? "Switching now costs warm-up. Trust the present session."
-    : readyNext
-      ? readyNext.intentionText
-      : "The queue can hold the noise while you stay with one task.";
-  const whyLifeArea = activeIntention ? getLifeAreaById(activeIntention.lifeAreaId, lifeAreas) : null;
+  const readyNextIntention = readyNext?.intentionId
+    ? intentions.find((intention) => intention.id === readyNext.intentionId) ?? null
+    : null;
+  const whyIntention = state
+    ? activeIsHabit
+      ? null
+      : activeIntention
+    : selectedIntention ?? readyNextIntention;
+  const whyLifeArea = whyIntention ? getLifeAreaById(whyIntention.lifeAreaId, lifeAreas) : null;
+  const whyChain =
+    whyIntention
+      ? normalizeWhyChain(whyIntention.whyChain) ??
+        buildTaskWhyChain({
+          taskText: whyIntention.text,
+          lifeArea: whyLifeArea,
+          selectedValues: personalValues,
+        })
+      : null;
+  const whyTitle = whyChain
+    ? whyChain
+    : state
+      ? state.intentionText
+      : readyNext
+        ? readyNext.intentionText
+        : "Pick one thread and let the rest wait.";
+  const whyDetail = whyChain
+    ? state
+      ? `You're ${formatDurationShort(elapsed)} in.`
+      : "Ready when you are."
+    : state
+      ? "Stay with the present session."
+      : readyNext
+        ? "Your next session is lined up."
+        : "The queue can hold the noise while you stay with one task.";
 
   const closeFloatingPanels = () => {
     setOpenBucketId(null);
@@ -835,6 +860,13 @@ export default function FocusPageClient() {
     }
 
     const future = actionable.filter((item) => item.tense !== "past");
+    const whyChainFor = (item: ParsedIntention): string | null =>
+      normalizeWhyChain(item.whyChain) ??
+      buildTaskWhyChain({
+        taskText: item.text,
+        lifeArea: getLifeAreaById(item.lifeAreaId, lifeAreas),
+        selectedValues: personalValues,
+      });
     const newIntentions: Intention[] = future.map((item, index) => ({
       id: crypto.randomUUID(),
       text: item.text.trim(),
@@ -849,6 +881,7 @@ export default function FocusPageClient() {
       lifeAreaId: item.lifeAreaId ?? null,
       priority: item.priority ?? null,
       activityCategory: item.categoryName ?? null,
+      whyChain: whyChainFor(item),
       nowNextRank: null,
       updatedAt: createdAt,
       deleted: false,

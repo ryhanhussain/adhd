@@ -1,8 +1,12 @@
--- ADDit — Life Areas priority layer
+-- ADDit — Values + Life Areas priority layer
 --
--- Run before deploying the client that syncs `life_area_id`.
--- Existing intentions, entries, and habits remain valid because all new
--- columns are nullable.
+-- Run before deploying the client that syncs Values / Life Areas.
+-- Existing intentions, entries, and habits remain valid because the new
+-- references are optional and `value_ids` defaults to an empty array.
+
+alter table public.profiles
+  add column if not exists personal_values jsonb,
+  add column if not exists personal_values_updated_at bigint not null default 0;
 
 create table if not exists public.life_areas (
   id          uuid primary key,
@@ -11,6 +15,7 @@ create table if not exists public.life_areas (
   description text not null default '' check (char_length(description) <= 140),
   color       text not null,
   icon        text not null default 'sparkle',
+  value_ids   text[] not null default '{}',
   core_value  text check (
     core_value is null or core_value in (
       'self_direction',
@@ -31,6 +36,9 @@ create table if not exists public.life_areas (
   created_at  bigint not null,
   updated_at  bigint not null
 );
+
+alter table public.life_areas
+  add column if not exists value_ids text[] not null default '{}';
 
 create index if not exists life_areas_user_updated_idx
   on public.life_areas (user_id, updated_at);
@@ -105,7 +113,8 @@ alter table public.intentions
   add column if not exists life_area_id uuid references public.life_areas(id),
   add column if not exists priority text
     check (priority is null or priority in ('high', 'medium', 'low')),
-  add column if not exists activity_category text;
+  add column if not exists activity_category text,
+  add column if not exists why_chain text;
 
 alter table public.entries
   add column if not exists life_area_id uuid references public.life_areas(id);
@@ -121,4 +130,3 @@ create index if not exists entries_user_life_area_idx
 
 create index if not exists habits_user_life_area_idx
   on public.habits (user_id, life_area_id);
-

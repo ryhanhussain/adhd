@@ -26,6 +26,7 @@ import {
   saveSettings,
   type Intention,
 } from "@/lib/db";
+import { normalizeWhyChain } from "@/lib/why";
 
 /** Shape of a row in the Supabase `intentions` table (snake_case). */
 interface RemoteIntentionRow {
@@ -49,6 +50,7 @@ interface RemoteIntentionRow {
   life_area_id: string | null;
   priority: Intention["priority"] | null;
   activity_category: string | null;
+  why_chain: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -79,6 +81,7 @@ function toRemote(intention: Intention, userId: string): RemoteIntentionRow {
     life_area_id: intention.lifeAreaId ?? null,
     priority: intention.priority ?? null,
     activity_category: intention.activityCategory ?? null,
+    why_chain: normalizeWhyChain(intention.whyChain),
     created_at: intention.createdAt,
     updated_at: intention.updatedAt,
   };
@@ -105,6 +108,7 @@ function fromRemote(row: RemoteIntentionRow): Intention {
     lifeAreaId: row.life_area_id ?? null,
     priority: row.priority ?? null,
     activityCategory: row.activity_category ?? null,
+    whyChain: normalizeWhyChain(row.why_chain),
     updatedAt: row.updated_at,
     syncedAt: row.updated_at,
   };

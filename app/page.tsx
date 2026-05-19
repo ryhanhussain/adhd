@@ -45,6 +45,7 @@ import { categorizeEntry, type ParsedIntention } from "@/lib/gemini";
 import { useCategories } from "@/lib/useCategories";
 import { useIntentionCategories } from "@/lib/useIntentionCategories";
 import { useLifeAreas } from "@/lib/useLifeAreas";
+import { usePersonalValues } from "@/lib/usePersonalValues";
 import { COLOR_OPTIONS, getCategoryNames } from "@/lib/categories";
 import { getStreakInfo, getMilestone, type StreakInfo, type MilestoneInfo } from "@/lib/streaks";
 import { syncIntentionsNow } from "@/lib/intentionsSync";
@@ -59,8 +60,20 @@ import {
   LIFE_AREA_STARTERS,
   SUGGESTED_LIFE_AREAS,
   activeLifeAreas,
+  getLifeAreaById,
   type LifeArea,
 } from "@/lib/lifeAreas";
+import {
+  MAX_PERSONAL_VALUES,
+  MIN_PERSONAL_VALUES,
+  VALUE_OPTIONS,
+  getCoreValueLabel,
+  getPersonalValueById,
+  serializePersonalValues,
+  suggestedValueIdsForLifeArea,
+  type PersonalValueId,
+} from "@/lib/values";
+import { buildTaskWhyChain, normalizeWhyChain } from "@/lib/why";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -91,6 +104,7 @@ export default function Home() {
   const categories = useCategories();
   const intentionCategories = useIntentionCategories();
   const lifeAreas = useLifeAreas();
+  const personalValues = usePersonalValues();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
@@ -105,7 +119,8 @@ export default function Home() {
   const [vaultOpen, setVaultOpen] = useState(false);
   const [vaultTargetRank, setVaultTargetRank] = useState<NowNextRank | null>(null);
   const [lifeAreaOnboardingOpen, setLifeAreaOnboardingOpen] = useState(false);
-  const [lifeAreaOnboardingStep, setLifeAreaOnboardingStep] = useState<1 | 2>(1);
+  const [lifeAreaOnboardingStep, setLifeAreaOnboardingStep] = useState<"values" | "lifeAreas" | "descriptions">("values");
+  const [selectedPersonalValueIds, setSelectedPersonalValueIds] = useState<PersonalValueId[]>([]);
   const [selectedLifeAreaNames, setSelectedLifeAreaNames] = useState<string[]>([]);
   const [lifeAreaDescriptions, setLifeAreaDescriptions] = useState<Record<string, string>>({});
   const toastTimeout = useRef<NodeJS.Timeout>(undefined);
@@ -175,12 +190,27 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (activeLifeAreas(lifeAreas).length > 0) return;
-    if (typeof window !== "undefined" && window.localStorage.getItem("addit-life-area-onboarding-dismissed") === "1") {
+    if (typeof window === "undefined") return;
+    if (lifeAreaOnboardingOpen) return;
+
+    const hasValues = personalValues.length > 0;
+    const hasLifeAreas = activeLifeAreas(lifeAreas).length > 0;
+    const valuesDismissed = window.localStorage.getItem("addit-values-onboarding-dismissed") === "1";
+    const lifeAreasDismissed = window.localStorage.getItem("addit-life-area-onboarding-dismissed") === "1";
+
+    if (!hasValues && !valuesDismissed) {
+      setSelectedPersonalValueIds([]);
+      setLifeAreaOnboardingStep("values");
+      setLifeAreaOnboardingOpen(true);
       return;
     }
-    setLifeAreaOnboardingOpen(true);
-  }, [lifeAreas]);
+
+    if (!hasLifeAreas && !lifeAreasDismissed) {
+      setSelectedPersonalValueIds(personalValues.map((value) => value.id));
+      setLifeAreaOnboardingStep("lifeAreas");
+      setLifeAreaOnboardingOpen(true);
+    }
+  }, [lifeAreaOnboardingOpen, lifeAreas, personalValues]);
 
   const activeEntry = entries.find((e) => e.endTime === 0);
   const tadaEntries = entries.filter((e) => e.id !== activeEntry?.id);
@@ -262,6 +292,13 @@ export default function Home() {
     // value so newly added rows don't visually jump above older ones until the
     // user reorders.
     const maxOrder = intentions.reduce((acc, i) => Math.max(acc, i.order), -1);
+    const whyChainFor = (item: ParsedIntention): string | null =>
+      normalizeWhyChain(item.whyChain) ??
+      buildTaskWhyChain({
+        taskText: item.text,
+        lifeArea: getLifeAreaById(item.lifeAreaId, lifeAreas),
+        selectedValues: personalValues,
+      });
 
     const newIntentions: Intention[] = future.map((p, i) => ({
       id: crypto.randomUUID(),
@@ -277,6 +314,7 @@ export default function Home() {
       lifeAreaId: p.lifeAreaId ?? null,
       priority: p.priority ?? null,
       activityCategory: p.categoryName ?? null,
+      whyChain: whyChainFor(p),
       nowNextRank: null,
       updatedAt: now,
       deleted: false,
@@ -390,17 +428,54 @@ export default function Home() {
     toastTimeout.current = setTimeout(() => setToast(null), 5000);
   };
 
+  const toggleSelectedPersonalValue = (id: PersonalValueId) => {
+    setSelectedPersonalValueIds((prev) => {
+      if (prev.includes(id)) return prev.filter((item) => item !== id);
+      if (prev.length >= MAX_PERSONAL_VALUES) return prev;
+      return [...prev, id];
+    });
+  };
+
+  const continueFromValuesOnboarding = async () => {
+    if (selectedPersonalValueIds.length < MIN_PERSONAL_VALUES) return;
+    await saveSettings({ personalValues: serializePersonalValues(selectedPersonalValueIds) });
+    window.localStorage.setItem("addit-values-onboarding-dismissed", "1");
+    window.dispatchEvent(new Event("personal-values-updated"));
+
+    if (activeLifeAreas(lifeAreas).length === 0) {
+      setLifeAreaOnboardingStep("lifeAreas");
+    } else {
+      setLifeAreaOnboardingOpen(false);
+    }
+  };
+
+  const skipValuesOnboarding = () => {
+    window.localStorage.setItem("addit-values-onboarding-dismissed", "1");
+    if (activeLifeAreas(lifeAreas).length === 0) {
+      setLifeAreaOnboardingStep("lifeAreas");
+    } else {
+      setLifeAreaOnboardingOpen(false);
+    }
+  };
+
   const createLifeAreasFromOnboarding = async (names: string[]) => {
     const now = Date.now();
+    const selectedValueIds =
+      selectedPersonalValueIds.length > 0
+        ? selectedPersonalValueIds
+        : personalValues.map((value) => value.id);
     for (let i = 0; i < names.length; i++) {
       const name = names[i];
+      const valueIds = suggestedValueIdsForLifeArea(name, selectedValueIds);
+      const coreValue = valueIds[0] ? getPersonalValueById(valueIds[0])?.coreValue ?? null : null;
       const area: LifeArea = {
         id: crypto.randomUUID(),
         name,
         description: lifeAreaDescriptions[name] || LIFE_AREA_STARTERS[name] || "",
         color: COLOR_OPTIONS[i % COLOR_OPTIONS.length].color,
         icon: name === "Career" ? "briefcase" : name === "Health" ? "dumbbell" : name === "Family" ? "home" : name === "Faith" ? "church" : "sparkle",
-        coreValue: null,
+        coreValue,
+        valueIds,
         sortOrder: i,
         archived: false,
         createdAt: now,
@@ -717,7 +792,69 @@ export default function Home() {
       {lifeAreaOnboardingOpen && (
         <div className="fixed inset-0 z-[70] bg-black/35 backdrop-blur-sm flex items-center justify-center px-4">
           <div className="glass-panel w-full max-w-lg rounded-3xl border border-[var(--glass-border)] p-5 shadow-2xl">
-            {lifeAreaOnboardingStep === 1 ? (
+            {lifeAreaOnboardingStep === "values" ? (
+              <>
+                <h2 className="text-xl font-black tracking-tight">Pick your roots</h2>
+                <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                  Choose {MIN_PERSONAL_VALUES}-{MAX_PERSONAL_VALUES} values. These sit above Life Areas and keep the reason attached to the work.
+                </p>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {VALUE_OPTIONS.map((value) => {
+                    const selected = selectedPersonalValueIds.includes(value.id);
+                    const disabled = !selected && selectedPersonalValueIds.length >= MAX_PERSONAL_VALUES;
+                    return (
+                      <button
+                        key={value.id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => toggleSelectedPersonalValue(value.id)}
+                        className={`rounded-2xl border px-3 py-3 text-left transition-all active:scale-[0.98] disabled:opacity-40 ${
+                          selected
+                            ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] border-[var(--color-accent)]"
+                            : "bg-[var(--color-surface)] border-[var(--color-border)]"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: selected ? "currentColor" : value.color }}
+                            aria-hidden="true"
+                          />
+                          <span className="text-sm font-bold">{value.label}</span>
+                        </span>
+                        <span className={`mt-1 block text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                          selected ? "text-white/75" : "text-[var(--color-text-muted)]"
+                        }`}>
+                          {getCoreValueLabel(value.coreValue)}
+                        </span>
+                        <span className={`mt-1 block text-xs leading-snug ${
+                          selected ? "text-white/85" : "text-[var(--color-text-muted)]"
+                        }`}>
+                          {value.line}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={selectedPersonalValueIds.length < MIN_PERSONAL_VALUES}
+                    onClick={() => void continueFromValuesOnboarding()}
+                    className="h-11 flex-1 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold disabled:opacity-40"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={skipValuesOnboarding}
+                    className="h-11 px-3 text-sm font-medium text-[var(--color-text-muted)]"
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              </>
+            ) : lifeAreaOnboardingStep === "lifeAreas" ? (
               <>
                 <h2 className="text-xl font-black tracking-tight">Set up Life Areas</h2>
                 <p className="text-sm text-[var(--color-text-muted)] mt-1">
@@ -763,7 +900,7 @@ export default function Home() {
                   <button
                     type="button"
                     disabled={selectedLifeAreaNames.length < 3}
-                    onClick={() => setLifeAreaOnboardingStep(2)}
+                    onClick={() => setLifeAreaOnboardingStep("descriptions")}
                     className="h-11 flex-1 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] text-sm font-semibold disabled:opacity-40"
                   >
                     Continue
@@ -802,7 +939,7 @@ export default function Home() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLifeAreaOnboardingStep(1)}
+                    onClick={() => setLifeAreaOnboardingStep("lifeAreas")}
                     className="h-11 px-3 text-sm font-medium text-[var(--color-text-muted)]"
                   >
                     Back

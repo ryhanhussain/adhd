@@ -17,6 +17,8 @@ create table public.profiles (
   theme                   text        default 'system'
                                       check (theme in ('light', 'dark', 'system')),
   custom_categories       jsonb       default '[]'::jsonb,
+  personal_values         jsonb,
+  personal_values_updated_at bigint   not null default 0,
   gemini_api_key_encrypted text,      -- base64 JSON { iv, ct } blob (AES-GCM-256)
   created_at              timestamptz default now() not null,
   updated_at              timestamptz default now() not null

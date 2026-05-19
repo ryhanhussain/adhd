@@ -25,6 +25,7 @@ create table if not exists public.intentions (
   snoozed_until text,
   last_reframed_at bigint,
   now_next_rank integer check (now_next_rank is null or now_next_rank in (0, 1)),
+  why_chain    text,
   created_at    bigint      not null,
   updated_at    bigint      not null
 );

@@ -18,6 +18,7 @@ import {
 } from "@/lib/db";
 import type { BucketIconKey } from "@/lib/categories";
 import type { CoreValue, LifeArea } from "@/lib/lifeAreas";
+import { normalizePersonalValueIds } from "@/lib/values";
 
 interface RemoteLifeAreaRow {
   id: string;
@@ -27,6 +28,7 @@ interface RemoteLifeAreaRow {
   color: string;
   icon: string;
   core_value: string | null;
+  value_ids: string[] | null;
   sort_order: number;
   archived: boolean;
   deleted: boolean;
@@ -43,6 +45,7 @@ function toRemote(area: LifeArea, userId: string): RemoteLifeAreaRow {
     color: area.color,
     icon: area.icon,
     core_value: area.coreValue,
+    value_ids: normalizePersonalValueIds(area.valueIds),
     sort_order: area.sortOrder,
     archived: area.archived,
     deleted: area.deleted ?? false,
@@ -59,6 +62,7 @@ function fromRemote(row: RemoteLifeAreaRow): LifeArea {
     color: row.color,
     icon: row.icon as BucketIconKey,
     coreValue: row.core_value as CoreValue | null,
+    valueIds: normalizePersonalValueIds(row.value_ids),
     sortOrder: row.sort_order,
     archived: row.archived,
     deleted: row.deleted,
@@ -200,4 +204,3 @@ export function stopLifeAreasSync(): void {
 export async function handleLifeAreasSignOut(): Promise<void> {
   stopLifeAreasSync();
 }
-

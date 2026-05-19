@@ -5,7 +5,8 @@ import type { Category, IntentionCategory } from "@/lib/categories";
 import type { Entry, EnergyLevel, Intention } from "@/lib/db";
 import { getEntriesForDateRange, toLocalDateStr } from "@/lib/db";
 import { getEntryDuration } from "@/lib/analysis";
-import { activeLifeAreas, getLifeAreaById, type LifeArea } from "@/lib/lifeAreas";
+import { activeLifeAreas, getLifeAreaById, getLifeAreaValues, type LifeArea } from "@/lib/lifeAreas";
+import { usePersonalValues } from "@/lib/usePersonalValues";
 import BucketCard from "./BucketCard";
 
 const UNTAGGED_KEY = "__untagged__";
@@ -120,6 +121,7 @@ export default function LifeAreaGrid({
   onTextChange,
 }: LifeAreaGridProps) {
   const [weekEntries, setWeekEntries] = useState<Entry[]>([]);
+  const personalValues = usePersonalValues();
 
   useEffect(() => {
     let cancelled = false;
@@ -154,6 +156,7 @@ export default function LifeAreaGrid({
       description: area.description,
       color: area.color,
       icon: area.icon,
+      valueChips: getLifeAreaValues(area, personalValues),
       items: grouped.get(area.id) ?? [],
     }));
 
@@ -165,12 +168,13 @@ export default function LifeAreaGrid({
         description: "Assign these when the meaning is clearer.",
         color: UNTAGGED_COLOR,
         icon: "sparkle",
+        valueChips: [],
         items: untagged,
       });
     }
 
     return ordered;
-  }, [intentions, lifeAreas]);
+  }, [intentions, lifeAreas, personalValues]);
 
   if (sections.length === 0) return null;
 
@@ -197,6 +201,7 @@ export default function LifeAreaGrid({
             description={section.description}
             color={section.color}
             icon={section.icon}
+            valueChips={section.valueChips}
             items={section.items}
             intentionCategories={intentionCategories}
             lifeAreas={lifeAreas}

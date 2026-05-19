@@ -13,6 +13,8 @@ interface IncomingLifeArea {
   id: string;
   name: string;
   description: string;
+  valueLabels: string[];
+  coreValueLabel: string | null;
 }
 
 interface IncomingActivityCategory {
@@ -45,8 +47,17 @@ function sanitizeLifeAreas(raw: unknown): IncomingLifeArea[] {
     const id = typeof r.id === "string" ? r.id.slice(0, 64) : null;
     const name = typeof r.name === "string" ? r.name.trim().slice(0, 30) : null;
     const description = typeof r.description === "string" ? r.description.trim().slice(0, 140) : "";
+    const valueLabels = Array.isArray(r.valueLabels)
+      ? r.valueLabels
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim().slice(0, 30))
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
+    const coreValueLabel =
+      typeof r.coreValueLabel === "string" ? r.coreValueLabel.trim().slice(0, 60) || null : null;
     if (!id || !name) continue;
-    out.push({ id, name, description });
+    out.push({ id, name, description, valueLabels, coreValueLabel });
     if (out.length >= 5) break;
   }
   return out;
@@ -99,7 +110,16 @@ export async function POST(req: NextRequest) {
     ? buckets.map((b) => `- ${b.id}: ${b.name}${b.description ? ` — ${b.description}` : ""}`).join("\n")
     : "- none";
   const lifeAreaList = lifeAreas.length
-    ? lifeAreas.map((a) => `- ${a.id}: ${a.name}${a.description ? ` — ${a.description}` : ""}`).join("\n")
+    ? lifeAreas
+        .map((a) => {
+          const details = [
+            a.description ? `Reason: ${a.description}` : "",
+            a.valueLabels.length > 0 ? `Values: ${a.valueLabels.join(", ")}` : "",
+            a.coreValueLabel ? `Core: ${a.coreValueLabel}` : "",
+          ].filter(Boolean).join("; ");
+          return `- ${a.id}: ${a.name}${details ? ` — ${details}` : ""}`;
+        })
+        .join("\n")
     : "- none";
   const categoryList = activityCategories.length
     ? activityCategories.map((c) => `- ${c.name}`).join("\n")
@@ -116,6 +136,7 @@ For each item detect:
 - priority: future-only high/medium/low/null.
 - durationMinutes and loggedAt: past-only. Use ISO loggedAt near the activity end; current time if unclear.
 - energy: high/medium/low/scattered/null if obvious.
+- whyChain: future-only one-line chain in the user's words, or null if no lifeAreaId. Format: "Task → Value → Life-area reason → Core value". Use the selected life area's values/reason/core; do not invent a quote.
 
 Life areas:
 ${lifeAreaList}
@@ -129,12 +150,12 @@ ${bucketList}
 Current time: ${new Date().toISOString()}
 
 Return JSON only:
-{"items":[{"rawText":"string","tense":"past|future","text":"string","categoryName":"string|null","categoryId":"uuid|null","lifeAreaId":"uuid|null","priority":"high|medium|low|null","durationMinutes":30,"loggedAt":"ISO|null","energy":"high|medium|low|scattered|null","confidence":0.8}]}
+{"items":[{"rawText":"string","tense":"past|future","text":"string","categoryName":"string|null","categoryId":"uuid|null","lifeAreaId":"uuid|null","priority":"high|medium|low|null","durationMinutes":30,"loggedAt":"ISO|null","energy":"high|medium|low|scattered|null","whyChain":"string|null","confidence":0.8}]}
 
 Transcript: ${JSON.stringify(text.trim())}`;
 
   try {
-    const responseText = await callGemini(prompt, { temperature: 0.2, maxOutputTokens: 512 });
+    const responseText = await callGemini(prompt, { temperature: 0.2, maxOutputTokens: 768 });
 
     const jsonMatch = responseText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
     if (!jsonMatch) return NextResponse.json({ intentions: null });
@@ -177,6 +198,8 @@ Transcript: ${JSON.stringify(text.trim())}`;
         loggedAt?: unknown;
         logged_at?: unknown;
         energy?: unknown;
+        whyChain?: unknown;
+        why_chain?: unknown;
         confidence?: unknown;
       }) => {
         const rawBucketId = item.categoryId ?? item.category_id ?? item.bucketId ?? item.bucket_id;
@@ -225,6 +248,11 @@ Transcript: ${JSON.stringify(text.trim())}`;
           typeof rawEnergy === "string" && validEnergies.has(rawEnergy.toLowerCase())
             ? (rawEnergy.toLowerCase() as "high" | "medium" | "low" | "scattered")
             : null;
+        const rawWhyChain = item.whyChain ?? item.why_chain;
+        const whyChain =
+          tense === "future" && lifeAreaId && typeof rawWhyChain === "string"
+            ? rawWhyChain.replace(/\s+/g, " ").trim().slice(0, 180) || null
+            : null;
         const confidence =
           typeof item.confidence === "number" && Number.isFinite(item.confidence)
             ? Math.max(0, Math.min(1, item.confidence))
@@ -241,6 +269,7 @@ Transcript: ${JSON.stringify(text.trim())}`;
           durationMinutes,
           loggedAt,
           energy,
+          whyChain,
           confidence,
         };
       });

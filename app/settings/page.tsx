@@ -22,6 +22,7 @@ import {
 } from "@/lib/db";
 import { useHabits } from "@/lib/useHabits";
 import { useLifeAreas } from "@/lib/useLifeAreas";
+import { usePersonalValues } from "@/lib/usePersonalValues";
 import {
   DEFAULT_CATEGORIES,
   COLOR_OPTIONS,
@@ -34,15 +35,22 @@ import {
   type BucketIconKey,
 } from "@/lib/categories";
 import {
-  CORE_VALUE_OPTIONS,
   LIFE_AREA_DESCRIPTION_MAX,
   LIFE_AREA_ICON_KEYS,
   LIFE_AREA_NAME_MAX,
   LIFE_AREA_STARTERS,
   MAX_LIFE_AREAS,
-  type CoreValue,
+  getLifeAreaValues,
   type LifeArea,
 } from "@/lib/lifeAreas";
+import {
+  MAX_PERSONAL_VALUES,
+  VALUE_OPTIONS,
+  getCoreValueLabel,
+  getPersonalValueById,
+  serializePersonalValues,
+  type PersonalValueId,
+} from "@/lib/values";
 import BucketIcon from "@/components/home/BucketIcon";
 import { useAuth } from "@/components/AuthProvider";
 import { fetchQuota, type QuotaSnapshot } from "@/lib/quota";
@@ -66,6 +74,7 @@ export default function SettingsPage() {
   const [intentionPendingRemoveId, setIntentionPendingRemoveId] = useState<string | null>(null);
   const habits = useHabits();
   const lifeAreas = useLifeAreas({ includeArchived: true });
+  const personalValues = usePersonalValues();
   const activeLifeAreas = lifeAreas.filter((area) => !area.archived && !area.deleted);
   const archivedLifeAreas = lifeAreas.filter((area) => area.archived && !area.deleted);
   const [expandedLifeAreaId, setExpandedLifeAreaId] = useState<string | null>(null);
@@ -266,6 +275,18 @@ export default function SettingsPage() {
     }, 3000);
   };
 
+  const togglePersonalValue = async (id: PersonalValueId) => {
+    const current = personalValues.map((value) => value.id);
+    const next = current.includes(id)
+      ? current.filter((item) => item !== id)
+      : current.length < MAX_PERSONAL_VALUES
+        ? [...current, id]
+        : current;
+
+    await saveSettings({ personalValues: next.length > 0 ? serializePersonalValues(next) : null });
+    window.dispatchEvent(new Event("personal-values-updated"));
+  };
+
   const addNewLifeArea = async () => {
     if (activeLifeAreas.length >= MAX_LIFE_AREAS) return;
     const usedColors = new Set(activeLifeAreas.map((area) => area.color));
@@ -278,6 +299,7 @@ export default function SettingsPage() {
       color: available.color,
       icon: "sparkle",
       coreValue: null,
+      valueIds: [],
       sortOrder: lifeAreas.reduce((acc, item) => Math.max(acc, item.sortOrder), -1) + 1,
       archived: false,
       createdAt: now,
@@ -295,6 +317,22 @@ export default function SettingsPage() {
     await updateLifeArea(id, patch);
     window.dispatchEvent(new Event("life-areas-updated"));
     window.dispatchEvent(new Event("entry-updated"));
+  };
+
+  const toggleLifeAreaValue = async (area: LifeArea, id: PersonalValueId) => {
+    const currentIds =
+      area.valueIds && area.valueIds.length > 0
+        ? area.valueIds
+        : getLifeAreaValues(area, personalValues).map((value) => value.id);
+    const nextSet = new Set(currentIds);
+    if (nextSet.has(id)) {
+      nextSet.delete(id);
+    } else {
+      nextSet.add(id);
+    }
+    const valueIds = VALUE_OPTIONS.map((value) => value.id).filter((valueId) => nextSet.has(valueId));
+    const coreValue = valueIds[0] ? getPersonalValueById(valueIds[0])?.coreValue ?? null : null;
+    await updateLifeAreaRow(area.id, { valueIds, coreValue });
   };
 
   const requestArchiveLifeArea = async (id: string) => {
@@ -478,6 +516,53 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Values */}
+      <section>
+        <div className="mb-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+            Values
+          </h2>
+          <p className="text-sm mt-1 text-[var(--color-text-muted)]">
+            The roots your Life Areas serve. Pick up to {MAX_PERSONAL_VALUES}.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {VALUE_OPTIONS.map((value) => {
+            const selected = personalValues.some((item) => item.id === value.id);
+            const disabled = !selected && personalValues.length >= MAX_PERSONAL_VALUES;
+            return (
+              <button
+                key={value.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => void togglePersonalValue(value.id)}
+                className="rounded-xl border bg-[var(--color-surface)] px-3 py-3 text-left transition-all active:scale-[0.98] disabled:opacity-40"
+                style={
+                  selected
+                    ? {
+                        borderColor: value.color,
+                        backgroundColor: `color-mix(in srgb, ${value.color} 12%, var(--color-surface))`,
+                      }
+                    : { borderColor: "var(--color-border)" }
+                }
+              >
+                <span className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: value.color }} aria-hidden="true" />
+                  <span className="text-sm font-bold">{value.label}</span>
+                </span>
+                <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+                  {getCoreValueLabel(value.coreValue)}
+                </span>
+                <span className="mt-1 block text-xs leading-snug text-[var(--color-text-muted)]">
+                  {value.line}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Life Areas */}
       <section>
         <div className="mb-3">
@@ -492,6 +577,12 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-2">
           {activeLifeAreas.map((area) => {
             const expanded = expandedLifeAreaId === area.id;
+            const areaValues = getLifeAreaValues(area, personalValues);
+            const areaValueIds = new Set(
+              area.valueIds && area.valueIds.length > 0
+                ? area.valueIds
+                : areaValues.map((value) => value.id)
+            );
             return (
               <div
                 key={area.id}
@@ -549,6 +640,22 @@ export default function SettingsPage() {
                     <p className="text-xs text-[var(--color-text-muted)] truncate">
                       {area.description || "Add why this matters"}
                     </p>
+                    {areaValues.length > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {areaValues.map((value) => (
+                          <span
+                            key={value.id}
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                            style={{
+                              color: value.color,
+                              backgroundColor: `color-mix(in srgb, ${value.color} 12%, transparent)`,
+                            }}
+                          >
+                            {value.label}
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </button>
 
                   <button
@@ -640,17 +747,39 @@ export default function SettingsPage() {
                         )}
                       </div>
 
-                      <select
-                        value={area.coreValue ?? ""}
-                        onChange={(e) => void updateLifeAreaRow(area.id, { coreValue: (e.target.value || null) as CoreValue | null })}
-                        className="h-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold"
-                        aria-label="Core value"
-                      >
-                        <option value="">Core Value: None</option>
-                        {CORE_VALUE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
+                      <div className="flex flex-wrap gap-2">
+                        {personalValues.length > 0 ? (
+                          personalValues.map((value) => {
+                            const selected = areaValueIds.has(value.id);
+                            return (
+                              <button
+                                key={value.id}
+                                type="button"
+                                onClick={() => void toggleLifeAreaValue(area, value.id)}
+                                className="h-10 rounded-xl border px-3 text-xs font-semibold transition-all active:scale-[0.98]"
+                                style={
+                                  selected
+                                    ? {
+                                        borderColor: value.color,
+                                        color: value.color,
+                                        backgroundColor: `color-mix(in srgb, ${value.color} 12%, transparent)`,
+                                      }
+                                    : {
+                                        borderColor: "var(--color-border)",
+                                        color: "var(--color-text-muted)",
+                                      }
+                                }
+                              >
+                                {value.label}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <span className="text-xs text-[var(--color-text-muted)]">
+                            Pick Values above to connect this area.
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}

@@ -16,6 +16,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { getSettings, saveSettings } from "@/lib/db";
+import { normalizePersonalValueIds } from "@/lib/values";
 
 export async function syncCategoriesNow(): Promise<void> {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -31,6 +32,8 @@ export async function syncCategoriesNow(): Promise<void> {
   const localCarryoverDate = settings.lastCarryoverPromptDate;
   const localHomeTabTs = settings.homeTabSyncedAt ?? 0;
   const localHomeTab = settings.homeTab;
+  const localPersonalValuesTs = settings.personalValuesSyncedAt ?? 0;
+  const localPersonalValues = settings.personalValues;
 
   // Pull remote profile row (all fields in one round-trip).
   // `.maybeSingle()` returns null (not 406) when the row doesn't exist yet —
@@ -38,7 +41,7 @@ export async function syncCategoriesNow(): Promise<void> {
   const { data: profile, error: pullError } = await supabase
     .from("profiles")
     .select(
-      "custom_categories, custom_categories_updated_at, custom_intention_categories, custom_intention_categories_updated_at, last_carryover_prompt_date, last_carryover_prompt_date_updated_at, home_tab, home_tab_updated_at"
+      "custom_categories, custom_categories_updated_at, custom_intention_categories, custom_intention_categories_updated_at, last_carryover_prompt_date, last_carryover_prompt_date_updated_at, home_tab, home_tab_updated_at, personal_values, personal_values_updated_at"
     )
     .eq("id", userId)
     .maybeSingle();
@@ -52,6 +55,7 @@ export async function syncCategoriesNow(): Promise<void> {
   const remoteIntentionTs: number = profile?.custom_intention_categories_updated_at ?? 0;
   const remoteCarryoverTs: number = profile?.last_carryover_prompt_date_updated_at ?? 0;
   const remoteHomeTabTs: number = profile?.home_tab_updated_at ?? 0;
+  const remotePersonalValuesTs: number = profile?.personal_values_updated_at ?? 0;
 
   // --- Activity categories ---
   if (remoteTs > localTs) {
@@ -181,6 +185,47 @@ export async function syncCategoriesNow(): Promise<void> {
       console.warn("[categoriesSync] home-tab push failed:", pushError.message);
     }
   }
+
+  // --- personalValues ---
+  // Selected root values are a tiny profile-level array. Life Areas reference
+  // these ids independently, so this follows the same whole-array LWW pattern.
+  if (remotePersonalValuesTs > localPersonalValuesTs) {
+    const personalValueIds = normalizePersonalValueIds(profile?.personal_values);
+    await saveSettings({
+      personalValues: personalValueIds.length > 0 ? JSON.stringify(personalValueIds) : null,
+      personalValuesSyncedAt: remotePersonalValuesTs,
+    });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("personal-values-updated"));
+    }
+  } else if (localPersonalValuesTs > remotePersonalValuesTs) {
+    let parsed: unknown;
+    if (localPersonalValues == null) {
+      parsed = [];
+    } else {
+      try {
+        parsed = normalizePersonalValueIds(JSON.parse(localPersonalValues));
+      } catch {
+        console.warn("[categoriesSync] local personal values JSON is invalid, skipping push");
+      }
+    }
+    if (parsed !== undefined) {
+      const { error: pushError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: userId,
+            personal_values: parsed,
+            personal_values_updated_at: localPersonalValuesTs,
+          },
+          { onConflict: "id" }
+        );
+
+      if (pushError) {
+        console.warn("[categoriesSync] personal values push failed:", pushError.message);
+      }
+    }
+  }
 }
 
 // --- Lifecycle ---------------------------------------------------------------
@@ -201,6 +246,7 @@ export function startCategoriesSync(): Unsubscribe {
   window.addEventListener("intention-categories-dirty", onDirty);
   window.addEventListener("carryover-prompt-date-dirty", onDirty);
   window.addEventListener("home-tab-dirty", onDirty);
+  window.addEventListener("personal-values-dirty", onDirty);
   document.addEventListener("visibilitychange", onVisible);
   window.addEventListener("online", onOnline);
   window.addEventListener("focus", onOnline);
@@ -212,6 +258,7 @@ export function startCategoriesSync(): Unsubscribe {
     window.removeEventListener("intention-categories-dirty", onDirty);
     window.removeEventListener("carryover-prompt-date-dirty", onDirty);
     window.removeEventListener("home-tab-dirty", onDirty);
+    window.removeEventListener("personal-values-dirty", onDirty);
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("online", onOnline);
     window.removeEventListener("focus", onOnline);
