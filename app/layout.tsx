@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import TopNav from "@/components/TopNav";
-import ActiveTimerBar from "@/components/ActiveTimerBar";
 import ThemeProvider from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
 import LoginGate from "@/components/LoginGate";
@@ -19,9 +18,9 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
   "https://addit.pages.dev";
 
-const tagline = "Your second brain for the day in front of you.";
+const tagline = "Tasks, focus, and a simple completion calendar.";
 const description =
-  "A frictionless second brain for brain dumps, interstitial journaling, and quiet time tracking. Capture thoughts by voice or text, plan your day, and reflect — all in one calm app.";
+  "ADDit turns brain dumps into tasks, helps you focus on one task, and shows completed work on a clean calendar.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -92,7 +91,6 @@ export default function RootLayout({
               <TopNav />
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>
-            <ActiveTimerBar />
           </AuthProvider>
         </ThemeProvider>
       </body>

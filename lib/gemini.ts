@@ -106,6 +106,7 @@ export interface ParsedIntention {
   categoryId?: string | null;
   lifeAreaId?: string | null;
   priority?: "high" | "medium" | "low" | null;
+  timeRequired?: "quick" | "medium" | "long" | null;
   durationMinutes?: number | null;
   loggedAt?: string | null;
   /** Gemini-inferred energy level for the task; null when ambiguous. */
@@ -159,9 +160,6 @@ export async function parseBrainDump(
       },
       body: JSON.stringify({
         text: transcript,
-        categories: categories ?? [],
-        lifeAreas: lifeAreas ?? [],
-        activityCategories: activityCategories ?? [],
       }),
     });
   } catch (e) {

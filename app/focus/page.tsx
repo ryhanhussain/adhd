@@ -4,7 +4,7 @@ import FocusPageClient from "./FocusPageClient";
 
 export const metadata: Metadata = {
   title: "Focus",
-  description: "A Pomodoro focus room for one task, with a quiet queue for what comes next.",
+  description: "A simple Pomodoro timer for one task.",
 };
 
 export default function FocusPage() {

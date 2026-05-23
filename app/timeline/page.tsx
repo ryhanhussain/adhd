@@ -1,7 +1,5 @@
-"use client";
-
-import Timeline from "@/components/Timeline";
+import { redirect } from "next/navigation";
 
 export default function TimelinePage() {
-  return <Timeline />;
+  redirect("/calendar");
 }

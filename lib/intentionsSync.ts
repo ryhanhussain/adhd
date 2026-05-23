@@ -49,6 +49,7 @@ interface RemoteIntentionRow {
   now_next_rank: 0 | 1 | null;
   life_area_id: string | null;
   priority: Intention["priority"] | null;
+  time_required: Intention["timeRequired"] | null;
   activity_category: string | null;
   why_chain: string | null;
   created_at: number;
@@ -80,6 +81,7 @@ function toRemote(intention: Intention, userId: string): RemoteIntentionRow {
     now_next_rank: intention.nowNextRank ?? null,
     life_area_id: intention.lifeAreaId ?? null,
     priority: intention.priority ?? null,
+    time_required: intention.timeRequired ?? null,
     activity_category: intention.activityCategory ?? null,
     why_chain: normalizeWhyChain(intention.whyChain),
     created_at: intention.createdAt,
@@ -107,6 +109,7 @@ function fromRemote(row: RemoteIntentionRow): Intention {
     nowNextRank: toNowNextRank(row.now_next_rank),
     lifeAreaId: row.life_area_id ?? null,
     priority: row.priority ?? null,
+    timeRequired: row.time_required ?? null,
     activityCategory: row.activity_category ?? null,
     whyChain: normalizeWhyChain(row.why_chain),
     updatedAt: row.updated_at,

@@ -113,6 +113,8 @@ alter table public.intentions
   add column if not exists life_area_id uuid references public.life_areas(id),
   add column if not exists priority text
     check (priority is null or priority in ('high', 'medium', 'low')),
+  add column if not exists time_required text
+    check (time_required is null or time_required in ('quick', 'medium', 'long')),
   add column if not exists activity_category text,
   add column if not exists why_chain text;
 

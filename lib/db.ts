@@ -28,6 +28,7 @@ export function clampToLocalDate(ts: number, dateStr: string): number {
 export type EnergyLevel = "high" | "medium" | "low" | "scattered";
 export type NowNextRank = 0 | 1;
 export type PriorityLevel = "high" | "medium" | "low";
+export type TimeRequired = "quick" | "medium" | "long";
 
 export interface Entry {
   id: string;
@@ -186,6 +187,8 @@ export interface Intention {
   lifeAreaId?: string | null;
   /** Optional user-facing priority inferred at brain-dump time or edited later. */
   priority?: PriorityLevel | null;
+  /** Optional user-facing effort/time hint inferred at brain-dump time or edited later. */
+  timeRequired?: TimeRequired | null;
   /** Optional activity category name used as a visual hint before completion. */
   activityCategory?: string | null;
   /**
@@ -297,6 +300,8 @@ function getDB() {
             db.createObjectStore("lifeAreas", { keyPath: "id" });
           }
         }
+        // v12: optional `timeRequired` field on Intention. Optional field,
+        // no IndexedDB store/index change required.
         //
         // Both backfills share a single async block so that any upgrade path
         // (e.g. fresh install → v7, or v3 → v7) runs whatever is needed in
@@ -807,6 +812,19 @@ export async function getIntentionsForDateRange(startDate: string, endDate: stri
   const range = IDBKeyRange.bound(startDate, endDate);
   const rows = await db.getAllFromIndex("intentions", "by-date", range);
   return rows.filter((i) => !i.deleted);
+}
+
+/** Completed intentions by local completion date, inclusive. Calendar uses this instead of entries. */
+export async function getCompletedIntentionsForDateRange(startDate: string, endDate: string): Promise<Intention[]> {
+  const db = await getDB();
+  const rows = await db.getAll("intentions");
+  return rows
+    .filter((i) => i.completed && !i.deleted && !i.archived && typeof i.completedAt === "number")
+    .filter((i) => {
+      const completedDate = toLocalDateStr(i.completedAt as number);
+      return completedDate >= startDate && completedDate <= endDate;
+    })
+    .sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0));
 }
 
 /** Returns reflections with `date` in [startDate, endDate] inclusive, excluding tombstones. */

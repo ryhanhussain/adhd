@@ -19,26 +19,6 @@ import {
   startEntriesSync,
   stopEntriesSync,
 } from "@/lib/entriesSync";
-import {
-  handleReflectionsSignOut,
-  startReflectionsSync,
-  stopReflectionsSync,
-} from "@/lib/reflectionsSync";
-import {
-  handleCategoriesSignOut,
-  startCategoriesSync,
-  stopCategoriesSync,
-} from "@/lib/categoriesSync";
-import {
-  handleHabitsSignOut,
-  startHabitsSync,
-  stopHabitsSync,
-} from "@/lib/habitsSync";
-import {
-  handleLifeAreasSignOut,
-  startLifeAreasSync,
-  stopLifeAreasSync,
-} from "@/lib/lifeAreasSync";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextValue {
@@ -96,23 +76,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     if (nextId) {
       startIntentionsSync();
       startEntriesSync();
-      startReflectionsSync();
-      startCategoriesSync();
-      startHabitsSync();
-      startLifeAreasSync();
     } else {
       stopIntentionsSync();
       stopEntriesSync();
-      stopReflectionsSync();
-      stopCategoriesSync();
-      stopHabitsSync();
-      stopLifeAreasSync();
       void handleIntentionsSignOut();
       void handleEntriesSignOut();
-      void handleReflectionsSignOut();
-      void handleCategoriesSignOut();
-      void handleHabitsSignOut();
-      void handleLifeAreasSignOut();
     }
     syncedUserId.current = nextId;
   }, [user?.id]);
@@ -121,10 +89,6 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       stopIntentionsSync();
       stopEntriesSync();
-      stopReflectionsSync();
-      stopCategoriesSync();
-      stopHabitsSync();
-      stopLifeAreasSync();
     };
   }, []);
 
