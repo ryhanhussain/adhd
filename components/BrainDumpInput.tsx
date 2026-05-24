@@ -1,7 +1,16 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft, LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { ParsedIntention } from "@/lib/gemini";
+import {
+  Button,
+  Field,
+  IconButton,
+  Input,
+  SegmentedControl,
+  inputClassName,
+} from "@/components/ui/primitives";
 import Toast from "./Toast";
 
 interface BrainDumpInputProps {
@@ -19,6 +28,9 @@ type DraftTask = {
   confidence?: number | null;
 };
 
+type PriorityChoice = NonNullable<DraftTask["priority"]> | "none";
+type TimeChoice = NonNullable<DraftTask["timeRequired"]> | "none";
+
 const TEXTAREA_MIN_HEIGHT = 104;
 const TEXTAREA_MAX_HEIGHT = 220;
 
@@ -35,6 +47,16 @@ const timeOptions: { value: DraftTask["timeRequired"]; label: string }[] = [
   { value: "long", label: "Long" },
   { value: null, label: "Unset" },
 ];
+
+const urgencySegments = urgencyOptions.map((option) => ({
+  value: (option.value ?? "none") as PriorityChoice,
+  label: option.label,
+}));
+
+const timeSegments = timeOptions.map((option) => ({
+  value: (option.value ?? "none") as TimeChoice,
+  label: option.label,
+}));
 
 export default function BrainDumpInput({
   onIntentionsParsed,
@@ -145,94 +167,92 @@ export default function BrainDumpInput({
 
   if (drafts) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            {drafts.length} {drafts.length === 1 ? "task" : "tasks"}
-          </span>
-          <button
-            type="button"
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+              Review
+            </p>
+            <h2 className="text-lg font-black leading-tight">
+              {drafts.length} {drafts.length === 1 ? "task" : "tasks"} ready
+            </h2>
+          </div>
+          <Button
             onClick={() => setDrafts(null)}
-            className="h-8 px-3 rounded-lg text-xs font-semibold text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+            variant="ghost"
+            size="sm"
           >
+            <ArrowLeft size={15} />
             Back
-          </button>
+          </Button>
         </div>
 
-        <div className="max-h-[52vh] overflow-y-auto pr-1 flex flex-col gap-2">
+        <div className="flex max-h-[52vh] flex-col gap-3 overflow-y-auto pr-1">
           {drafts.map((draft, index) => (
-            <div
+            <article
               key={`${draft.rawText ?? draft.text}-${index}`}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4"
             >
-              <div className="flex items-start gap-2">
-                <input
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                <Input
                   value={draft.text}
                   onChange={(event) => updateDraft(index, { text: event.target.value })}
-                  className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-sm font-semibold outline-none focus:border-[var(--color-accent)]"
+                  className="bg-[var(--color-bg)] text-sm"
                   aria-label="Task text"
                 />
-                <button
-                  type="button"
+                <IconButton
                   onClick={() => removeDraft(index)}
-                  className="h-8 w-8 flex-shrink-0 rounded-md text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-red-500"
-                  aria-label="Remove task"
-                  title="Remove"
+                  label="Remove task"
+                  variant="danger"
                 >
-                  x
-                </button>
+                  <Trash2 size={16} aria-hidden="true" />
+                </IconButton>
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              <div className="mt-3 grid gap-3">
+                <div className="grid gap-1.5">
+                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
                     Urgency
                   </span>
-                  <select
-                    value={draft.priority ?? ""}
-                    onChange={(event) =>
-                      updateDraft(index, { priority: (event.target.value || null) as DraftTask["priority"] })
+                  <SegmentedControl
+                    value={(draft.priority ?? "none") as PriorityChoice}
+                    onChange={(value) =>
+                      updateDraft(index, { priority: value === "none" ? null : value })
                     }
-                    className="h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs font-semibold"
-                  >
-                    {urgencyOptions.map((option) => (
-                      <option key={option.value ?? "none"} value={option.value ?? ""}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    ariaLabel={`Urgency for task ${index + 1}`}
+                    className="grid-cols-4"
+                    options={urgencySegments}
+                  />
+                </div>
 
-                <label className="flex flex-col gap-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                <div className="grid gap-1.5">
+                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
                     Time
                   </span>
-                  <select
-                    value={draft.timeRequired ?? ""}
-                    onChange={(event) =>
-                      updateDraft(index, { timeRequired: (event.target.value || null) as DraftTask["timeRequired"] })
+                  <SegmentedControl
+                    value={(draft.timeRequired ?? "none") as TimeChoice}
+                    onChange={(value) =>
+                      updateDraft(index, { timeRequired: value === "none" ? null : value })
                     }
-                    className="h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs font-semibold"
-                  >
-                    {timeOptions.map((option) => (
-                      <option key={option.value ?? "none"} value={option.value ?? ""}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    ariaLabel={`Time required for task ${index + 1}`}
+                    className="grid-cols-4"
+                    options={timeSegments}
+                  />
+                </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
 
-        <button
-          type="button"
+        <Button
           onClick={() => void commit(drafts)}
-          className="h-11 rounded-lg bg-[var(--color-accent)] px-4 text-sm font-semibold text-[var(--color-on-accent)] active:scale-[0.98]"
+          variant="primary"
+          size="lg"
+          fullWidth
         >
+          <Plus size={17} />
           Add tasks
-        </button>
+        </Button>
 
         {toast && <Toast message={toast} />}
       </div>
@@ -241,45 +261,47 @@ export default function BrainDumpInput({
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="brain-dump-textarea" className="sr-only">
-        Brain dump tasks
-      </label>
-      <textarea
-        id="brain-dump-textarea"
-        ref={textareaRef}
-        value={transcript}
-        onChange={(event) => {
-          setTranscript(event.target.value);
-          resizeTextarea(event.currentTarget);
-        }}
-        placeholder="Dump tasks here..."
-        className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)]"
-        style={{ minHeight: TEXTAREA_MIN_HEIGHT, maxHeight: TEXTAREA_MAX_HEIGHT, overflowY: "hidden" }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            void handleParse();
-          }
-        }}
-      />
+      <Field label="Brain dump">
+        <textarea
+          id="brain-dump-textarea"
+          ref={textareaRef}
+          aria-label="Brain dump tasks"
+          value={transcript}
+          onChange={(event) => {
+            setTranscript(event.target.value);
+            resizeTextarea(event.currentTarget);
+          }}
+          placeholder="Dump tasks here..."
+          className={inputClassName("w-full resize-none px-4 py-3 text-sm leading-6")}
+          style={{ minHeight: TEXTAREA_MIN_HEIGHT, maxHeight: TEXTAREA_MAX_HEIGHT, overflowY: "hidden" }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              void handleParse();
+            }
+          }}
+        />
+      </Field>
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
+        <Button
           onClick={() => void handleParse()}
           disabled={!transcript.trim() || isParsing}
-          className="h-11 flex-1 rounded-lg bg-[var(--color-accent)] px-4 text-sm font-semibold text-[var(--color-on-accent)] disabled:cursor-not-allowed disabled:opacity-45 active:scale-[0.98]"
+          variant="primary"
+          size="lg"
+          fullWidth
         >
-          {isParsing ? "Parsing..." : "Parse tasks"}
-        </button>
+          {isParsing ? <LoaderCircle size={17} className="animate-spin" /> : <Sparkles size={17} />}
+          {isParsing ? "Parsing..." : "Review tasks"}
+        </Button>
         {showClose && (
-          <button
-            type="button"
+          <Button
             onClick={onClose}
-            className="h-11 rounded-lg border border-[var(--color-border)] px-4 text-sm font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            variant="secondary"
+            size="lg"
           >
             Close
-          </button>
+          </Button>
         )}
       </div>
 

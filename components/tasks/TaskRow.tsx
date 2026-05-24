@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Check, Circle, Clock3, Pencil, Play, Trash2, X } from "lucide-react";
 import type { Intention, PriorityLevel, TimeRequired } from "@/lib/db";
+import { Button, IconButton, Input, MetadataChip, cn } from "@/components/ui/primitives";
 import TaskMetadataEditor from "./TaskMetadataEditor";
 
 interface TaskRowProps {
   task: Intention;
-  editable: boolean;
   onComplete: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onStartFocus: (id: string) => void;
@@ -27,9 +28,20 @@ function timeLabel(timeRequired: Intention["timeRequired"]): string {
   return "Long";
 }
 
+function priorityTone(priority: Intention["priority"]) {
+  if (priority === "high") return "danger" as const;
+  if (priority === "medium") return "accent" as const;
+  return "neutral" as const;
+}
+
+function timeTone(timeRequired: Intention["timeRequired"]) {
+  if (timeRequired === "quick") return "success" as const;
+  if (timeRequired === "medium") return "accent" as const;
+  return "neutral" as const;
+}
+
 export default function TaskRow({
   task,
-  editable,
   onComplete,
   onDelete,
   onStartFocus,
@@ -38,11 +50,12 @@ export default function TaskRow({
   onTimeRequiredChange,
 }: TaskRowProps) {
   const [draft, setDraft] = useState(task.text);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setDraft(task.text);
-  }, [task.text]);
+    if (!editing) setDraft(task.text);
+  }, [editing, task.text]);
 
   const commitText = async () => {
     const next = draft.trim();
@@ -51,6 +64,22 @@ export default function TaskRow({
       return;
     }
     if (next !== task.text) await onTextChange(task.id, next);
+  };
+
+  const finishEditing = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await commitText();
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelEditing = () => {
+    setDraft(task.text);
+    setEditing(false);
   };
 
   const complete = async () => {
@@ -64,90 +93,110 @@ export default function TaskRow({
   };
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-      <div className="flex items-start gap-3">
+    <article
+      className={cn(
+        "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors sm:p-4",
+        editing && "border-[var(--color-accent)]/45 bg-[var(--color-surface-elevated)]"
+      )}
+    >
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
         <button
           type="button"
           onClick={() => void complete()}
           disabled={busy}
-          className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-accent)] disabled:opacity-50"
+          className="mt-0.5 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-accent)] transition-all hover:border-[var(--color-accent)]/45 hover:bg-[var(--color-accent-soft)] active:scale-[0.96] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
           aria-label={`Complete ${task.text}`}
           title="Complete"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
+          <Check size={18} strokeWidth={3} aria-hidden="true" />
         </button>
 
         <div className="min-w-0 flex-1">
-          {editable ? (
-            <input
+          {editing ? (
+            <Input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              onBlur={() => void commitText()}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  event.currentTarget.blur();
+                  event.preventDefault();
+                  void finishEditing();
                 }
                 if (event.key === "Escape") {
-                  setDraft(task.text);
-                  event.currentTarget.blur();
+                  cancelEditing();
                 }
               }}
-              className="w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none focus:border-[var(--color-accent)]"
+              className="min-h-11 bg-[var(--color-bg)] text-sm"
               aria-label="Task text"
             />
           ) : (
-            <p className="break-words text-sm font-semibold leading-snug">{task.text}</p>
+            <p className="break-words pt-1 text-sm font-bold leading-6 sm:text-base">{task.text}</p>
           )}
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
-            <span className="rounded-md bg-[var(--color-bg)] px-2 py-0.5">{priorityLabel(task.priority)}</span>
-            <span className="rounded-md bg-[var(--color-bg)] px-2 py-0.5">{timeLabel(task.timeRequired)}</span>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <MetadataChip tone={priorityTone(task.priority)}>
+              <Circle size={9} fill="currentColor" />
+              {priorityLabel(task.priority)}
+            </MetadataChip>
+            <MetadataChip tone={timeTone(task.timeRequired)}>
+              <Clock3 size={12} />
+              {timeLabel(task.timeRequired)}
+            </MetadataChip>
           </div>
         </div>
 
         <div className="flex flex-shrink-0 items-center gap-1">
-          <button
-            type="button"
+          <IconButton
             onClick={() => onStartFocus(task.id)}
-            className="h-8 w-8 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
-            aria-label={`Focus on ${task.text}`}
-            title="Focus"
+            label={`Focus on ${task.text}`}
+            size="sm"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="13" r="8" />
-              <path d="M12 9v4l2 2" />
-              <path d="M9 2h6" />
-            </svg>
-          </button>
-          {editable && (
-            <button
-              type="button"
-              onClick={() => void onDelete(task.id)}
-              className="h-8 w-8 rounded-md text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-red-500"
-              aria-label={`Delete ${task.text}`}
-              title="Delete"
+            <Play size={16} fill="currentColor" aria-hidden="true" />
+          </IconButton>
+          {editing ? (
+            <IconButton
+              onClick={cancelEditing}
+              label={`Cancel editing ${task.text}`}
+              size="sm"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="m19 6-1 14H6L5 6" />
-              </svg>
-            </button>
+              <X size={16} aria-hidden="true" />
+            </IconButton>
+          ) : (
+            <IconButton
+              onClick={() => setEditing(true)}
+              label={`Edit ${task.text}`}
+              size="sm"
+            >
+              <Pencil size={16} aria-hidden="true" />
+            </IconButton>
           )}
+          <IconButton
+            onClick={() => void onDelete(task.id)}
+            label={`Delete ${task.text}`}
+            variant="danger"
+            size="sm"
+          >
+            <Trash2 size={16} aria-hidden="true" />
+          </IconButton>
         </div>
       </div>
 
-      {editable && (
-        <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+      {editing && (
+        <div className="mt-4 border-t border-[var(--color-border)] pt-4">
           <TaskMetadataEditor
             priority={task.priority}
             timeRequired={task.timeRequired}
             onPriorityChange={(priority) => void onPriorityChange(task.id, priority)}
             onTimeRequiredChange={(timeRequired) => void onTimeRequiredChange(task.id, timeRequired)}
           />
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="ghost" onClick={cancelEditing} disabled={busy}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={() => void finishEditing()} disabled={busy}>
+              Done
+            </Button>
+          </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }

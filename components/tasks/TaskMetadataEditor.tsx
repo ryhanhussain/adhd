@@ -1,6 +1,8 @@
 "use client";
 
+import { Clock3, Flag, Minus } from "lucide-react";
 import type { PriorityLevel, TimeRequired } from "@/lib/db";
+import { SegmentedControl } from "@/components/ui/primitives";
 
 interface TaskMetadataEditorProps {
   priority: PriorityLevel | null | undefined;
@@ -30,40 +32,40 @@ export default function TaskMetadataEditor({
   onTimeRequiredChange,
 }: TaskMetadataEditorProps) {
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <label className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+    <div className="grid gap-3">
+      <div className="grid gap-1.5">
+        <span className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
           Urgency
         </span>
-        <select
-          value={priority ?? ""}
-          onChange={(event) => onPriorityChange((event.target.value || null) as PriorityLevel | null)}
-          className="h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs font-semibold"
-        >
-          {priorities.map((option) => (
-            <option key={option.value ?? "none"} value={option.value ?? ""}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        <SegmentedControl
+          value={priority ?? "none"}
+          onChange={(value) => onPriorityChange(value === "none" ? null : (value as PriorityLevel))}
+          ariaLabel="Task urgency"
+          className="grid-cols-4"
+          options={priorities.map((option) => ({
+            value: option.value ?? "none",
+            label: option.label,
+            icon: option.value ? <Flag size={14} /> : <Minus size={14} />,
+          }))}
+        />
+      </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+      <div className="grid gap-1.5">
+        <span className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
           Time
         </span>
-        <select
-          value={timeRequired ?? ""}
-          onChange={(event) => onTimeRequiredChange((event.target.value || null) as TimeRequired | null)}
-          className="h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs font-semibold"
-        >
-          {times.map((option) => (
-            <option key={option.value ?? "none"} value={option.value ?? ""}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        <SegmentedControl
+          value={timeRequired ?? "none"}
+          onChange={(value) => onTimeRequiredChange(value === "none" ? null : (value as TimeRequired))}
+          ariaLabel="Task time required"
+          className="grid-cols-4"
+          options={times.map((option) => ({
+            value: option.value ?? "none",
+            label: option.label,
+            icon: option.value ? <Clock3 size={14} /> : <Minus size={14} />,
+          }))}
+        />
+      </div>
     </div>
   );
 }

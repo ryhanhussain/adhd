@@ -1,6 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, Clock3, Inbox, ListOrdered } from "lucide-react";
 import type { Intention, PriorityLevel, TimeRequired } from "@/lib/db";
+import { Button, EmptyState, Panel, SectionHeader, SegmentedControl } from "@/components/ui/primitives";
 import TaskRow from "./TaskRow";
 
 export type TaskSortMode =
@@ -15,6 +18,7 @@ interface TaskListProps {
   visibleTasks: Intention[];
   expanded: boolean;
   sortMode: TaskSortMode;
+  loading?: boolean;
   onExpandedChange: (expanded: boolean) => void;
   onSortModeChange: (mode: TaskSortMode) => void;
   onComplete: (id: string) => Promise<void>;
@@ -25,11 +29,11 @@ interface TaskListProps {
   onTimeRequiredChange: (id: string, timeRequired: TimeRequired | null) => Promise<void>;
 }
 
-const sortOptions: { value: TaskSortMode; label: string }[] = [
-  { value: "urgency-desc", label: "Urgency: high to low" },
-  { value: "urgency-asc", label: "Urgency: low to high" },
-  { value: "time-asc", label: "Time: quick to long" },
-  { value: "time-desc", label: "Time: long to quick" },
+const sortOptions: { value: TaskSortMode; label: string; icon?: ReactNode }[] = [
+  { value: "urgency-desc", label: "High first", icon: <ArrowDownNarrowWide size={14} /> },
+  { value: "urgency-asc", label: "Low first", icon: <ArrowUpNarrowWide size={14} /> },
+  { value: "time-asc", label: "Quick first", icon: <Clock3 size={14} /> },
+  { value: "time-desc", label: "Long first", icon: <Clock3 size={14} /> },
   { value: "manual", label: "Manual" },
 ];
 
@@ -38,6 +42,7 @@ export default function TaskList({
   visibleTasks,
   expanded,
   sortMode,
+  loading = false,
   onExpandedChange,
   onSortModeChange,
   onComplete,
@@ -50,38 +55,36 @@ export default function TaskList({
   const hiddenCount = Math.max(0, tasks.length - visibleTasks.length);
 
   return (
-    <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 sm:p-4">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-bold tracking-tight">Tasks</h2>
-          <p className="text-xs font-medium text-[var(--color-text-muted)]">
-            {tasks.length === 0 ? "Nothing active" : `${tasks.length} active`}
-          </p>
-        </div>
+    <Panel className="grid gap-4">
+      <SectionHeader
+        title="Tasks"
+        description={loading ? "Loading active tasks..." : tasks.length === 0 ? "Nothing active" : `${tasks.length} active`}
+      />
 
-        <label className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-muted)]">
-          Sort
-          <select
-            value={sortMode}
-            onChange={(event) => onSortModeChange(event.target.value as TaskSortMode)}
-            className="h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs font-semibold text-[var(--color-text)]"
-          >
-            {sortOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <SegmentedControl
+        value={sortMode}
+        onChange={onSortModeChange}
+        ariaLabel="Sort active tasks"
+        className="grid-cols-2 sm:grid-cols-5"
+        options={sortOptions.map((option) => ({
+          value: option.value,
+          label: option.label,
+          icon: option.icon ?? <ListOrdered size={14} />,
+        }))}
+      />
 
-      {visibleTasks.length > 0 ? (
+      {loading ? (
+        <EmptyState
+          title="Loading tasks"
+          description="Your active list will appear here in a moment."
+          className="py-7"
+        />
+      ) : visibleTasks.length > 0 ? (
         <div className="flex flex-col gap-2">
           {visibleTasks.map((task) => (
             <TaskRow
               key={task.id}
               task={task}
-              editable={expanded}
               onComplete={onComplete}
               onDelete={onDelete}
               onStartFocus={onStartFocus}
@@ -92,20 +95,23 @@ export default function TaskList({
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-8 text-center">
-          <p className="text-sm font-semibold">No tasks yet.</p>
-        </div>
+        <EmptyState
+          icon={<Inbox size={20} />}
+          title="No tasks yet"
+          description="Start with a brain dump above."
+          className="py-8"
+        />
       )}
 
       {tasks.length > 5 && (
-        <button
-          type="button"
+        <Button
           onClick={() => onExpandedChange(!expanded)}
-          className="mt-3 h-10 w-full rounded-md border border-[var(--color-border)] text-sm font-semibold text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+          variant="secondary"
+          fullWidth
         >
           {expanded ? "Show less" : `View all (${hiddenCount} more)`}
-        </button>
+        </Button>
       )}
-    </section>
+    </Panel>
   );
 }

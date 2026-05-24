@@ -3,51 +3,29 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { CalendarDays, PencilLine, Settings, Sparkles, Timer } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 
 const tabs = [
   {
     href: "/",
     label: "Home",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 20h9" />
-        <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
-      </svg>
-    ),
+    Icon: PencilLine,
   },
   {
     href: "/focus",
     label: "Focus",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="13" r="8" />
-        <path d="M12 9v4l2 2" />
-        <path d="M9 2h6" />
-      </svg>
-    ),
+    Icon: Timer,
   },
   {
     href: "/calendar",
     label: "Calendar",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M8 2v4" />
-        <path d="M16 2v4" />
-        <rect x="3" y="4" width="18" height="18" rx="2" />
-        <path d="M3 10h18" />
-      </svg>
-    ),
+    Icon: CalendarDays,
   },
   {
     href: "/settings",
     label: "Settings",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    ),
+    Icon: Settings,
   },
 ];
 
@@ -120,7 +98,7 @@ function SyncIndicator() {
 
   return (
     <span
-      className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)]"
+      className="hidden md:inline-flex items-center gap-1.5 text-[11px] font-bold text-[var(--color-text-muted)]"
       title={label}
       aria-label={`Sync status: ${label}`}
     >
@@ -147,35 +125,36 @@ export default function TopNav() {
   }, []);
 
   return (
-    <div className="flex items-center justify-between gap-2 sm:gap-4 mb-4 lg:mb-6 px-2 sm:px-4 h-12 sm:h-14 rounded-full glass-panel border border-[var(--glass-border)]">
+    <div className="mb-4 flex h-14 items-center justify-between gap-2 rounded-2xl border border-[var(--glass-border)] bg-[var(--color-surface-elevated)]/80 px-2 shadow-[0_18px_60px_-34px_rgba(40,20,80,0.35)] backdrop-blur sm:mb-6 sm:gap-4 sm:rounded-full sm:px-4">
       <Link
         href="/"
         aria-label="ADDit home"
-        className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-[var(--color-text)] active:scale-95 transition-transform"
+        className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl text-sm font-black tracking-tight text-[var(--color-text)] transition-transform active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] sm:min-w-0 sm:px-2"
       >
-        <span className="text-[var(--color-accent)]" aria-hidden="true">✦</span>
+        <Sparkles size={18} className="text-[var(--color-accent)]" aria-hidden="true" />
         <span className="hidden sm:inline">ADDit</span>
       </Link>
 
       <nav
         aria-label="Primary"
-        className="glass-control flex items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 rounded-full"
+        className="flex min-w-0 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] p-1"
       >
         {tabs.map((tab) => {
           const active = pathname === tab.href || (tab.href !== "/" && pathname.startsWith(tab.href));
+          const Icon = tab.Icon;
           return (
             <Link
               key={tab.href}
               href={tab.href}
               aria-label={tab.label}
               aria-current={active ? "page" : undefined}
-              className={`hit-area flex items-center gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 rounded-full text-xs font-semibold transition-all active:scale-95 ${
+              className={`hit-area flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-bold transition-all active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] sm:px-3 ${
                 active
                   ? "bg-[var(--color-accent)] text-[var(--color-on-accent)] shadow-[0_10px_24px_-14px_var(--color-accent)]"
                   : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
               }`}
             >
-              {tab.icon}
+              <Icon size={18} strokeWidth={2.4} aria-hidden="true" />
               <span className="hidden sm:inline">{tab.label}</span>
             </Link>
           );
@@ -184,12 +163,12 @@ export default function TopNav() {
 
       <div className="flex items-center gap-2 sm:gap-3">
         <SyncIndicator />
-        <span className="hidden sm:inline text-xs font-medium tabular-nums text-[var(--color-text-muted)]">
+        <span className="hidden lg:inline text-xs font-bold tabular-nums text-[var(--color-text-muted)]">
           {now ? formatNow(now) : ""}
         </span>
         <span
           aria-hidden="true"
-          className="glass-control w-8 h-8 rounded-full text-[var(--color-accent)] flex items-center justify-center text-xs font-bold flex-shrink-0"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-black text-[var(--color-accent)]"
           title={user?.email ?? undefined}
         >
           {initialOf(user?.email)}

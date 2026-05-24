@@ -9,13 +9,13 @@ interface ToastProps {
   position?: "nav" | "dock";
 }
 
-export default function Toast({ message, action, position = "dock" }: ToastProps) {
+export default function Toast({ message, action, position = "nav" }: ToastProps) {
   const clearance = position === "nav" ? "above-nav" : "above-dock";
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`fixed ${clearance} left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 px-5 py-2.5 rounded-full bg-[var(--color-text)] text-[var(--color-bg)] text-sm font-medium shadow-lg animate-toast-in`}
+      className={`fixed ${clearance} left-1/2 z-[70] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-full bg-[var(--color-text)] px-5 py-2.5 text-sm font-bold text-[var(--color-bg)] shadow-lg animate-toast-in`}
     >
       <span>{message}</span>
       {action && (

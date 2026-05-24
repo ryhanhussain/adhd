@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import TaskList, { type TaskSortMode } from "@/components/tasks/TaskList";
 import Toast from "@/components/Toast";
+import { MetadataChip, PageHeader, PageShell, Panel, SectionHeader } from "@/components/ui/primitives";
 import {
   addEntry,
   addIntentions,
@@ -189,28 +191,38 @@ export default function Home() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 pb-20">
-      <header className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-          {formatToday()}
-        </p>
-        <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Home</h1>
-      </header>
+    <PageShell maxWidth="lg">
+      <PageHeader
+        eyebrow={formatToday()}
+        title="Home"
+        description="Capture first, sort later."
+        actions={
+          intentions.length > 0 ? (
+            <MetadataChip tone="accent">{intentions.length} active</MetadataChip>
+          ) : undefined
+        }
+      />
 
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 sm:p-4">
+      <Panel className="grid gap-4">
+        <SectionHeader
+          title="Capture"
+          description="Loose tasks go here."
+          actions={<Sparkles size={20} className="text-[var(--color-accent)]" aria-hidden="true" />}
+        />
         <BrainDumpInput
           onIntentionsParsed={handleIntentionsParsed}
           onClose={() => {}}
           autoFocus={false}
           showClose={false}
         />
-      </section>
+      </Panel>
 
       <TaskList
         tasks={sortedTasks}
         visibleTasks={visibleTasks}
         expanded={expanded}
         sortMode={sortMode}
+        loading={loading}
         onExpandedChange={setExpanded}
         onSortModeChange={setSortMode}
         onComplete={handleComplete}
@@ -221,11 +233,7 @@ export default function Home() {
         onTimeRequiredChange={handleTimeRequiredChange}
       />
 
-      {loading && (
-        <p className="text-center text-sm font-medium text-[var(--color-text-muted)]">Loading tasks...</p>
-      )}
-
       {toast && <Toast message={toast} />}
-    </div>
+    </PageShell>
   );
 }

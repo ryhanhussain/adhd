@@ -453,8 +453,8 @@ html.dark .gradient-mesh {
 
 /* Clearance utilities for bottom-pinned overlays. Always prefer these over
    raw `bottom-20` / `pb-28` so changes to navbar height propagate centrally. */
-.above-nav { bottom: var(--nav-clearance); }
-.above-dock { bottom: calc(var(--dock-clearance) + var(--kb, 0px)); }
+.above-nav { bottom: max(calc(var(--nav-clearance) + 1rem), 1rem); }
+.above-dock { bottom: max(calc(var(--dock-clearance) + var(--kb, 0px)), 1rem); }
 .pb-nav { padding-bottom: var(--nav-clearance); }
 .pb-dock { padding-bottom: var(--dock-clearance); }
 

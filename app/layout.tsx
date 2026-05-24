@@ -87,7 +87,7 @@ export default function RootLayout({
             <LoginGate />
             <div className="fixed inset-0 z-0 pointer-events-none gradient-mesh opacity-100 dark:opacity-90" />
             <div className="fixed inset-0 z-0 pointer-events-none noise-bg" />
-            <main className="max-w-lg lg:max-w-7xl mx-auto px-3 sm:px-5 pt-3 lg:pt-3 relative z-10">
+            <main className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-5 lg:px-6 relative z-10">
               <TopNav />
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>

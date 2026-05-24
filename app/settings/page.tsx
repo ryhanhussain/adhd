@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Download, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import Toast from "@/components/Toast";
+import { Button, MetadataChip, PageHeader, PageShell, Panel, SectionHeader, SegmentedControl } from "@/components/ui/primitives";
 import {
   getAllEntriesForSync,
   getAllIntentionsForSync,
@@ -10,10 +12,12 @@ import {
   saveSettings,
 } from "@/lib/db";
 
-const themes = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+type ThemeChoice = "system" | "light" | "dark";
+
+const themes: Array<{ value: ThemeChoice; label: string; icon: ReactNode }> = [
+  { value: "system", label: "System", icon: <Monitor size={15} /> },
+  { value: "light", label: "Light", icon: <Sun size={15} /> },
+  { value: "dark", label: "Dark", icon: <Moon size={15} /> },
 ];
 
 export default function SettingsPage() {
@@ -70,68 +74,56 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 pb-20">
-      <header className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-          Settings
-        </p>
-        <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Account</h1>
-      </header>
+    <PageShell maxWidth="md">
+      <PageHeader
+        eyebrow="Settings"
+        title="Account"
+        description="Manage account, appearance, and local backup."
+      />
 
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Signed in
-          </span>
-          <span className="break-words text-sm font-semibold">{user?.email ?? "No email"}</span>
+      <Panel className="grid gap-4">
+        <SectionHeader title="Signed in" />
+        <div className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+            <UserRound size={20} aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="break-words text-sm font-bold">{user?.email ?? "No email"}</p>
+            <MetadataChip className="mt-1">Sync enabled</MetadataChip>
+          </div>
         </div>
-        <button
-          type="button"
+        <Button
           onClick={() => void signOut()}
-          className="mt-4 h-10 rounded-lg border border-[var(--color-border)] px-4 text-sm font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+          variant="secondary"
         >
+          <LogOut size={17} />
           Sign out
-        </button>
-      </section>
+        </Button>
+      </Panel>
 
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-        <label className="flex flex-col gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Theme
-          </span>
-          <select
-            value={theme}
-            onChange={(event) => void handleThemeChange(event.target.value)}
-            className="h-11 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm font-semibold"
-          >
-            {themes.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
+      <Panel className="grid gap-4">
+        <SectionHeader title="Appearance" description="Choose how ADDit follows your device." />
+        <SegmentedControl
+          value={theme as ThemeChoice}
+          onChange={(value) => void handleThemeChange(value)}
+          ariaLabel="Theme"
+          className="grid-cols-3"
+          options={themes}
+        />
+      </Panel>
 
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Data
-          </span>
-          <span className="text-sm font-medium text-[var(--color-text-muted)]">
-            Export tasks and completion history.
-          </span>
-        </div>
-        <button
-          type="button"
+      <Panel className="grid gap-4">
+        <SectionHeader title="Data" description="Export tasks and completion history." />
+        <Button
           onClick={() => void handleExport()}
-          className="mt-4 h-10 rounded-lg bg-[var(--color-accent)] px-4 text-sm font-semibold text-[var(--color-on-accent)]"
+          variant="primary"
         >
+          <Download size={17} />
           Export backup
-        </button>
-      </section>
+        </Button>
+      </Panel>
 
       {toast && <Toast message={toast} />}
-    </div>
+    </PageShell>
   );
 }

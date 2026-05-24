@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CalendarCheck2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   getCompletedIntentionsForDateRange,
   toLocalDateStr,
   type Intention,
 } from "@/lib/db";
+import { Button, EmptyState, IconButton, MetadataChip, PageHeader, PageShell, Panel, cn } from "@/components/ui/primitives";
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -106,101 +108,128 @@ export default function MonthlyCalendar() {
   const today = toLocalDateStr(new Date());
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-20">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Calendar
-          </p>
-          <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{monthTitle(month)}</h1>
-        </div>
-        <div className="grid grid-cols-3 gap-2 sm:flex">
-          <button
-            type="button"
-            onClick={() => setMonth((current) => addMonths(current, -1))}
-            className="h-10 rounded-lg border border-[var(--color-border)] px-3 text-sm font-semibold"
-          >
-            Prev
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const now = new Date();
-              setMonth(startOfMonth(now));
-              setSelectedDate(toLocalDateStr(now));
-            }}
-            className="h-10 rounded-lg bg-[var(--color-accent)] px-3 text-sm font-semibold text-[var(--color-on-accent)]"
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={() => setMonth((current) => addMonths(current, 1))}
-            className="h-10 rounded-lg border border-[var(--color-border)] px-3 text-sm font-semibold"
-          >
-            Next
-          </button>
-        </div>
-      </header>
+    <PageShell maxWidth="xl">
+      <PageHeader
+        eyebrow="Calendar"
+        title={monthTitle(month)}
+        description="Completed tasks by day."
+        actions={
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 sm:flex">
+            <IconButton
+              label="Previous month"
+              onClick={() => setMonth((current) => addMonths(current, -1))}
+            >
+              <ChevronLeft size={18} aria-hidden="true" />
+            </IconButton>
+            <Button
+              onClick={() => {
+                const now = new Date();
+                setMonth(startOfMonth(now));
+                setSelectedDate(toLocalDateStr(now));
+              }}
+              variant="primary"
+            >
+              <CalendarDays size={17} />
+              Today
+            </Button>
+            <IconButton
+              label="Next month"
+              onClick={() => setMonth((current) => addMonths(current, 1))}
+            >
+              <ChevronRight size={18} aria-hidden="true" />
+            </IconButton>
+          </div>
+        }
+      />
 
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2 sm:p-3">
-        <div className="grid grid-cols-7 border-b border-[var(--color-border)] pb-2">
-          {weekdayLabels.map((label) => (
-            <div key={label} className="text-center text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-              {label}
-            </div>
-          ))}
-        </div>
-        <div className="mt-2 grid grid-cols-7 gap-1">
-          {grid.map((date) => {
-            const dateStr = toLocalDateStr(date);
-            const count = grouped.get(dateStr)?.length ?? 0;
-            const inMonth = date.getMonth() === month.getMonth();
-            const isToday = dateStr === today;
-            const selected = dateStr === selectedDate;
-            return (
-              <button
-                key={dateStr}
-                type="button"
-                onClick={() => setSelectedDate(dateStr)}
-                className={`flex min-h-20 flex-col items-start rounded-lg border p-2 text-left transition-colors sm:min-h-28 ${
-                  selected
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10"
-                    : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/50"
-                } ${inMonth ? "" : "opacity-45"}`}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+        <Panel className="p-2 sm:p-3">
+          <div className="grid grid-cols-7 border-b border-[var(--color-border)] pb-2">
+            {weekdayLabels.map((label) => (
+              <div
+                key={label}
+                className="text-center text-[10px] font-black uppercase tracking-[0.12em] text-[var(--color-text-muted)] sm:text-[11px]"
               >
-                <span
-                  className={`grid h-7 w-7 place-items-center rounded-md text-xs font-bold ${
-                    isToday ? "bg-[var(--color-accent)] text-[var(--color-on-accent)]" : ""
-                  }`}
-                >
-                  {date.getDate()}
-                </span>
-                {count > 0 && (
-                  <span className="mt-auto rounded-md bg-[var(--color-bg)] px-2 py-1 text-[11px] font-bold text-[var(--color-text)]">
-                    {count} done
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <aside className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-        <h2 className="text-base font-bold">{dayTitle(selectedDate)}</h2>
-        {selectedTasks.length > 0 ? (
-          <ul className="mt-3 flex flex-col gap-2">
-            {selectedTasks.map((task) => (
-              <li key={task.id} className="rounded-lg bg-[var(--color-surface)] px-3 py-2 text-sm font-semibold">
-                {task.text}
-              </li>
+                {label}
+              </div>
             ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm font-medium text-[var(--color-text-muted)]">No completed tasks.</p>
-        )}
-      </aside>
-    </div>
+          </div>
+          <div className="mt-2 grid grid-cols-7 gap-1 sm:gap-1.5">
+            {grid.map((date) => {
+              const dateStr = toLocalDateStr(date);
+              const count = grouped.get(dateStr)?.length ?? 0;
+              const inMonth = date.getMonth() === month.getMonth();
+              const isToday = dateStr === today;
+              const selected = dateStr === selectedDate;
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  onClick={() => setSelectedDate(dateStr)}
+                  className={cn(
+                    "flex aspect-square min-h-12 flex-col items-start rounded-xl border p-1.5 text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] sm:min-h-20 sm:p-2 lg:min-h-24",
+                    selected
+                      ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] shadow-[0_12px_30px_-24px_var(--color-accent)]"
+                      : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-surface-elevated)]",
+                    !inMonth && "opacity-45"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid h-6 w-6 place-items-center rounded-lg text-xs font-black sm:h-7 sm:w-7",
+                      isToday && "bg-[var(--color-accent)] text-[var(--color-on-accent)]"
+                    )}
+                  >
+                    {date.getDate()}
+                  </span>
+                  {count > 0 && (
+                    <span className="mt-auto inline-flex min-h-5 items-center rounded-full bg-[var(--color-bg)] px-1.5 text-[10px] font-black text-[var(--color-text)] sm:min-h-6 sm:px-2 sm:text-[11px]">
+                      <span className="sm:hidden">{count}</span>
+                      <span className="hidden sm:inline">{count} done</span>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+
+        <Panel as="aside" className="lg:sticky lg:top-24">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+                Selected day
+              </p>
+              <h2 className="mt-1 text-lg font-black leading-tight">{dayTitle(selectedDate)}</h2>
+            </div>
+            <MetadataChip tone={selectedTasks.length > 0 ? "success" : "neutral"}>
+              <CalendarCheck2 size={13} />
+              {selectedTasks.length}
+            </MetadataChip>
+          </div>
+
+          {selectedTasks.length > 0 ? (
+            <ul className="mt-4 flex flex-col gap-2">
+              {selectedTasks.map((task) => (
+                <li
+                  key={task.id}
+                  className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm font-bold"
+                >
+                  <CheckCircle2 size={16} className="mt-0.5 text-[var(--color-success)]" aria-hidden="true" />
+                  <span className="min-w-0 break-words">{task.text}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={<CalendarDays size={20} />}
+              title="No completed tasks"
+              description="Completed work for this day will appear here."
+              className="mt-4 py-8"
+            />
+          )}
+        </Panel>
+      </div>
+    </PageShell>
   );
 }

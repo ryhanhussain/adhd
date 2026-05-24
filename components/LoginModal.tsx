@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { CheckCircle2, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { Button, Input } from "@/components/ui/primitives";
 
 export default function LoginModal() {
   const [mounted, setMounted] = useState(false);
@@ -85,14 +87,17 @@ export default function LoginModal() {
         role="dialog"
         aria-modal="true"
         aria-label="Sign in to ADDit"
-        className="relative popup-panel rounded-2xl w-full max-w-sm p-8 animate-pop-in"
+        className="relative w-full max-w-sm rounded-2xl popup-panel p-6 animate-pop-in sm:p-8"
       >
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+            <Sparkles size={22} aria-hidden="true" />
+          </div>
+          <h1 className="text-2xl font-black text-[var(--color-text)]">
             ADDit
           </h1>
-          <p className="text-sm text-[var(--color-text-muted)] mt-1">
+          <p className="mt-1 text-sm font-medium text-[var(--color-text-muted)]">
             Sign in to sync your data
           </p>
         </div>
@@ -100,19 +105,7 @@ export default function LoginModal() {
         {confirmationSent ? (
           <div className="text-center py-4">
             <div className="w-12 h-12 rounded-full bg-[var(--color-success)]/15 flex items-center justify-center mx-auto mb-3">
-              <svg
-                className="w-6 h-6 text-[var(--color-success)]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
+              <CheckCircle2 className="h-6 w-6 text-[var(--color-success)]" aria-hidden="true" />
             </div>
             <p className="text-[var(--color-text)] font-medium">
               Check your email
@@ -135,22 +128,24 @@ export default function LoginModal() {
           <>
             {/* Email form */}
             <form onSubmit={handleEmailSubmit} className="space-y-3">
-              <input
+              <Input
                 type="email"
+                aria-label="Email"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full h-12 px-4 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                className="min-h-12 px-4"
               />
-              <input
+              <Input
                 type="password"
+                aria-label="Password"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full h-12 px-4 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                className="min-h-12 px-4"
               />
 
               {error && (
@@ -159,17 +154,19 @@ export default function LoginModal() {
                 </p>
               )}
 
-              <button
+              <Button
                 type="submit"
                 disabled={submitting}
-                className="w-full h-12 rounded-xl bg-[var(--color-accent)] text-[var(--color-on-accent)] font-medium text-sm hover:opacity-90 active:scale-[0.98] transition-all duration-200 disabled:opacity-50"
+                variant="primary"
+                size="lg"
+                fullWidth
               >
                 {submitting
                   ? "..."
                   : mode === "signin"
                     ? "Sign In"
                     : "Create Account"}
-              </button>
+              </Button>
             </form>
 
             {/* Toggle mode */}
