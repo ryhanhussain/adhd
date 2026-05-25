@@ -122,7 +122,6 @@ async function pullOnce(userId: string): Promise<{ applied: boolean }> {
 
   const pageSize = 500;
   let page = 0;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { data, error } = await supabase
       .from("entries")
