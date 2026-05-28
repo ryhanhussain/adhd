@@ -18,9 +18,9 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
   "https://addit.pages.dev";
 
-const tagline = "Tasks, focus, and a simple completion calendar.";
+const tagline = "Tasks and a simple completion calendar.";
 const description =
-  "ADDit turns brain dumps into tasks, helps you focus on one task, and shows completed work on a clean calendar.";
+  "ADDit turns brain dumps into tasks and shows completed work on a clean calendar.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

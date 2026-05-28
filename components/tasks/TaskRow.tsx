@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Circle, Clock3, Pencil, Play, Trash2, X } from "lucide-react";
+import { Check, Circle, Clock3, Pencil, Trash2, X } from "lucide-react";
 import type { Intention, PriorityLevel, TimeRequired } from "@/lib/db";
 import { Button, IconButton, Input, MetadataChip, cn } from "@/components/ui/primitives";
 import TaskMetadataEditor from "./TaskMetadataEditor";
@@ -10,7 +10,6 @@ interface TaskRowProps {
   task: Intention;
   onComplete: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onStartFocus: (id: string) => void;
   onTextChange: (id: string, text: string) => Promise<void>;
   onPriorityChange: (id: string, priority: PriorityLevel | null) => Promise<void>;
   onTimeRequiredChange: (id: string, timeRequired: TimeRequired | null) => Promise<void>;
@@ -44,7 +43,6 @@ export default function TaskRow({
   task,
   onComplete,
   onDelete,
-  onStartFocus,
   onTextChange,
   onPriorityChange,
   onTimeRequiredChange,
@@ -144,13 +142,6 @@ export default function TaskRow({
         </div>
 
         <div className="flex flex-shrink-0 items-center gap-1">
-          <IconButton
-            onClick={() => onStartFocus(task.id)}
-            label={`Focus on ${task.text}`}
-            size="sm"
-          >
-            <Play size={16} fill="currentColor" aria-hidden="true" />
-          </IconButton>
           {editing ? (
             <IconButton
               onClick={cancelEditing}

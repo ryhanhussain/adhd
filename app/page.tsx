@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import BrainDumpInput from "@/components/BrainDumpInput";
 import TaskList, { type TaskSortMode } from "@/components/tasks/TaskList";
@@ -76,7 +75,6 @@ function sortTasks(tasks: Intention[], mode: TaskSortMode): Intention[] {
 }
 
 export default function Home() {
-  const router = useRouter();
   const [intentions, setIntentions] = useState<Intention[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [sortMode, setSortMode] = useState<TaskSortMode>("urgency-desc");
@@ -227,7 +225,6 @@ export default function Home() {
         onSortModeChange={setSortMode}
         onComplete={handleComplete}
         onDelete={handleDelete}
-        onStartFocus={(id) => router.push(`/focus?task=${encodeURIComponent(id)}`)}
         onTextChange={handleTextChange}
         onPriorityChange={handlePriorityChange}
         onTimeRequiredChange={handleTimeRequiredChange}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CalendarDays, PencilLine, Settings, Sparkles, Timer } from "lucide-react";
+import { CalendarDays, PencilLine, Settings, Sparkles } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 
 const tabs = [
@@ -11,11 +11,6 @@ const tabs = [
     href: "/",
     label: "Home",
     Icon: PencilLine,
-  },
-  {
-    href: "/focus",
-    label: "Focus",
-    Icon: Timer,
   },
   {
     href: "/calendar",

@@ -94,9 +94,6 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("addit-pomodoro");
-    }
     setUser(null);
     setSession(null);
   };

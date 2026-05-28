@@ -531,70 +531,6 @@ html[data-keyboard="open"] .keyboard-hide-on-keyboard {
   letter-spacing: 0;
 }
 
-.focus-orb-wrap {
-  --focus-progress: 0deg;
-  width: min(85vw, 26rem);
-  aspect-ratio: 1;
-  padding: 0.35rem;
-  border-radius: 9999px;
-  background:
-    conic-gradient(from -90deg, #F472B6 0deg, #FBBF24 var(--focus-progress), rgba(255, 255, 255, 0.45) var(--focus-progress), rgba(255, 255, 255, 0.45) 360deg);
-  box-shadow:
-    0 28px 90px -36px rgba(40, 20, 80, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-
-.focus-orb {
-  width: 100%;
-  height: 100%;
-  border-radius: 9999px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  background:
-    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0.45) 80%),
-    linear-gradient(135deg, rgba(244, 114, 182, 0.2), rgba(251, 191, 36, 0.2));
-  box-shadow:
-    inset 0 0 60px rgba(255, 255, 255, 0.8),
-    0 12px 40px -10px rgba(244, 114, 182, 0.2);
-}
-
-.focus-orb-wrap.is-running .focus-orb {
-  animation: focusOrbBreathe 5s ease-in-out infinite;
-}
-
-@media (max-width: 639px) {
-  .focus-orb-wrap {
-    width: min(82vw, 20.75rem);
-    padding: 0.3rem;
-  }
-
-  .focus-orb {
-    gap: 0.35rem;
-  }
-}
-
-@media (max-width: 380px), (max-height: 700px) {
-  .focus-orb-wrap {
-    width: min(78vw, 19rem);
-  }
-}
-
-@keyframes focusOrbBreathe {
-  0%, 100% {
-    box-shadow:
-      inset 0 0 60px rgba(255, 255, 255, 0.8),
-      0 12px 40px -10px rgba(244, 114, 182, 0.2);
-  }
-  50% {
-    box-shadow:
-      inset 0 0 76px rgba(255, 255, 255, 0.94),
-      0 18px 56px -14px rgba(244, 114, 182, 0.34);
-  }
-}
-
 /* ──────────────────────────────────────────────────────────────────
    Design-system scales. Prefer these over ad-hoc Tailwind sizes.
 
@@ -855,8 +791,7 @@ h1, h2, h3 {
   .animate-streak-bounce,
   .animate-bucket-flash,
   .animate-success-flash,
-  .animate-check-draw,
-  .focus-orb-wrap.is-running .focus-orb {
+  .animate-check-draw {
     animation: none !important;
   }
 

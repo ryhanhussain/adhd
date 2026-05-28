@@ -23,7 +23,6 @@ interface TaskListProps {
   onSortModeChange: (mode: TaskSortMode) => void;
   onComplete: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onStartFocus: (id: string) => void;
   onTextChange: (id: string, text: string) => Promise<void>;
   onPriorityChange: (id: string, priority: PriorityLevel | null) => Promise<void>;
   onTimeRequiredChange: (id: string, timeRequired: TimeRequired | null) => Promise<void>;
@@ -47,7 +46,6 @@ export default function TaskList({
   onSortModeChange,
   onComplete,
   onDelete,
-  onStartFocus,
   onTextChange,
   onPriorityChange,
   onTimeRequiredChange,
@@ -87,7 +85,6 @@ export default function TaskList({
               task={task}
               onComplete={onComplete}
               onDelete={onDelete}
-              onStartFocus={onStartFocus}
               onTextChange={onTextChange}
               onPriorityChange={onPriorityChange}
               onTimeRequiredChange={onTimeRequiredChange}
