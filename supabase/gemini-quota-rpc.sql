@@ -1,5 +1,5 @@
 -- =============================================================
--- ADDit — Gemini quota: atomic increment + burst guard
+-- ADDit — AI quota: atomic increment + burst guard
 -- Run AFTER schema.sql in the Supabase SQL Editor.
 -- =============================================================
 --

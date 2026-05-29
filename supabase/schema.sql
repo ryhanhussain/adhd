@@ -9,7 +9,7 @@ create extension if not exists "pgcrypto";
 -- -----------------------------------------------------------
 -- PROFILES TABLE
 -- Auto-created for each new user via trigger.
--- Stores preferences and the encrypted Gemini API key.
+-- Stores preferences and legacy API-key metadata.
 -- -----------------------------------------------------------
 create table public.profiles (
   id                      uuid        primary key references auth.users(id) on delete cascade,
@@ -49,7 +49,7 @@ create index logs_user_id_idx   on public.logs (user_id);
 create index logs_user_date_idx on public.logs (user_id, log_date);
 
 -- -----------------------------------------------------------
--- GEMINI USAGE TABLE
+-- AI USAGE TABLE
 -- Tracks per-user daily API call counts. Written only by server-side routes
 -- using the service role; no direct client access (see rls.sql).
 -- -----------------------------------------------------------

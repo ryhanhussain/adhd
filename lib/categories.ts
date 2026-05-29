@@ -64,7 +64,7 @@ export const BUCKET_ICON_KEYS: BucketIconKey[] = [
 
 /**
  * Intention category ("bucket"). User-defined, up to 3, each with a short
- * description that's passed verbatim to the brain-dump Gemini prompt so the
+ * description that's passed verbatim to the brain-dump AI prompt so the
  * model can sort tasks by the user's own mental model rather than a canned
  * taxonomy.
  */

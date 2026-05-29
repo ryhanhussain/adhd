@@ -178,7 +178,7 @@ export interface Intention {
    */
   carriedFromId?: string | null;
   /**
-   * v9: optional energy hint. Inferred at brain-dump time by Gemini and used
+   * v9: optional energy hint. Inferred at brain-dump time by AI and used
    * by the Energy view to slice the backlog. Pre-fills the Entry's energy
    * when the intention is completed; user can still override.
    */
@@ -208,10 +208,26 @@ export interface Intention {
    * 0 = Now, 1 = Next, null/undefined = Brain Dump Vault.
    */
   nowNextRank?: NowNextRank | null;
+  /**
+   * Local YYYY-MM-DD selected in the hourly planner. Only today and tomorrow
+   * are accepted by the Home planner; null/undefined = Inbox.
+   */
+  plannedDate?: string | null;
+  /** Minutes after local midnight where the planned block starts. */
+  plannedStartMinute?: number | null;
+  /** Planned block size in minutes. Defaults from `timeRequired` when scheduled. */
+  plannedDurationMinutes?: number | null;
   // --- sync metadata (v6) ---
   updatedAt: number;         // epoch ms of the last local or remote write; drives last-write-wins merge
   deleted?: boolean;         // soft-delete tombstone so other devices observe the removal
   syncedAt?: number | null;  // updatedAt value at the moment of the last successful push; null = dirty
+}
+
+export interface DailyPlannerChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt: number;
 }
 
 const pendingEntryDeletions = new Set<string>();
@@ -300,8 +316,9 @@ function getDB() {
             db.createObjectStore("lifeAreas", { keyPath: "id" });
           }
         }
-        // v12: optional `timeRequired` field on Intention. Optional field,
-        // no IndexedDB store/index change required.
+        // Later optional Intention fields (`timeRequired`, plannedDate,
+        // plannedStartMinute, plannedDurationMinutes) need no IndexedDB
+        // store/index change; old rows naturally render as unset.
         //
         // Both backfills share a single async block so that any upgrade path
         // (e.g. fresh install → v7, or v3 → v7) runs whatever is needed in
@@ -714,6 +731,45 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Local-only daily AI planner chat
+// ---------------------------------------------------------------------------
+
+const PLANNER_CHAT_PREFIX = "dailyPlannerChat:";
+
+function normalizeDailyPlannerChat(raw: unknown): DailyPlannerChatMessage[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      const role = row.role === "user" || row.role === "assistant" ? row.role : null;
+      const text = typeof row.text === "string" ? row.text.trim().slice(0, 2000) : "";
+      const createdAt = typeof row.createdAt === "number" && Number.isFinite(row.createdAt) ? row.createdAt : Date.now();
+      const id = typeof row.id === "string" && row.id ? row.id : crypto.randomUUID();
+      if (!role || !text) return null;
+      return { id, role, text, createdAt };
+    })
+    .filter((item): item is DailyPlannerChatMessage => item !== null)
+    .slice(-16);
+}
+
+export async function getDailyPlannerChat(date: string): Promise<DailyPlannerChatMessage[]> {
+  const db = await getDB();
+  const raw = await db.get("settings", `${PLANNER_CHAT_PREFIX}${date}`);
+  if (!raw) return [];
+  try {
+    return normalizeDailyPlannerChat(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDailyPlannerChat(date: string, messages: DailyPlannerChatMessage[]): Promise<void> {
+  const db = await getDB();
+  const normalized = normalizeDailyPlannerChat(messages);
+  await db.put("settings", JSON.stringify(normalized.slice(-16)), `${PLANNER_CHAT_PREFIX}${date}`);
+}
+
+// ---------------------------------------------------------------------------
 // Reflections
 // ---------------------------------------------------------------------------
 
@@ -752,6 +808,58 @@ function normalizeNowNextRankValue(value: unknown): NowNextRank | null {
   return value === 0 || value === 1 ? value : null;
 }
 
+function addLocalDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function isSchedulableDate(value: string): boolean {
+  const today = toLocalDateStr(new Date());
+  const tomorrow = toLocalDateStr(addLocalDays(new Date(), 1));
+  return value === today || value === tomorrow;
+}
+
+function normalizePlannedDateValue(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") return null;
+  return isSchedulableDate(value) ? value : null;
+}
+
+function normalizeMinuteValue(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "number" || !Number.isInteger(value)) return null;
+  return value >= 0 && value <= 1439 ? value : null;
+}
+
+function normalizeDurationValue(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "number" || !Number.isInteger(value)) return null;
+  return value >= 5 && value <= 480 ? value : null;
+}
+
+function normalizePlanningFields<T extends Partial<Intention>>(intention: T): T {
+  const plannedDate = normalizePlannedDateValue(intention.plannedDate);
+  const plannedStartMinute = normalizeMinuteValue(intention.plannedStartMinute);
+  const plannedDurationMinutes = normalizeDurationValue(intention.plannedDurationMinutes);
+
+  return {
+    ...intention,
+    ...(plannedDate !== undefined
+      ? {
+          plannedDate,
+          ...(plannedDate === null ? { plannedStartMinute: null, plannedDurationMinutes: null } : {}),
+        }
+      : {}),
+    ...(plannedStartMinute !== undefined ? { plannedStartMinute } : {}),
+    ...(plannedDurationMinutes !== undefined ? { plannedDurationMinutes } : {}),
+  };
+}
+
 function shouldKeepNowNextRank(intention: Intention, today: string): boolean {
   return (
     !intention.completed &&
@@ -777,7 +885,7 @@ export async function addIntentions(intentions: Intention[]): Promise<void> {
   const tx = db.transaction("intentions", "readwrite");
   for (const intention of intentions) {
     tx.store.put({
-      ...intention,
+      ...normalizePlanningFields(intention),
       nowNextRank: normalizeNowNextRankValue(intention.nowNextRank),
       whyChain: normalizeWhyChain(intention.whyChain),
       updatedAt: intention.updatedAt ?? now,
@@ -899,10 +1007,10 @@ export async function updateIntention(
   const intention = await db.get("intentions", id);
   if (intention) {
     const shouldClearNowNext = clearsNowNextRank(updates);
-    const normalizedUpdates = {
+    const normalizedUpdates = normalizePlanningFields({
       ...updates,
       ...(updates.whyChain !== undefined ? { whyChain: normalizeWhyChain(updates.whyChain) } : {}),
-    };
+    });
     await db.put("intentions", {
       ...intention,
       ...normalizedUpdates,

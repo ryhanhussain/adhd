@@ -26,6 +26,13 @@ create table if not exists public.intentions (
   last_reframed_at bigint,
   now_next_rank integer check (now_next_rank is null or now_next_rank in (0, 1)),
   time_required text check (time_required is null or time_required in ('quick','medium','long')),
+  planned_date text,
+  planned_start_minute integer check (
+    planned_start_minute is null or (planned_start_minute >= 0 and planned_start_minute <= 1439)
+  ),
+  planned_duration_minutes integer check (
+    planned_duration_minutes is null or (planned_duration_minutes >= 5 and planned_duration_minutes <= 480)
+  ),
   why_chain    text,
   created_at    bigint      not null,
   updated_at    bigint      not null

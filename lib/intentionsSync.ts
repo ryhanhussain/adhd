@@ -52,6 +52,9 @@ interface RemoteIntentionRow {
   time_required: Intention["timeRequired"] | null;
   activity_category: string | null;
   why_chain: string | null;
+  planned_date: string | null;
+  planned_start_minute: number | null;
+  planned_duration_minutes: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -83,6 +86,9 @@ function toRemote(intention: Intention, userId: string): RemoteIntentionRow {
     time_required: intention.timeRequired ?? null,
     activity_category: intention.activityCategory ?? null,
     why_chain: normalizeWhyChain(intention.whyChain),
+    planned_date: intention.plannedDate ?? null,
+    planned_start_minute: intention.plannedStartMinute ?? null,
+    planned_duration_minutes: intention.plannedDurationMinutes ?? null,
     created_at: intention.createdAt,
     updated_at: intention.updatedAt,
   };
@@ -111,6 +117,9 @@ function fromRemote(row: RemoteIntentionRow): Intention {
     timeRequired: row.time_required ?? null,
     activityCategory: row.activity_category ?? null,
     whyChain: normalizeWhyChain(row.why_chain),
+    plannedDate: row.planned_date ?? null,
+    plannedStartMinute: row.planned_start_minute ?? null,
+    plannedDurationMinutes: row.planned_duration_minutes ?? null,
     updatedAt: row.updated_at,
     syncedAt: row.updated_at,
   };

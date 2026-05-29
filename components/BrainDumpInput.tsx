@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-react";
-import type { ParsedIntention } from "@/lib/gemini";
+import type { ParsedIntention } from "@/lib/ai";
 import {
   Button,
   Field,
@@ -97,7 +97,7 @@ export default function BrainDumpInput({
     if (!text || isParsing) return;
     setIsParsing(true);
     try {
-      const { parseBrainDump } = await import("@/lib/gemini");
+      const { parseBrainDump } = await import("@/lib/ai");
       const result = await parseBrainDump(text);
       if (!result.ok) {
         const messages = {
