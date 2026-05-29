@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callAIChat, checkAndIncrementQuota, getLocalDateFromRequest, getUserFromRequest } from "../_shared";
+import {
+  callAIChat,
+  checkAndIncrementQuota,
+  getLocalDateFromRequest,
+  getUserFromRequest,
+  isAIConfigurationError,
+} from "../_shared";
 
 export const runtime = "edge";
 
@@ -95,6 +101,9 @@ Transcript JSON string: ${JSON.stringify(text.trim())}`;
     return NextResponse.json({ items, intentions: items });
   } catch (e) {
     console.error("parse-brain-dump route error:", e);
+    if (isAIConfigurationError(e)) {
+      return NextResponse.json({ items: null, _error: "config" }, { status: 503 });
+    }
     return NextResponse.json({ items: null }, { status: 500 });
   }
 }

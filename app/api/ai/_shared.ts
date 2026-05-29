@@ -4,7 +4,8 @@ import { getRequestContext } from "@cloudflare/next-on-pages";
 
 export const runtime = "edge";
 
-export const AI_MODEL = "deepseek-v4-flash";
+export const AI_MODEL = "deepseek-chat";
+export const GEMINI_MODEL = "gemini-2.5-flash-lite";
 const DEFAULT_DAILY_CAP = 100;
 /** Minimum ms between two allowed calls from the same user. Blocks scripted
  * bursts that would otherwise drain the daily cap in a single second. */
@@ -14,6 +15,17 @@ type AiMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
+
+export class AIConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AIConfigurationError";
+  }
+}
+
+export function isAIConfigurationError(error: unknown): error is AIConfigurationError {
+  return error instanceof AIConfigurationError || (error instanceof Error && error.name === "AIConfigurationError");
+}
 
 function getEnv() {
   try {
@@ -98,9 +110,25 @@ export async function callAIChat(
     json?: boolean;
   } = {}
 ): Promise<string> {
-  const apiKey = getEnv().DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured");
+  const env = getEnv();
+  if (env.DEEPSEEK_API_KEY) {
+    return callDeepSeekChat(env.DEEPSEEK_API_KEY, messages, config);
+  }
+  if (env.GEMINI_API_KEY) {
+    return callGeminiChat(env.GEMINI_API_KEY, messages, config);
+  }
+  throw new AIConfigurationError("Set DEEPSEEK_API_KEY or GEMINI_API_KEY to use AI features");
+}
 
+async function callDeepSeekChat(
+  apiKey: string,
+  messages: AiMessage[],
+  config: {
+    temperature?: number;
+    maxOutputTokens?: number;
+    json?: boolean;
+  }
+): Promise<string> {
   const res = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -125,4 +153,50 @@ export async function callAIChat(
 
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
+}
+
+async function callGeminiChat(
+  apiKey: string,
+  messages: AiMessage[],
+  config: {
+    temperature?: number;
+    maxOutputTokens?: number;
+    json?: boolean;
+  }
+): Promise<string> {
+  const system = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
+  const contents = messages
+    .filter((message) => message.role !== "system")
+    .map((message) => ({
+      role: message.role === "assistant" ? "model" : "user",
+      parts: [{ text: message.content }],
+    }));
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+        contents,
+        generationConfig: {
+          temperature: config.temperature ?? 0.2,
+          maxOutputTokens: config.maxOutputTokens ?? 640,
+          ...(config.json ? { responseMimeType: "application/json" } : {}),
+        },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Gemini ${res.status}: ${body}`);
+  }
+
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }

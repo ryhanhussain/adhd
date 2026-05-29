@@ -31,7 +31,7 @@ export interface ParsedIntention {
   confidence?: number | null;
 }
 
-export type AiFailureReason = "auth" | "cap" | "burst" | "quota_error" | "network" | "server";
+export type AiFailureReason = "auth" | "cap" | "burst" | "quota_error" | "network" | "config" | "server";
 
 export type BrainDumpResult =
   | { ok: true; intentions: ParsedIntention[] }
@@ -68,6 +68,12 @@ async function failureReasonFromResponse(res: Response): Promise<AiFailureReason
     if (quotaReason === "burst") return "burst";
     if (quotaReason === "error") return "quota_error";
     return "cap";
+  }
+  if (res.status === 503) {
+    try {
+      const body = (await res.json()) as { _error?: unknown };
+      if (body._error === "config") return "config";
+    } catch {}
   }
   return "server";
 }

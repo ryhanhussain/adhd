@@ -106,6 +106,7 @@ export default function BrainDumpInput({
           burst: "Slow down a sec - try again in a moment",
           quota_error: "Quota check failed - see console / Supabase",
           network: "Couldn't reach AI - check connection and retry",
+          config: "AI key missing - add DEEPSEEK_API_KEY or GEMINI_API_KEY",
           server: "AI hiccup - please retry",
         } as const;
         showToast(messages[result.reason]);

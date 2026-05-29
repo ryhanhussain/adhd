@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callAIChat, checkAndIncrementQuota, getLocalDateFromRequest, getUserFromRequest } from "../_shared";
+import {
+  callAIChat,
+  checkAndIncrementQuota,
+  getLocalDateFromRequest,
+  getUserFromRequest,
+  isAIConfigurationError,
+} from "../_shared";
 
 export const runtime = "edge";
 
@@ -229,6 +235,9 @@ Allowed action types:
     return NextResponse.json({ message, actions });
   } catch (e) {
     console.error("planner route error:", e);
+    if (isAIConfigurationError(e)) {
+      return NextResponse.json({ message: null, actions: null, _error: "config" }, { status: 503 });
+    }
     return NextResponse.json({ message: null, actions: null }, { status: 500 });
   }
 }
